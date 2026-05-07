@@ -146,16 +146,36 @@ Sandbox development may override `SCRIPTS_*` / `OLMINSTALL_*` (and the ITS `reso
 ## Local helper script: `run-olminstall.sh`
 
 Use `run-olminstall.sh` for local trigger/debug loops. It can:
+- List latest PipelineRuns for the selected app (`--list-pipelines [N]`, default `10`), including archived runs from KubeArchive
 - Apply the [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) safely on repeated runs
 - Resolve an image (auto/latest, explicit `--image`, or `--product rhoai --version x.y`)
 - Inject ITS overrides (`SCRIPTS_REPO_*`, `UPDATE_CHANNEL`)
+- Watch your latest owned PipelineRun or a specific one (`--watch [PIPELINERUN]`), with KubeArchive fallback for runs pruned from the cluster
 - Create a [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot), stream logs, and print a Konflux URL summary
 
 Examples:
 
 ```bash
-# Default: latest FBCF across rhoai-v* apps
+# Watch your latest owned olminstall PipelineRun (default behavior)
 ./integration-tests/olminstall/run-olminstall.sh
+
+# Same as above (explicit watch mode)
+./integration-tests/olminstall/run-olminstall.sh --watch
+
+# Watch a specific existing PipelineRun
+./integration-tests/olminstall/run-olminstall.sh --watch odh-olminstall-smoke-testops-xxxxx
+
+# List latest PipelineRuns for selected app (default 10)
+./integration-tests/olminstall/run-olminstall.sh --list-pipelines
+
+# List latest 20 PipelineRuns for selected app
+./integration-tests/olminstall/run-olminstall.sh --list-pipelines 20
+
+# Show usage/help
+./integration-tests/olminstall/run-olminstall.sh --help
+
+# Latest FBCF across rhoai-v* apps
+./integration-tests/olminstall/run-olminstall.sh --product rhoai
 
 # Pin exact image
 ./integration-tests/olminstall/run-olminstall.sh \
@@ -174,11 +194,16 @@ Examples:
 
 # Trigger against ODH (uses sandbox ITS with ODH-specific pipeline params)
 ./integration-tests/olminstall/run-olminstall.sh --product odh
+
 ```
 
 Omit `--konflux-repo`/`--konflux-branch` to keep pipeline defaults (`opendatahub-io` + `main` for scripts clone).
 
-> **Concurrent runs:** `run-olminstall.sh` does not take a cluster-side lock. If two users run the script simultaneously against the same namespace, both may create Snapshots and trigger separate PipelineRuns. The cleanup trap deletes your Snapshot on exit, but the other run will continue; deletion of a Snapshot mid-run is non-fatal to the PipelineRun (which has already resolved the snapshot). To avoid confusion, coordinate with your team before triggering manually in a shared namespace.
+> **Concurrent runs:** `run-olminstall.sh` does not take a cluster-side lock. If two users run the script simultaneously against the same namespace, both may create Snapshots and trigger separate PipelineRuns. On startup, the helper now tries to re-attach as early as possible: it first prefers running PipelineRuns marked with your current `oc whoami` identity, and if owner metadata is unavailable it falls back to the latest running `olminstall` PipelineRun for the same app (to avoid spawning a duplicate run). Use `--watch` to follow your latest owned run, or `--watch <pipelinerun>` for an explicit run. The cleanup trap deletes your Snapshot on exit, but the other run will continue; deletion of a Snapshot mid-run is non-fatal to the PipelineRun (which has already resolved the snapshot). To avoid confusion, coordinate with your team before triggering manually in a shared namespace.
+
+If a freshly-created Snapshot takes time to trigger, `run-olminstall.sh` waits up to `PR_APPEAR_TIMEOUT_SECONDS` (default `600`) for the corresponding PipelineRun before failing. On this timeout path, it keeps the test Snapshot so a delayed trigger can still be attached on the next invocation.
+
+> **Archived runs (KubeArchive):** Completed PipelineRuns are pruned from the live cluster by Tekton Results / cluster GC shortly after completion. `--list-pipelines` and `--watch` automatically fall back to the [KubeArchive](https://konflux-ci.dev/architecture/core/pipeline-service/) REST API to retrieve pruned runs and replay their logs. The `KA_HOST` environment variable can override the KubeArchive endpoint if needed. If KubeArchive is unreachable, the script degrades gracefully to live-only data.
 
 For `--product rhoai`, use `--version` in `x.y` form (for example `3.5`).
 
@@ -200,7 +225,7 @@ Examples:
 
 ```bash
 # Default for rhoai-v3-* image resolution: auto channel stable-3.x
-./integration-tests/olminstall/run-olminstall.sh
+./integration-tests/olminstall/run-olminstall.sh --product rhoai
 
 # Explicitly force stable-3.x
 ./integration-tests/olminstall/run-olminstall.sh --channel stable-3.x
