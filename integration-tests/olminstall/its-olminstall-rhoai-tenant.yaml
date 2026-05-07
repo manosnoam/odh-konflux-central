@@ -21,7 +21,7 @@ spec:
     - description: Execute olminstall smoke test (sandbox / manual trigger)
       name: application
   # Optional SCRIPTS_REPO_URL / SCRIPTS_REPO_REVISION here to override the pipeline
-  # default (opendatahub-io odh-konflux-central @ main). Or: run-olminstall.sh --konflux-repo …
+  # default (opendatahub-io odh-konflux-central @ main). Or: python3 …/run_olm_pipeline.py --konflux-repo …
   params:
     - name: FBCF_COMPONENT_NAME
       value: "rhoai-fbc-fragment-ocp-421"

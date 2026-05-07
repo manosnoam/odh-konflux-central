@@ -134,7 +134,7 @@ If the file uses a fixed `metadata.name`, delete the previous run before recreat
 
 ## Snapshot-driven example (olminstall)
 
-The **olminstall** integration under `integration-tests/olminstall/` exercises [Snapshot](#snapshot) + [ITS](#its): Konflux [EaaS](#eaas) provisions a short-lived [HyperShift](#hypershift) cluster, installs the operator from the snapshot catalog, then destroys the cluster. For triggers (with or without [run-olminstall.sh](../integration-tests/olminstall/run-olminstall.sh)), parameters, pipeline behavior, and glossary cross-links, see [integration-tests/olminstall/README.md](../integration-tests/olminstall/README.md) (**Triggering**). Vocabulary is in [Terms and abbreviations](#terms-and-abbreviations) above.
+The **olminstall** integration under `integration-tests/olminstall/` exercises [Snapshot](#snapshot) + [ITS](#its): Konflux [EaaS](#eaas) provisions a short-lived [HyperShift](#hypershift) cluster, installs the operator from the snapshot catalog, then destroys the cluster. For triggers (including [`run_olm_pipeline.py`](../integration-tests/olminstall/run_olm_pipeline.py)), parameters, pipeline behavior, and glossary cross-links, see [integration-tests/olminstall/README.md](../integration-tests/olminstall/README.md) (**Triggering**). Vocabulary is in [Terms and abbreviations](#terms-and-abbreviations) above.
 
 <!-- Future: document EaaS quota limits, supported OCP versions, cluster size options,
      provisioning-timeout troubleshooting, and the alternative shared-cluster approach. -->

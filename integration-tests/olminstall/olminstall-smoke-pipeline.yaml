@@ -407,7 +407,7 @@ spec:
                 value: /credentials/$(steps.get-kubeconfig.results.kubeconfig)
             script: |
               #!/bin/bash
-              exec /workspace/repo/integration-tests/olminstall/scripts/patch-cluster-pull-secret.sh
+              exec python3 /workspace/repo/integration-tests/olminstall/helpers/patch_cluster_pull_secret.py
 
           - name: install-and-verify
             image: quay.io/rhoai/rhoai-task-toolset:its@sha256:18b1af9b64d766478792849e49eed156464f678ef53b567a641a28444cacbfc9
@@ -437,7 +437,7 @@ spec:
                 value: $(results.OPERATOR_VERSION.path)
             script: |
               #!/bin/bash
-              exec /workspace/repo/integration-tests/olminstall/scripts/install-and-verify.sh
+              exec python3 /workspace/repo/integration-tests/olminstall/helpers/install_and_verify.py
 
   finally:
     - name: collect-diagnostics
@@ -536,6 +536,9 @@ spec:
             default: "(unknown)"
           - name: PIPELINE_RUN_NAME
             type: string
+          - name: OPERATOR_NAME
+            type: string
+            default: "rhods-operator"
         steps:
           - name: send-notification
             image: quay.io/konflux-ci/konflux-test:stable@sha256:09328e5f47da168ffe951ec9c4242cd6761e61e0a235df1bba3f5158e757446d
@@ -560,7 +563,12 @@ spec:
                 STATUS_TEXT="FAILED (task status: $(params.TEST_STATUS))"
               fi
 
-              MSG="${EMOJI} ODH olminstall smoke test ${STATUS_TEXT}"
+              case "$(params.OPERATOR_NAME)" in
+                opendatahub-operator) PRODUCT_LABEL="ODH" ;;
+                rhods-operator) PRODUCT_LABEL="RHOAI" ;;
+                *) PRODUCT_LABEL="ODH/RHOAI" ;;
+              esac
+              MSG="${EMOJI} ${PRODUCT_LABEL} olminstall smoke test ${STATUS_TEXT}"
               MSG="${MSG}"$'\n'"Operator : $(params.OPERATOR_VERSION)"
               MSG="${MSG}"$'\n'"FBCF     : $(params.FBCF_IMAGE)"
               MSG="${MSG}"$'\n'"Run      : $(params.PIPELINE_RUN_NAME)"
@@ -598,3 +606,5 @@ spec:
           value: "(see pipeline run logs)"
         - name: PIPELINE_RUN_NAME
           value: $(context.pipelineRun.name)
+        - name: OPERATOR_NAME
+          value: "$(params.OPERATOR_NAME)"

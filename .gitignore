@@ -1,2 +1,4 @@
 integration-tests/raw-artifacts/*
+**/__pycache__/
+*.py[cod]
 .vscode/

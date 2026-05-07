@@ -41,10 +41,10 @@ The `BUILD` node is the entry point for both **automatic** and **manual** runs (
 2. **provision-eaas-space** — reserves an [EaaS](../../doc/contributing-konflux-testing-rhoai.md#eaas) environment using the `provision-eaas-space` step action from [konflux-ci/build-definitions](https://github.com/konflux-ci/build-definitions) (`main`).
 3. **provision-cluster** — queries EaaS for supported versions, selects the latest patch release for the chosen prefix, and creates an ephemeral [HyperShift](../../doc/contributing-konflux-testing-rhoai.md#hypershift) cluster (AWS, `m5.2xlarge` by default) via `konflux-ci/build-definitions` step actions. Configures an [IDMS](../../doc/contributing-konflux-testing-rhoai.md#idms) mirror: `registry.redhat.io/rhoai` → `quay.io/rhoai`.
 4. **install-operator** — clones two repos and runs scripts against the provisioned cluster:
-   - [opendatahub-io/odh-konflux-central](https://github.com/opendatahub-io/odh-konflux-central) (`SCRIPTS_REPO_URL` / `SCRIPTS_REPO_REVISION`): provides `patch-cluster-pull-secret.sh` and `install-and-verify.sh`.
+   - [opendatahub-io/odh-konflux-central](https://github.com/opendatahub-io/odh-konflux-central) (`SCRIPTS_REPO_URL` / `SCRIPTS_REPO_REVISION`): provides [`helpers/patch_cluster_pull_secret.py`](helpers/patch_cluster_pull_secret.py) and [`helpers/install_and_verify.py`](helpers/install_and_verify.py).
    - olminstall repo (`OLMINSTALL_REPO_URL` / `OLMINSTALL_REPO_REVISION`): provides the `resources/install-rhods-operator.yaml` template (Namespace + OperatorGroup + Subscription) and `utils/oc_wait.sh` / `utils/oc_approve.sh` utilities. This avoids re-implementing tested [OLM](../../doc/contributing-konflux-testing-rhoai.md#olm) install logic.
-   - `patch-cluster-pull-secret.sh`: merges `quay.io/rhoai` credentials into the cluster pull secret, creates an `additional-pull-secret` in `kube-system` for [HCCO](../../doc/contributing-konflux-testing-rhoai.md#hcco) node sync (see [Auth strategy](#auth-strategy-for-idms-mirrors)), and creates `rhoai-quay-pull` in `openshift-marketplace`.
-   - `install-and-verify.sh`: creates the CatalogSource (using the [FBCF](../../doc/contributing-konflux-testing-rhoai.md#fbc--fbcf) image — the part not covered by olminstall), waits for [HCCO](../../doc/contributing-konflux-testing-rhoai.md#hcco) to sync credentials to all nodes, then delegates Subscription creation, InstallPlan approval, and [CSV](../../doc/contributing-konflux-testing-rhoai.md#csv) wait to olminstall's resources and utilities.
+   - `patch_cluster_pull_secret.py`: merges `quay.io/rhoai` credentials into the cluster pull secret, creates an `additional-pull-secret` in `kube-system` for [HCCO](../../doc/contributing-konflux-testing-rhoai.md#hcco) node sync (see [Auth strategy](#auth-strategy-for-idms-mirrors)), and creates `rhoai-quay-pull` in `openshift-marketplace`.
+   - `install_and_verify.py`: creates the CatalogSource (using the [FBCF](../../doc/contributing-konflux-testing-rhoai.md#fbc--fbcf) image — the part not covered by olminstall), waits for [HCCO](../../doc/contributing-konflux-testing-rhoai.md#hcco) to sync credentials to all nodes, then delegates Subscription creation, InstallPlan approval, and [CSV](../../doc/contributing-konflux-testing-rhoai.md#csv) wait to olminstall's resources and utilities.
 5. **post-results** — sends a Slack notification (if `SLACK_WEBHOOK_URL` is configured) and reports final status. `TEST_OUTPUT` is exposed from `install-operator` results.
 6. **collect-diagnostics** _(on failure)_ — runs `oc adm inspect` on the operator namespace and relevant [OLM](../../doc/contributing-konflux-testing-rhoai.md#olm) resources via a `konflux-ci/build-definitions` step action.
 
@@ -55,9 +55,10 @@ The `BUILD` node is the entry point for both **automatic** and **manual** runs (
 | [`olminstall-smoke-pipeline.yaml`](olminstall-smoke-pipeline.yaml) | Pipeline: [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot) → [EaaS](../../doc/contributing-konflux-testing-rhoai.md#eaas) cluster → install → verify |
 | [`its-olminstall-open-data-hub-tenant.yaml`](its-olminstall-open-data-hub-tenant.yaml) | [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) for [ODH](../../doc/contributing-konflux-testing-rhoai.md#odh) (`open-data-hub-tenant`, `odh-operator-catalog` component) |
 | [`its-olminstall-rhoai-tenant.yaml`](its-olminstall-rhoai-tenant.yaml) | [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) for [RHOAI](../../doc/contributing-konflux-testing-rhoai.md#rhoai) sandbox testing (`rhoai-tenant`, `rhoai-fbc-fragment-ocp-421`) |
-| [`scripts/patch-cluster-pull-secret.sh`](scripts/patch-cluster-pull-secret.sh) | Injects `quay.io/rhoai` credentials into the [EaaS](../../doc/contributing-konflux-testing-rhoai.md#eaas) cluster at all required levels |
-| [`scripts/install-and-verify.sh`](scripts/install-and-verify.sh) | Creates [OLM](../../doc/contributing-konflux-testing-rhoai.md#olm) resources, waits for [CSV](../../doc/contributing-konflux-testing-rhoai.md#csv) `Succeeded`, writes `INSTALL_STATUS` |
-| [`run-olminstall.sh`](run-olminstall.sh) | Local helper to apply ITS with optional overrides (`SCRIPTS_REPO_*`, `UPDATE_CHANNEL`), resolve an image, create a [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot), and stream logs |
+| [`helpers/patch_cluster_pull_secret.py`](helpers/patch_cluster_pull_secret.py) | Tekton step: injects `quay.io/rhoai` credentials into the [EaaS](../../doc/contributing-konflux-testing-rhoai.md#eaas) cluster at all required levels |
+| [`helpers/install_and_verify.py`](helpers/install_and_verify.py) | Tekton step: creates [OLM](../../doc/contributing-konflux-testing-rhoai.md#olm) resources, waits for [CSV](../../doc/contributing-konflux-testing-rhoai.md#csv) `Succeeded`, writes `INSTALL_STATUS` |
+| [`run_olm_pipeline.py`](run_olm_pipeline.py) | Local CLI — apply ITS with optional overrides (`SCRIPTS_REPO_*`, `UPDATE_CHANNEL`), resolve an image, create a [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot), and stream logs |
+| [`requirements.txt`](requirements.txt) | Documents Python deps for this directory (stdlib-only for [`run_olm_pipeline.py`](run_olm_pipeline.py) and [`helpers/`](helpers/); no `pip install` required) |
 | [`test-snapshot.yaml`](test-snapshot.yaml) | Example [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot) for manual pipeline trigger |
 | [`test-pipelinerun.yaml`](test-pipelinerun.yaml) | Example [PipelineRun](../../doc/contributing-konflux-testing-rhoai.md#pipelinerun) for local/manual execution |
 
@@ -73,7 +74,7 @@ The pipeline also needs a tenant secret with quay credentials. Each ITS sets `QU
 
 Channel defaults:
 - `its-olminstall-open-data-hub-tenant.yaml` sets `UPDATE_CHANNEL=odh-stable` for Konflux auto-triggered [ODH](../../doc/contributing-konflux-testing-rhoai.md#odh) runs
-- `run-olminstall.sh --product odh` auto-selects `odh-stable` unless `--channel` is explicitly provided
+- `python3 …/run_olm_pipeline.py --product odh` auto-selects `odh-stable` unless `--channel` is explicitly provided
 
 ## Auth strategy for IDMS mirrors
 
@@ -83,18 +84,18 @@ However, [OLM's](../../doc/contributing-konflux-testing-rhoai.md#olm) bundle-unp
 
 In a standard cluster, updating the global pull secret propagates via the Machine Config Operator ([MCO](../../doc/contributing-konflux-testing-rhoai.md#mco)). In [HyperShift](../../doc/contributing-konflux-testing-rhoai.md#hypershift), [MCO](../../doc/contributing-konflux-testing-rhoai.md#mco) changes trigger **node replacement** (not in-place update), which takes 15-30 minutes — too slow for an ephemeral integration test.
 
-**Solution:** `patch-cluster-pull-secret.sh` creates a secret named `additional-pull-secret` in `kube-system`. [HyperShift's](../../doc/contributing-konflux-testing-rhoai.md#hypershift) **Hosted Cluster Config Operator ([HCCO](../../doc/contributing-konflux-testing-rhoai.md#hcco))** automatically detects this secret and deploys a `global-pull-secret-syncer` DaemonSet in `kube-system` that:
+**Solution:** `patch_cluster_pull_secret.py` creates a secret named `additional-pull-secret` in `kube-system`. [HyperShift's](../../doc/contributing-konflux-testing-rhoai.md#hypershift) **Hosted Cluster Config Operator ([HCCO](../../doc/contributing-konflux-testing-rhoai.md#hcco))** automatically detects this secret and deploys a `global-pull-secret-syncer` DaemonSet in `kube-system` that:
 - Merges credentials into `/var/lib/kubelet/config.json` on each node
 - Restarts kubelet via systemd [DBus](../../doc/contributing-konflux-testing-rhoai.md#dbus)
 
-This is the **official [HyperShift](../../doc/contributing-konflux-testing-rhoai.md#hypershift) mechanism** for propagating pull-secret changes without node replacement. `install-and-verify.sh` waits for the syncer to complete on all nodes before creating the Subscription.
+This is the **official [HyperShift](../../doc/contributing-konflux-testing-rhoai.md#hypershift) mechanism** for propagating pull-secret changes without node replacement. `install_and_verify.py` waits for the syncer to complete on all nodes before creating the Subscription.
 
 > **Note:** Use namespace-specific credential keys (e.g. `quay.io/rhoai`) rather than bare `quay.io` in `additional-pull-secret`. [HCCO](../../doc/contributing-konflux-testing-rhoai.md#hcco) applies original-pull-secret entries with higher precedence on conflict, so namespace-specific keys avoid being overridden.
 
 ## Triggering
 
 - **Automatic (Konflux CI):** New [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot) → matching [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) → [PipelineRun](../../doc/contributing-konflux-testing-rhoai.md#pipelinerun). Example ITS: [`its-olminstall-open-data-hub-tenant.yaml`](its-olminstall-open-data-hub-tenant.yaml), [`its-olminstall-rhoai-tenant.yaml`](its-olminstall-rhoai-tenant.yaml).
-- **Manual (script):** [`run-olminstall.sh`](run-olminstall.sh) applies or overrides the sandbox [ITS](../../doc/contributing-konflux-testing-rhoai.md#its), resolves an image when needed, creates a test [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot), and streams logs.
+- **Manual (CLI):** [`run_olm_pipeline.py`](run_olm_pipeline.py) applies or overrides the sandbox [ITS](../../doc/contributing-konflux-testing-rhoai.md#its), resolves an image when needed, creates a test [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot), and streams logs.
 - **Manual (`oc` only):** After [logging in](../../doc/contributing-konflux-testing-rhoai.md#log-in-and-pick-a-namespace) to the tenant namespace, apply an [ITS](../../doc/contributing-konflux-testing-rhoai.md#its), then create a [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot) (pinned file or latest image for your app label). Example for the [RHOAI](../../doc/contributing-konflux-testing-rhoai.md#rhoai) sandbox [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) and `rhoai-fbc-fragment-ocp-421`:
 
 ```bash
@@ -115,9 +116,10 @@ For generic Konflux testing (login, namespaces, [PipelineRun](../../doc/contribu
 
 Tooling for local debug commands in this section:
 - `oc` (required)
+- `python3` (required for [`run_olm_pipeline.py`](run_olm_pipeline.py))
 - `tkn` (recommended for logs; otherwise poll with `oc`)
-- `jq` (required by `run-olminstall.sh` for snapshot/image resolution)
-- `yq` (required only when using `run-olminstall.sh` overrides such as `--konflux-repo`, `--konflux-branch`, or `--channel`)
+- `skopeo` (optional; used by `--product odh` when Konflux snapshots are unavailable)
+- `yq` (required only when using `run_olm_pipeline.py` overrides such as `--konflux-repo`, `--konflux-branch`, or `--channel`)
 
 Quick watch after triggering:
 
@@ -131,10 +133,10 @@ tkn pipelinerun logs -n rhoai-tenant --last -f
 |-----------|---------|-------------|
 | `FBCF_COMPONENT_NAME` | `odh-operator-catalog` | [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot) component name for the [FBCF](../../doc/contributing-konflux-testing-rhoai.md#fbc--fbcf) catalog image ([ITS](../../doc/contributing-konflux-testing-rhoai.md#its) overrides to `rhoai-fbc-fragment-ocp-421` for [RHOAI](../../doc/contributing-konflux-testing-rhoai.md#rhoai)) |
 | `UPDATE_CHANNEL` | `stable` | [OLM](../../doc/contributing-konflux-testing-rhoai.md#olm) subscription channel |
-| `OPERATOR_NAMESPACE` | `redhat-ods-operator` | Namespace for operator installation (must match [OLM](../../doc/contributing-konflux-testing-rhoai.md#olm) package expectations; `install-and-verify.sh` adapts olminstall manifests to this namespace) |
+| `OPERATOR_NAMESPACE` | `redhat-ods-operator` | Namespace for operator installation (must match [OLM](../../doc/contributing-konflux-testing-rhoai.md#olm) package expectations; `install_and_verify.py` adapts olminstall manifests to this namespace) |
 | `OPERATOR_NAME` | `rhods-operator` | [OLM](../../doc/contributing-konflux-testing-rhoai.md#olm) package name (use `rhods-operator` for [RHOAI](../../doc/contributing-konflux-testing-rhoai.md#rhoai), `opendatahub-operator` for [ODH](../../doc/contributing-konflux-testing-rhoai.md#odh)) |
 | `HYPERSHIFT_INSTANCE_TYPE` | `m5.2xlarge` | AWS worker instance type for the ephemeral [HyperShift](../../doc/contributing-konflux-testing-rhoai.md#hypershift) cluster |
-| `SCRIPTS_REPO_URL` | `https://github.com/opendatahub-io/odh-konflux-central.git` | Repo that provides `integration-tests/olminstall/scripts/` (`patch-cluster-pull-secret.sh`, `install-and-verify.sh`) |
+| `SCRIPTS_REPO_URL` | `https://github.com/opendatahub-io/odh-konflux-central.git` | Repo that provides `integration-tests/olminstall/helpers/` (`patch_cluster_pull_secret.py`, `install_and_verify.py`) |
 | `SCRIPTS_REPO_REVISION` | `main` | Branch/SHA of the scripts repo |
 | `OLMINSTALL_REPO_URL` | `https://gitlab.cee.redhat.com/data-hub/olminstall.git` | olminstall repo with tested OLM manifests (`resources/install-rhods-operator.yaml`) and `utils/` helpers |
 | `OLMINSTALL_REPO_REVISION` | `main` | Branch/SHA of the olminstall repo |
@@ -143,9 +145,9 @@ tkn pipelinerun logs -n rhoai-tenant --last -f
 
 Sandbox development may override `SCRIPTS_*` / `OLMINSTALL_*` (and the ITS `resolverRef` URL/revision) so Konflux runs a pipeline revision that is not yet on `main`; see [`its-olminstall-rhoai-tenant.yaml`](its-olminstall-rhoai-tenant.yaml).
 
-## Local helper script: `run-olminstall.sh`
+## Local CLI: `run_olm_pipeline.py`
 
-Use `run-olminstall.sh` for local trigger/debug loops. It can:
+From the repo root, invoke `python3 integration-tests/olminstall/run_olm_pipeline.py` (paths shown below assume that working directory). With **no arguments**, it prints the same usage as `--help`. Use it for local trigger/debug loops. It can:
 - List latest PipelineRuns for the selected app (`--list-pipelines [N]`, default `10`), including archived runs from KubeArchive
 - Apply the [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) safely on repeated runs
 - Resolve an image (auto/latest, explicit `--image`, or `--product rhoai --version x.y`)
@@ -156,52 +158,52 @@ Use `run-olminstall.sh` for local trigger/debug loops. It can:
 Examples:
 
 ```bash
-# Watch your latest owned olminstall PipelineRun (default behavior)
-./integration-tests/olminstall/run-olminstall.sh
+# Show usage (same as no arguments or --help)
+python3 integration-tests/olminstall/run_olm_pipeline.py --help
 
-# Same as above (explicit watch mode)
-./integration-tests/olminstall/run-olminstall.sh --watch
+# Watch your latest owned olminstall PipelineRun
+python3 integration-tests/olminstall/run_olm_pipeline.py --watch
 
 # Watch a specific existing PipelineRun
-./integration-tests/olminstall/run-olminstall.sh --watch odh-olminstall-smoke-testops-xxxxx
+python3 integration-tests/olminstall/run_olm_pipeline.py --watch odh-olminstall-smoke-testops-xxxxx
 
 # List latest PipelineRuns for selected app (default 10)
-./integration-tests/olminstall/run-olminstall.sh --list-pipelines
+python3 integration-tests/olminstall/run_olm_pipeline.py --list-pipelines
 
 # List latest 20 PipelineRuns for selected app
-./integration-tests/olminstall/run-olminstall.sh --list-pipelines 20
+python3 integration-tests/olminstall/run_olm_pipeline.py --list-pipelines 20
 
 # Show usage/help
-./integration-tests/olminstall/run-olminstall.sh --help
+python3 integration-tests/olminstall/run_olm_pipeline.py --help
 
 # Latest FBCF across rhoai-v* apps
-./integration-tests/olminstall/run-olminstall.sh --product rhoai
+python3 integration-tests/olminstall/run_olm_pipeline.py --product rhoai
 
 # Pin exact image
-./integration-tests/olminstall/run-olminstall.sh \
+python3 integration-tests/olminstall/run_olm_pipeline.py \
   --image quay.io/rhoai/rhoai-fbc-fragment@sha256:<digest>
 
 # Test scripts from a fork
-./integration-tests/olminstall/run-olminstall.sh \
+python3 integration-tests/olminstall/run_olm_pipeline.py \
   --konflux-repo https://github.com/you/odh-konflux-central.git \
   --konflux-branch your-feature-branch
 
 # Resolve latest FBCF from a specific RHOAI version stream
-./integration-tests/olminstall/run-olminstall.sh --product rhoai --version 3.5
+python3 integration-tests/olminstall/run_olm_pipeline.py --product rhoai --version 3.5
 
 # Override OLM channel
-./integration-tests/olminstall/run-olminstall.sh --channel beta
+python3 integration-tests/olminstall/run_olm_pipeline.py --channel beta
 
 # Trigger against ODH (uses sandbox ITS with ODH-specific pipeline params)
-./integration-tests/olminstall/run-olminstall.sh --product odh
+python3 integration-tests/olminstall/run_olm_pipeline.py --product odh
 
 ```
 
 Omit `--konflux-repo`/`--konflux-branch` to keep pipeline defaults (`opendatahub-io` + `main` for scripts clone).
 
-> **Concurrent runs:** `run-olminstall.sh` does not take a cluster-side lock. If two users run the script simultaneously against the same namespace, both may create Snapshots and trigger separate PipelineRuns. On startup, the helper now tries to re-attach as early as possible: it first prefers running PipelineRuns marked with your current `oc whoami` identity, and if owner metadata is unavailable it falls back to the latest running `olminstall` PipelineRun for the same app (to avoid spawning a duplicate run). Use `--watch` to follow your latest owned run, or `--watch <pipelinerun>` for an explicit run. The cleanup trap deletes your Snapshot on exit, but the other run will continue; deletion of a Snapshot mid-run is non-fatal to the PipelineRun (which has already resolved the snapshot). To avoid confusion, coordinate with your team before triggering manually in a shared namespace.
+> **Concurrent runs:** The CLI does not take a cluster-side lock. If two users run the script simultaneously against the same namespace, both may create Snapshots and trigger separate PipelineRuns. On startup, the helper now tries to re-attach as early as possible: it first prefers running PipelineRuns marked with your current `oc whoami` identity, and if owner metadata is unavailable it falls back to the latest running `olminstall` PipelineRun for the same app (to avoid spawning a duplicate run). Use `--watch` to follow your latest owned run, or `--watch <pipelinerun>` for an explicit run. The cleanup trap deletes your Snapshot on exit, but the other run will continue; deletion of a Snapshot mid-run is non-fatal to the PipelineRun (which has already resolved the snapshot). To avoid confusion, coordinate with your team before triggering manually in a shared namespace.
 
-If a freshly-created Snapshot takes time to trigger, `run-olminstall.sh` waits up to `PR_APPEAR_TIMEOUT_SECONDS` (default `600`) for the corresponding PipelineRun before failing. On this timeout path, it keeps the test Snapshot so a delayed trigger can still be attached on the next invocation.
+If a freshly-created Snapshot takes time to trigger, `run_olm_pipeline.py` waits up to `PR_APPEAR_TIMEOUT_SECONDS` (default `600`) for the corresponding PipelineRun before failing. On this timeout path, it keeps the test Snapshot so a delayed trigger can still be attached on the next invocation.
 
 > **Archived runs (KubeArchive):** Completed PipelineRuns are pruned from the live cluster by Tekton Results / cluster GC shortly after completion. `--list-pipelines` and `--watch` automatically fall back to the [KubeArchive](https://konflux-ci.dev/architecture/core/pipeline-service/) REST API to retrieve pruned runs and replay their logs. The `KA_HOST` environment variable can override the KubeArchive endpoint if needed. If KubeArchive is unreachable, the script degrades gracefully to live-only data.
 
@@ -219,19 +221,19 @@ For the current fragment image (`quay.io/rhoai/rhoai-fbc-fragment@sha256:dc61ae7
 | `beta` | `rhods-operator.3.4.0-ea.1` |
 | `fast-3.x` | `rhods-operator.3.3.1` |
 
-`run-olminstall.sh` now auto-selects `stable-3.x` when it resolves an image from a `rhoai-v3-*` app and no `--channel` is passed.
+`run_olm_pipeline.py` auto-selects `stable-3.x` when it resolves an image from a `rhoai-v3-*` app and no `--channel` is passed.
 
 Examples:
 
 ```bash
 # Default for rhoai-v3-* image resolution: auto channel stable-3.x
-./integration-tests/olminstall/run-olminstall.sh --product rhoai
+python3 integration-tests/olminstall/run_olm_pipeline.py --product rhoai
 
 # Explicitly force stable-3.x
-./integration-tests/olminstall/run-olminstall.sh --channel stable-3.x
+python3 integration-tests/olminstall/run_olm_pipeline.py --channel stable-3.x
 
 # Use EA channel
-./integration-tests/olminstall/run-olminstall.sh --channel beta
+python3 integration-tests/olminstall/run_olm_pipeline.py --channel beta
 ```
 
 ## Slack notifications

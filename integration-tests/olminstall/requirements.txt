@@ -1,0 +1,7 @@
+# integration-tests/olminstall — Python dependencies for this directory.
+#
+# run_olm_pipeline.py and helpers/*.py use only the Python standard library.
+# No packages need to be installed via pip to run them.
+#
+# Runtime binaries (install separately): oc (required), tkn (recommended), yq (for ITS overrides),
+# skopeo (optional, ODH catalog fallback). See module docstring / python3 run_olm_pipeline.py -h.
