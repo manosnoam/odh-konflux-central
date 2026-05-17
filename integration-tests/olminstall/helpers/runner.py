@@ -71,6 +71,12 @@ _CTX_ANNOTATION_LABELS: dict[str, str] = {
     "olminstall.scripts-repo-revision": "Scripts branch/revision",
     "olminstall.tests": "Test phases (TESTS)",
     "olminstall.slack-channel-id": "Slack channel ID",
+    "olminstall.fbcf-image": "FBCF image",
+    "olminstall.operator-version": "Operator version",
+    "olminstall.ephemeral-cluster": "Ephemeral CTI",
+    "olminstall.test-results-url": "Test Results",
+    "olminstall.artifacts-status": "Artifacts status",
+    "olminstall.pipeline-test-output": "Pipeline test output",
 }
 
 
@@ -294,6 +300,20 @@ class OLMInstallRunner:
             out["olminstall.slack-channel-id"] = self.args.slack_channel_id.strip()
         return out
 
+    def early_summary_annotate_argv(self) -> list[str]:
+        """Predicted BVT artifact URL on the PipelineRun so Konflux UI shows it while the run is in progress."""
+        from .bvt_artifacts import tests_include_bvt
+        from .pipelinerun_summary import predicted_artifacts_browser_url
+
+        if not (self.pr or "").strip():
+            return []
+        tests_csv = (self.args.tests or "").strip()
+        if not tests_include_bvt(tests_csv):
+            return []
+        prj = self.get_pipelinerun_json_for_display()
+        url = predicted_artifacts_browser_url(prj, self.pr)
+        return [f"olminstall.test-results-url={url}"]
+
     def olminstall_context_annotate_argv(self) -> list[str]:
         ctx = self.build_olminstall_context_annotations()
         return [f"{k}={ctx[k]}" for k in OLMINSTALL_WRITE_ANNOTATION_KEYS if k in ctx]
@@ -341,15 +361,10 @@ class OLMInstallRunner:
 
     def bvt_artifacts_browser_url(self, prj: dict[str, Any] | None = None) -> str:
         """Per-run BVT folder in the OCI artifact browser (URL pattern from pipeline params / defaults)."""
+        from .pipelinerun_summary import predicted_artifacts_browser_url
+
         data = prj if prj is not None else self.get_pipelinerun_json_for_display()
-        base = self._pipelinerun_param_value(data, "ARTIFACT_BROWSER_URL", DEFAULT_ARTIFACT_BROWSER_URL)
-        repo = self._pipelinerun_param_value(data, "ARTIFACT_BROWSER_REPO_PATH", DEFAULT_ARTIFACT_BROWSER_REPO_PATH)
-        base = base.rstrip("/")
-        repo = (repo or "").strip("/").strip()
-        pr_name = (self.pr or "").strip()
-        if not pr_name:
-            return f"{base}/{repo}/<pipelinerun>-bvt/"
-        return f"{base}/{repo}/{pr_name}-bvt/"
+        return predicted_artifacts_browser_url(data, (self.pr or "").strip())
 
     def read_pipeline_install_results(self, prj: dict[str, Any]) -> list[tuple[str, str]]:
         """Tekton ``status.pipelineResults`` (install/catalog summary), when the API exposes them."""
@@ -412,6 +427,10 @@ class OLMInstallRunner:
         from .bvt_artifacts import resolve_artifacts_notification_line
 
         data = prj if prj is not None else self.get_pipelinerun_json_for_display()
+        ann = (data.get("metadata") or {}).get("annotations") or {}
+        url_ann = (ann.get("olminstall.test-results-url") or "").strip()
+        if url_ann:
+            return url_ann
         tests = self._pipelinerun_param_value(data, "TESTS", "")
         line = resolve_artifacts_notification_line(
             tests_csv=tests,
@@ -426,6 +445,11 @@ class OLMInstallRunner:
 
     def read_provision_cluster_cti_name(self) -> str:
         """Best-effort CTI / HyperShift object name from the provision-cluster TaskRun (live cluster only)."""
+        prj = self.get_pipelinerun_json_for_display()
+        ann = (prj.get("metadata") or {}).get("annotations") or {}
+        cti_ann = (ann.get("olminstall.ephemeral-cluster") or "").strip()
+        if cti_ann:
+            return cti_ann
         if self.watch_from_archive or not (self.pr or "").strip():
             return ""
         proc = run_cmd(
@@ -498,8 +522,9 @@ class OLMInstallRunner:
         ``phase='preview'`` is printed before log replay/stream; ``phase='final'`` after.
         """
         prj = self.get_pipelinerun_json_for_display()
-        op_ver = ""
-        if phase == "final" and self.log_file and Path(self.log_file).exists():
+        ann = (prj.get("metadata") or {}).get("annotations") or {}
+        op_ver = (ann.get("olminstall.operator-version") or "").strip()
+        if phase == "final" and not op_ver and self.log_file and Path(self.log_file).exists():
             txt = Path(self.log_file).read_text(encoding="utf-8", errors="ignore")
             m = re.findall(r"Operator version\s*:\s*([^\s]+)", txt)
             op_ver = m[-1] if m else ""
@@ -520,6 +545,9 @@ class OLMInstallRunner:
         print(f"  PipelineRun  : {self.pr}  [{final_status or 'unknown'}]")
         if op_ver:
             print(f"  Operator     : {op_ver}")
+        artifacts_status = (ann.get("olminstall.artifacts-status") or "").strip()
+        if artifacts_status:
+            print(f"  Artifacts    : {artifacts_status}")
         print(f"  Watch logs   : {watch_cmd}")
         if self.watch_from_archive:
             print("  Source       : KubeArchive (pruned from live cluster)")
@@ -1663,6 +1691,7 @@ class OLMInstallRunner:
             self.args.namespace,
             f"olminstall.run-owner={self.run_owner}",
             *self.olminstall_context_annotate_argv(),
+            *self.early_summary_annotate_argv(),
             "--overwrite",
         ]
         self._oc_annotate_required(pr_ann, f"pipelinerun/{self.pr}")

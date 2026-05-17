@@ -156,6 +156,18 @@ spec:
       description: FBCF image that was tested
       value: $(tasks.extract-fbcf-image.results.FBCF_IMAGE)
 
+    - name: TEST_RESULTS_URL
+      description: BVT JUnit and logs in the OCI artifact browser (when BVT ran)
+      value: $(finally.post-results.results.TEST_RESULTS_URL)
+
+    - name: OLMINSTALL_OPERATOR_VERSION
+      description: Installed operator CSV version from install-operator
+      value: $(finally.post-results.results.OPERATOR_VERSION)
+
+    - name: EPHEMERAL_CLUSTER
+      description: EaaS ClusterTemplateInstance name from provision-cluster
+      value: $(finally.post-results.results.EPHEMERAL_CLUSTER)
+
   tasks:
     - name: parse-pipeline-tests
       params:
@@ -1186,6 +1198,13 @@ spec:
           operator: in
           values: ["Succeeded", "Failed", "Completed"]
       taskSpec:
+        results:
+          - name: TEST_RESULTS_URL
+            description: BVT artifact browser URL for this PipelineRun
+          - name: OPERATOR_VERSION
+            description: Installed operator version when install-operator completed
+          - name: EPHEMERAL_CLUSTER
+            description: Ephemeral EaaS cluster name (clusterName result)
         params:
           - name: FBCF_IMAGE
             type: string
@@ -1201,6 +1220,10 @@ spec:
           - name: OPERATOR_NAME
             type: string
             default: "rhods-operator"
+          - name: ARTIFACTS_URL
+            type: string
+            description: BVT artifact browser URL (predicted path; Konflux UI Parameters panel)
+            default: ""
           - name: TESTS
             type: string
             default: ""
@@ -1241,6 +1264,8 @@ spec:
                 value: $(params.FBCF_IMAGE)
               - name: PIPELINE_RUN_NAME
                 value: $(params.PIPELINE_RUN_NAME)
+              - name: ARTIFACTS_URL
+                value: $(params.ARTIFACTS_URL)
               - name: TESTS
                 value: $(params.TESTS)
               - name: SLACK_CHANNEL_ID
@@ -1257,13 +1282,36 @@ spec:
 
               os.chdir("/workspace/scripts-repo/integration-tests/olminstall")
               os.execvp(sys.executable, [sys.executable, "helpers/send_notification.py"])
+
+          - name: patch-summary-annotations
+            image: quay.io/konflux-ci/konflux-test:stable@sha256:09328e5f47da168ffe951ec9c4242cd6761e61e0a235df1bba3f5158e757446d
+            env:
+              - name: PIPELINE_RUN_NAME
+                value: $(params.PIPELINE_RUN_NAME)
+              - name: TESTS
+                value: $(params.TESTS)
+              - name: ARTIFACTS_URL
+                value: $(params.ARTIFACTS_URL)
+              - name: TEST_RESULTS_URL_PATH
+                value: $(results.TEST_RESULTS_URL.path)
+              - name: OPERATOR_VERSION_PATH
+                value: $(results.OPERATOR_VERSION.path)
+              - name: EPHEMERAL_CLUSTER_PATH
+                value: $(results.EPHEMERAL_CLUSTER.path)
+            script: |
+              #!/usr/bin/env python3
+              import os, sys
+
+              os.chdir("/workspace/scripts-repo/integration-tests/olminstall")
+              os.execvp(sys.executable, [sys.executable, "helpers/patch_pipelinerun_summary.py"])
       params:
         # NOTE: Do NOT reference $(tasks.bvt-health-checks.results.*) or any other
         # task results here. In Tekton v1, a finally task that references a result
         # from a skipped/failed task is itself skipped — so Slack notifications
         # would silently not fire on the most important failures.
-        # Do not pass a guessed ARTIFACTS_URL: send_notification reads TaskRuns and
-        # only prints a link when upload-artifacts published ARTIFACTS_URL.
+        # ARTIFACTS_URL uses only params + context (never $(tasks.*.results)) so post-results
+        # is not skipped when BVT was skipped. patch-summary-annotations overwrites annotations
+        # with the published URL when upload-artifacts emitted ARTIFACTS_URL on a TaskRun.
         - name: FBCF_IMAGE
           value: "$(params.FBCF_COMPONENT_NAME)"
         # Aggregate status of all non-finally pipeline tasks (install, resolve, BVT).
@@ -1277,6 +1325,8 @@ spec:
           value: $(context.pipelineRun.name)
         - name: OPERATOR_NAME
           value: "$(params.OPERATOR_NAME)"
+        - name: ARTIFACTS_URL
+          value: "$(params.ARTIFACT_BROWSER_URL)/$(params.ARTIFACT_BROWSER_REPO_PATH)/$(context.pipelineRun.name)-bvt/"
         - name: TESTS
           value: "$(params.TESTS)"
         - name: SLACK_CHANNEL_ID

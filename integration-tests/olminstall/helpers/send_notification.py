@@ -6,7 +6,7 @@ Env (required):
     OPERATOR_NAME     -- e.g. rhods-operator, opendatahub-operator
     PIPELINE_RUN_NAME
 Env (optional):
-    OPERATOR_VERSION, FBCF_IMAGE, TESTS,
+    OPERATOR_VERSION, FBCF_IMAGE, ARTIFACTS_URL, TESTS,
     SLACK_CHANNEL_ID, SLACK_WEBHOOK_URL
 """
 
@@ -24,7 +24,7 @@ _OLMINSTALL = Path(__file__).resolve().parent.parent
 if str(_OLMINSTALL) not in sys.path:
     sys.path.insert(0, str(_OLMINSTALL))
 
-from helpers.bvt_artifacts import resolve_artifacts_notification_line
+from helpers.bvt_artifacts import resolve_artifacts_notification_line, tests_include_bvt
 from helpers.tekton_util import require_env
 
 _PRODUCT_LABELS = {
@@ -69,6 +69,10 @@ def main() -> int:
         tests_csv=tests_csv,
         pipeline_run=pipeline_run,
     )
+    if not artifacts_line and tests_include_bvt(tests_csv):
+        predicted = os.environ.get("ARTIFACTS_URL", "").strip()
+        if predicted:
+            artifacts_line = f"Artifacts: {predicted}"
     if artifacts_line:
         lines.append(artifacts_line)
     msg = "\n".join(lines)

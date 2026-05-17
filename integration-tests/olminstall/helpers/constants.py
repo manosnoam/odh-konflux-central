@@ -70,5 +70,19 @@ OLMINSTALL_WRITE_ANNOTATION_KEYS = (
     "olminstall.tests",
     "olminstall.bvt-env-only",
 )
+# Written by patch_pipelinerun_summary (post-results) and read by CLI / Konflux UI.
+OLMINSTALL_SUMMARY_ANNOTATION_KEYS = (
+    "olminstall.fbcf-image",
+    "olminstall.operator-version",
+    "olminstall.ephemeral-cluster",
+    "olminstall.test-results-url",
+    "olminstall.artifacts-status",
+    "olminstall.pipeline-test-output",
+)
+
 # Order when printing from existing PipelineRuns (includes run-owner from annotate).
-OLMINSTALL_CTX_PRINT_KEYS = OLMINSTALL_WRITE_ANNOTATION_KEYS + ("olminstall.run-owner",)
+OLMINSTALL_CTX_PRINT_KEYS = (
+    OLMINSTALL_WRITE_ANNOTATION_KEYS
+    + ("olminstall.run-owner",)
+    + OLMINSTALL_SUMMARY_ANNOTATION_KEYS
+)
