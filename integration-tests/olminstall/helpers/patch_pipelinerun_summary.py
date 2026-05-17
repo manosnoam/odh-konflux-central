@@ -7,7 +7,7 @@ visible under post-results → patch-summary-annotations in the Konflux UI.
 Env:
     PIPELINE_RUN_NAME  -- Tekton PipelineRun (default: /etc/tekton/pipelineRunName)
     TESTS              -- comma-separated test phases (optional; read from PipelineRun params)
-    TEST_RESULTS_URL_PATH, OPERATOR_VERSION_PATH, EPHEMERAL_CLUSTER_PATH, FBCF_IMAGE_PATH
+    ARTIFACTS_URL_PATH, TEST_OUTPUT_PATH, OPERATOR_VERSION_PATH, EPHEMERAL_CLUSTER_PATH
         -- optional Tekton result file paths (set by the pipeline step)
 """
 

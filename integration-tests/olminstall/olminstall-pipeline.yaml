@@ -156,9 +156,13 @@ spec:
       description: FBCF image that was tested
       value: $(tasks.extract-fbcf-image.results.FBCF_IMAGE)
 
-    - name: TEST_RESULTS_URL
-      description: BVT JUnit and logs in the OCI artifact browser (when BVT ran)
-      value: $(finally.post-results.results.TEST_RESULTS_URL)
+    - name: ARTIFACTS_URL
+      description: BVT JUnit and logs in the OCI artifact browser (Konflux task Results panel)
+      value: $(finally.post-results.results.ARTIFACTS_URL)
+
+    - name: OLMINSTALL_SUMMARY_TEST_OUTPUT
+      description: Aggregated TEST_OUTPUT / install status (same as pipeline TEST_OUTPUT)
+      value: $(finally.post-results.results.TEST_OUTPUT)
 
     - name: OLMINSTALL_OPERATOR_VERSION
       description: Installed operator CSV version from install-operator
@@ -1199,7 +1203,9 @@ spec:
           values: ["Succeeded", "Failed", "Completed"]
       taskSpec:
         results:
-          - name: TEST_RESULTS_URL
+          - name: TEST_OUTPUT
+            description: BVT / install summary (Konflux standard; same names as bvt-health-checks)
+          - name: ARTIFACTS_URL
             description: BVT artifact browser URL for this PipelineRun
           - name: OPERATOR_VERSION
             description: Installed operator version when install-operator completed
@@ -1251,6 +1257,16 @@ spec:
               git init -q && git remote add origin "${REPO_URL}"
               git fetch --depth=1 origin "${REPO_REV}" && git checkout -q FETCH_HEAD
 
+          # Seed Konflux task Results from params (no scripts repo) so ARTIFACTS_URL appears even
+          # if patch-summary-annotations fails on an older SCRIPTS_REPO_REVISION.
+          - name: seed-ui-results
+            image: quay.io/konflux-ci/konflux-test:stable@sha256:09328e5f47da168ffe951ec9c4242cd6761e61e0a235df1bba3f5158e757446d
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+              printf '%s' "$(params.ARTIFACTS_URL)" > "$(results.ARTIFACTS_URL.path)"
+              printf '%s' "result=$(params.TEST_STATUS)" > "$(results.TEST_OUTPUT.path)"
+
           - name: send-notification
             image: quay.io/konflux-ci/konflux-test:stable@sha256:09328e5f47da168ffe951ec9c4242cd6761e61e0a235df1bba3f5158e757446d
             env:
@@ -1292,8 +1308,10 @@ spec:
                 value: $(params.TESTS)
               - name: ARTIFACTS_URL
                 value: $(params.ARTIFACTS_URL)
-              - name: TEST_RESULTS_URL_PATH
-                value: $(results.TEST_RESULTS_URL.path)
+              - name: ARTIFACTS_URL_PATH
+                value: $(results.ARTIFACTS_URL.path)
+              - name: TEST_OUTPUT_PATH
+                value: $(results.TEST_OUTPUT.path)
               - name: OPERATOR_VERSION_PATH
                 value: $(results.OPERATOR_VERSION.path)
               - name: EPHEMERAL_CLUSTER_PATH

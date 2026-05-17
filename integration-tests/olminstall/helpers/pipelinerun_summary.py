@@ -275,7 +275,8 @@ def write_summary_tekton_results(summary_annotations: dict[str, str]) -> None:
     from helpers.tekton_util import write_result
 
     mapping = {
-        "TEST_RESULTS_URL_PATH": "olminstall.test-results-url",
+        "ARTIFACTS_URL_PATH": "olminstall.test-results-url",
+        "TEST_OUTPUT_PATH": "olminstall.pipeline-test-output",
         "OPERATOR_VERSION_PATH": "olminstall.operator-version",
         "EPHEMERAL_CLUSTER_PATH": "olminstall.ephemeral-cluster",
     }
