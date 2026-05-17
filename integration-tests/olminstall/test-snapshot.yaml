@@ -1,5 +1,5 @@
 ---
-# Manual test Snapshot for olminstall smoke scenario.
+# Manual test Snapshot for olminstall integration scenario.
 # Creates a Snapshot to trigger the ITS pipeline without waiting for a real build.
 #
 # Prerequisites:
@@ -18,7 +18,10 @@
 #     integration-tests/olminstall/test-snapshot.yaml | oc create -n rhoai-tenant -f -
 #
 # After creation, Konflux detects the Snapshot and triggers a PipelineRun for
-# every matching ITS. Watch the run:
+# every matching IntegrationTestScenario on spec.application (and Enterprise Contract
+# may add separate runs). Prefer ``python3 …/olm_pipeline.py`` (prunes legacy ITS by
+# default for rhoai-tenant + testops-playpen) or run ``python3 …/helpers/prune_stale_testops_its.py`` first.
+# Watch the olminstall run:
 #   oc get pipelineruns -n rhoai-tenant | grep olminstall
 #   or via the Konflux UI:
 #   https://konflux-ui.apps.<cluster-domain>/ns/rhoai-tenant/applications/testops-playpen/activity/pipelineruns

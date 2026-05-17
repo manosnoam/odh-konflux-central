@@ -13,22 +13,26 @@ kind: IntegrationTestScenario
 metadata:
   labels:
     test.appstudio.openshift.io/optional: "true"
-  name: odh-olminstall-smoke-testops
+  name: odh-olminstall-testops
   namespace: rhoai-tenant
 spec:
   application: testops-playpen
   contexts:
-    - description: Execute olminstall smoke test (sandbox / manual trigger)
+    - description: Execute olminstall integration test (sandbox / manual trigger)
       name: application
   # Optional SCRIPTS_REPO_URL / SCRIPTS_REPO_REVISION here to override the pipeline
   # default (opendatahub-io odh-konflux-central @ main). Or: python3 …/olm_pipeline.py --konflux-repo …
   params:
+    - name: PRODUCT
+      value: "rhoai"
     - name: FBCF_COMPONENT_NAME
       value: "rhoai-fbc-fragment-ocp-421"
     - name: OPERATOR_NAME
       value: "rhods-operator"
     - name: QUAY_PULL_SECRET_NAME
       value: "rhoai-quay-secret"
+    - name: TESTS
+      value: "bvt,smoke"
   resolverRef:
     params:
       - name: url
@@ -36,6 +40,6 @@ spec:
       - name: revision
         value: main
       - name: pathInRepo
-        value: integration-tests/olminstall/olminstall-smoke-pipeline.yaml
+        value: integration-tests/olminstall/olminstall-pipeline.yaml
     resolver: git
     resourceKind: pipeline

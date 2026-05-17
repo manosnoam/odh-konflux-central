@@ -2,6 +2,12 @@
 """
 Batch-verify argparse + parse_cli_args for olm_pipeline.py (no oc / cluster).
 
+This process only exercises ``parse_cli_args`` — it does **not** call ``oc`` or start
+``OLMInstallRunner.run()``. It is meant to pass in CI or on a laptop with no Konflux
+context. A full ``olm_pipeline.py`` trigger/watch (including ``--tests bvt``) **will
+fail** without a logged-in Konflux cluster and tenant; that is expected until a future
+option exists to target an existing cluster URL / kubeconfig from this entrypoint.
+
 Run:  python3 integration-tests/olminstall/verify_cli_args.py
 """
 
@@ -100,11 +106,24 @@ def main() -> int:
             failures.append(f"{label} -> {type(exc).__name__}: {exc}")
 
     # --- Valid parses ---
+    expect_ok([], check=lambda a: (_assert(a.product == "none"), _assert(a.list_pipelines == 0), _assert(not a.watch_mode), _assert(a.prune_stale_its)))
+
+    expect_ok(["--no-prune-stale-its"], check=lambda a: (_assert(not a.prune_stale_its),))
+
     expect_ok(
         ["--product", "odh"],
         check=lambda a: (
             _assert(a.product == "odh"),
             _assert(a.list_pipelines == 0),
+            _assert(not a.watch_mode),
+        ),
+    )
+
+    expect_ok(
+        ["--tests", "bvt"],
+        check=lambda a: (
+            _assert(a.product == "none"),
+            _assert(a.tests == "bvt"),
             _assert(not a.watch_mode),
         ),
     )
@@ -150,11 +169,28 @@ def main() -> int:
         check=lambda a: _assert(a.image == "quay.io/rhoai/x@sha256:deadbeef"),
     )
     expect_ok(
-        ["--konflux-repo", "https://github.com/o/r.git", "--konflux-branch", "feat/x"],
-        check=lambda a: (_assert(a.konflux_repo.endswith(".git")), _assert(a.konflux_branch == "feat/x")),
+        ["--konflux-repo", "https://github.com/o/r.git", "--konflux-branch", "your-branch"],
+        check=lambda a: (_assert(a.konflux_repo.endswith(".git")), _assert(a.konflux_branch == "your-branch")),
     )
     expect_ok(["--ocp-version", "4.20"], check=lambda a: _assert(a.ocp_version == "4.20"))
     expect_ok(["--ocp-version", " 4.19 "], check=lambda a: _assert(a.ocp_version == "4.19"))
+
+    expect_ok(
+        ["--tests", "bvt", "--ocp-version", "4.19"],
+        check=lambda a: (_assert(a.tests == "bvt"), _assert(a.ocp_version == "4.19")),
+    )
+    expect_ok(
+        ["--tests", "bvt", "--image", "quay.io/rhoai/x@sha256:deadbeef"],
+        check=lambda a: _assert(a.tests == "bvt"),
+    )
+    expect_ok(
+        ["--tests", "bvt", "--channel", "stable"],
+        check=lambda a: _assert(a.tests == "bvt"),
+    )
+    expect_ok(
+        ["--tests", "tier1,bvt"],
+        check=lambda a: _assert(a.tests == "bvt,tier1"),
+    )
 
     expect_ok(
         ["--ka-host"],
@@ -218,6 +254,7 @@ def main() -> int:
 
     # --- Expected AppError ---
     expect_err(["--product", "odh", "--version", "1"], "--version is supported only")
+    expect_err(["--version", "3.5"], "--version is supported only")
     expect_err(["--ka-host"], "KA_HOST", env={"KA_HOST": ""})
 
     prev_ka = _patch_env({"KA_HOST": None})
@@ -244,8 +281,10 @@ def main() -> int:
     expect_err(["--watch", "--ocp-version", "4.19"], "Trigger/install options cannot be used")
     expect_err(["--watch", "--version", "3.5", "--product", "rhoai"], "Trigger/install options cannot be used")
     expect_err(["--list-supported-ocp", "--konflux-repo", "https://g/r.git"], "Trigger/install options cannot be used")
+    expect_err(["--list-pipelines", "--tests", "bvt"], "Trigger/install options cannot be used")
 
     expect_argparse_fail(["--product", "invalid"])
+    expect_argparse_fail(["--bvt-env-only"])
 
     if failures:
         print(f"FAIL ({len(failures)}):", file=sys.stderr)

@@ -20,8 +20,11 @@ from .constants import (
     DEFAULT_PRODUCT,
     LIST_SUPPORTED_OCP_MAX_PRS,
     PRODUCT_CHOICES,
+    default_tests_config_path,
 )
 from .errors import AppError
+from .tests_config import load_tests_catalog
+from .tests_plan import validate_and_normalize_tests_csv
 
 # When user passes ``--ka-host`` with no URL, read KA_HOST from the environment.
 _KA_HOST_FROM_ENV = "__KA_HOST_FROM_ENV__"
@@ -104,8 +107,26 @@ def make_parser(description: str = "", epilog: str | None = None) -> CliArgument
         default=os.environ.get("KONFLUX_SERVER", DEFAULT_KONFLUX_SERVER),
         help="Konflux API URL for oc login fallback (env KONFLUX_SERVER)",
     )
-    parser.add_argument("--konflux-repo", metavar="URL", default="", help="ITS scripts repo URL (needs yq)")
-    parser.add_argument("--konflux-branch", metavar="REF", default="", help="ITS scripts revision (needs yq)")
+    parser.add_argument(
+        "--konflux-repo",
+        metavar="URL",
+        default="",
+        help=(
+            "Git URL for pipeline + scripts (must contain integration-tests/olminstall/). "
+            "Omit (with no --konflux-branch) = ITS default opendatahub-io/odh-konflux-central @ main. "
+            "Optional: set OLMINSTALL_PIPELINE_REPO and OLMINSTALL_PIPELINE_REVISION (or KONFLUX_PIPELINE_*) "
+            "when both CLI flags are omitted. Needs yq when this or --konflux-branch patches the ITS."
+        ),
+    )
+    parser.add_argument(
+        "--konflux-branch",
+        metavar="REF",
+        default="",
+        help=(
+            "Git revision for --konflux-repo (branch/tag/SHA). Omit with --konflux-repo = resolver stays ``main`` "
+            "from the ITS YAML. Needs yq when patching."
+        ),
+    )
     parser.add_argument(
         "--channel",
         metavar="NAME",
@@ -116,7 +137,11 @@ def make_parser(description: str = "", epilog: str | None = None) -> CliArgument
         "--product",
         default=DEFAULT_PRODUCT,
         choices=PRODUCT_CHOICES,
-        help="rhoai or odh (catalog / ITS wiring)",
+        help=(
+            "none = no rhoai/odh auto image resolution (pinned test-snapshot.yaml unless --image); "
+            "rhoai or odh for catalog / ITS wiring. Omit = same as none (default). "
+            "Use rhoai/odh for full installs."
+        ),
     )
     parser.add_argument(
         "--version",
@@ -133,12 +158,31 @@ def make_parser(description: str = "", epilog: str | None = None) -> CliArgument
         help="EaaS cluster minor (e.g. 4.19); with --list-supported-ocp, assert minor is listed",
     )
     parser.add_argument(
+        "--tests",
+        metavar="LIST",
+        default=None,
+        help=(
+            "Comma-separated test phases for ITS param TESTS (include every phase marked "
+            "requiredInSelection in olminstall-tests-config.yaml; the default file may have none). "
+            "Omit to use defaults from that file."
+        ),
+    )
+    parser.add_argument(
+        "--tests-config",
+        metavar="PATH",
+        default="",
+        help=(
+            "Path to olminstall-tests-config.yaml (phase list + defaults). "
+            f"Default: {default_tests_config_path()}"
+        ),
+    )
+    parser.add_argument(
         "--watch",
         nargs="?",
         const="",
         default=None,
         metavar="PIPELINERUN",
-        help="Watch latest owned run or PIPELINERUN (archive if pruned)",
+        help="Watch newest olminstall run for --app (same order as --list), else owner/Snapshot match; or PIPELINERUN",
     )
     parser.add_argument(
         "--list-pipelines",
@@ -154,10 +198,32 @@ def make_parser(description: str = "", epilog: str | None = None) -> CliArgument
         action="store_true",
         help=f"Print supported OCP minors from logs (≤{LIST_SUPPORTED_OCP_MAX_PRS} runs); optional --ocp-version",
     )
+    parser.add_argument(
+        "--slack-channel-id",
+        metavar="CHANNEL",
+        default="",
+        help=(
+            "Optional Slack channel ID (e.g. C01234ABCDE) to receive a run notification via the "
+            "slack-webhook secret in the namespace. Omit (the default) to suppress all Slack messages. "
+            "Requires the slack-webhook secret to be present when set."
+        ),
+    )
+    parser.add_argument(
+        "--no-prune-stale-its",
+        dest="prune_stale_its",
+        action="store_false",
+        default=True,
+        help=(
+            "When creating a Snapshot with default --namespace rhoai-tenant and --app testops-playpen, "
+            "skip deleting legacy IntegrationTestScenario CRs (rhoai-test) "
+            "before oc apply + Snapshot. Default: prune so only odh-olminstall-testops runs for that app."
+        ),
+    )
     return parser
 
 
 def parse_cli_args(parser: CliArgumentParser, argv: list[str]) -> argparse.Namespace:
+    tests_explicit = any(x == "--tests" or x.startswith("--tests=") for x in argv)
     args = parser.parse_args(argv)
 
     if args.version and args.product != "rhoai":
@@ -181,6 +247,13 @@ def parse_cli_args(parser: CliArgumentParser, argv: list[str]) -> argparse.Names
         raise AppError("--ka-host must use https://", 2)
     if args.konflux_server and not args.konflux_server.startswith("https://"):
         raise AppError("--konflux-server must use https://", 2)
+
+    cfg_arg = (args.tests_config or "").strip()
+    cfg_path = Path(cfg_arg).expanduser().resolve() if cfg_arg else default_tests_config_path()
+    catalog = load_tests_catalog(cfg_path)
+    args.tests_catalog_default_csv = catalog.default_csv
+    args.tests = validate_and_normalize_tests_csv(args.tests, catalog)
+    args.tests_explicit = tests_explicit
 
     if args.list_pipelines is not None:
         try:
@@ -217,6 +290,10 @@ def parse_cli_args(parser: CliArgumentParser, argv: list[str]) -> argparse.Names
             bad.append("--konflux-branch")
         if args.ocp_version and not list_ocp_on:
             bad.append("--ocp-version")
+        if getattr(args, "tests_explicit", False):
+            bad.append("--tests")
+        if (args.tests_config or "").strip():
+            bad.append("--tests-config")
         return bad
 
     if query_modes and (bad := _trigger_options_incompatible_with_query()):

@@ -28,6 +28,58 @@ FBCF_IMAGE_PATTERN = re.compile(r"^[A-Za-z0-9./_:@-]+$")
 NS_PATCH_PATTERN = re.compile(r"^(\s*namespace:\s*)redhat-ods-operator\s*$", re.MULTILINE)
 OC_WAIT_NEEDLE = 'local namespace="${2:-default}"'
 
+# Minimal DSCI + DSC for BVT. The operator must be installed first; these CRs
+# activate RHOAI so the opendatahub-tests conftest can discover the cluster.
+_DSCI_YAML = """\
+apiVersion: dscinitialization.opendatahub.io/v1
+kind: DSCInitialization
+metadata:
+  name: default-dsci
+spec:
+  applicationsNamespace: redhat-ods-applications
+  monitoring:
+    managementState: Managed
+    namespace: redhat-ods-monitoring
+  serviceMesh:
+    managementState: Removed
+  trustedCABundle:
+    customCABundle: ""
+    managementState: Removed
+"""
+
+_DSC_YAML = """\
+apiVersion: datasciencecluster.opendatahub.io/v2
+kind: DataScienceCluster
+metadata:
+  name: default-dsc
+spec:
+  components:
+    dashboard:
+      managementState: Managed
+    workbenches:
+      managementState: Managed
+    modelmeshserving:
+      managementState: Removed
+    datasciencepipelines:
+      managementState: Removed
+    kserve:
+      managementState: Removed
+    codeflare:
+      managementState: Removed
+    ray:
+      managementState: Removed
+    kueue:
+      managementState: Removed
+    modelregistry:
+      managementState: Removed
+    trainingoperator:
+      managementState: Removed
+    trustyai:
+      managementState: Removed
+    modelcontroller:
+      managementState: Removed
+"""
+
 
 def fail(message: str = "") -> NoReturn:
     if message:
@@ -42,6 +94,8 @@ def fail(message: str = "") -> NoReturn:
 
 
 def require_env(name: str) -> str:
+    # Local version that calls fail() to write INSTALL_STATUS on error.
+    # Other scripts use the shared helpers.tekton_util.require_env instead.
     v = os.environ.get(name, "").strip()
     if not v:
         fail(f"❌ Required environment variable is missing: {name}")
@@ -107,16 +161,37 @@ def patch_manifest_namespace(manifest_path: Path, operator_namespace: str) -> No
     manifest_path.write_text(patched, encoding="utf-8")
 
 
-def resolve_olminstall_manifest(olminstall_dir: Path, operator_name: str) -> tuple[Path, str]:
+def normalize_odh_olm_targets(operator_name: str, operator_namespace: str, update_channel: str) -> tuple[str, str]:
+    """Align ODH catalog installs with Jenkins (odhTestConfigOperator / generateTestConfigFile).
+
+    For ``odh-stable`` (Konflux ODH catalog) Jenkins uses the rhods-operator OLM package and
+    downstream (RHOAI) operator namespace — same as ``install-operator.sh rhods-operator`` in olminstall.
+    """
+    if update_channel == "odh-stable":
+        if operator_name != "rhods-operator" or operator_namespace != "redhat-ods-operator":
+            print(
+                "ODH odh-stable: using Jenkins/olminstall targets "
+                f"rhods-operator / redhat-ods-operator "
+                f"(was {operator_name!r} / {operator_namespace!r})"
+            )
+        return "rhods-operator", "redhat-ods-operator"
+    if update_channel == "odh-nightlies" and operator_name == "opendatahub-operator":
+        print("ODH odh-nightlies: using rhods-operator OLM package (Jenkins default)")
+        return "rhods-operator", operator_namespace
+    return operator_name, operator_namespace
+
+
+def resolve_olminstall_manifest(olminstall_dir: Path, operator_name: str) -> Path:
+    """Return path to ``resources/install-<operator>.yaml`` in the cloned olminstall repo."""
     resources_dir = (olminstall_dir / "resources").resolve()
     manifest = olminstall_dir / "resources" / f"install-{operator_name}.yaml"
     try:
         manifest.resolve().relative_to(resources_dir)
     except (ValueError, OSError):
         fail(f"❌ Resolved manifest path escapes olminstall dir: {manifest}")
-    if manifest.is_file():
-        return manifest, operator_name
-    fail(f"❌ Missing olminstall manifest: {manifest}")
+    if not manifest.is_file():
+        fail(f"❌ Missing olminstall manifest: {manifest}")
+    return manifest
 
 
 def apply_catalog_source(name: str, fbcf_image: str) -> None:
@@ -327,6 +402,67 @@ def wait_global_pull_secret_syncer() -> None:
         print(pods_diag.stdout.rstrip())
 
 
+def _cr_exists(kind: str, name: str) -> bool:
+    r = oc_run(["get", kind, name], check=False, capture_output=True, timeout=30)
+    return r.returncode == 0
+
+
+def _apply_cr(kind: str, name: str, yaml_doc: str) -> None:
+    r = oc_run(["apply", "-f", "-"], stdin_text=yaml_doc, check=False, capture_output=True, timeout=60)
+    if r.returncode != 0:
+        err = (r.stderr or r.stdout or "").strip()
+        print(f"⚠ Could not apply {kind}/{name}: {err}", file=sys.stderr)
+        fail(f"oc apply failed for {kind}/{name}: {err or 'unknown error'}")
+    print(f"✓ Applied {kind}/{name}")
+
+
+def setup_dsc_resources() -> None:
+    """Create DSCInitialization and DataScienceCluster if they don't already exist."""
+    print("\nSetting up RHOAI DataScienceCluster resources for BVT testing...")
+
+    if _cr_exists("dscinitialization", "default-dsci"):
+        print("  DSCInitialization/default-dsci already exists — skipping")
+    else:
+        _apply_cr("dscinitialization", "default-dsci", _DSCI_YAML)
+
+    if _cr_exists("datasciencecluster", "default-dsc"):
+        print("  DataScienceCluster/default-dsc already exists — skipping")
+    else:
+        _apply_cr("datasciencecluster", "default-dsc", _DSC_YAML)
+
+
+def wait_dsc_ready(timeout_s: int = 600) -> bool:
+    """Poll until DataScienceCluster/default-dsc has Ready==True or timeout expires."""
+    print(f"Waiting for DataScienceCluster/default-dsc to be Ready (up to {timeout_s}s)...")
+    deadline = time.time() + timeout_s
+    iteration = 0
+    while time.time() < deadline:
+        r = oc_run(
+            [
+                "get", "datasciencecluster", "default-dsc",
+                "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}",
+            ],
+            check=False, capture_output=True, text=True, timeout=30,
+        )
+        status = (r.stdout or "").strip()
+        if status == "True":
+            print("✓ DataScienceCluster/default-dsc is Ready")
+            return True
+        iteration += 1
+        print(f"  DSC Ready status: {status or 'unknown'} (iter {iteration})")
+        if iteration % 4 == 0:
+            oc_run(
+                ["get", "datasciencecluster", "default-dsc", "-o",
+                 "custom-columns=NAME:.metadata.name,PHASE:.status.phase,"
+                 "READY:.status.conditions[?(@.type==\"Ready\")].status"],
+                capture_output=False, check=False, timeout=60,
+            )
+        time.sleep(15)
+    print(f"⚠ DataScienceCluster/default-dsc not Ready after {timeout_s}s — BVT tests may fail")
+    oc_run(["describe", "datasciencecluster", "default-dsc"], capture_output=False, check=False, timeout=120)
+    return False
+
+
 def pick_succeeded_csv_version(namespace: str, olminstall_operator: str) -> str | None:
     r = oc_run(["get", "csv", "-n", namespace, "-o", "json"], capture_output=True, text=True, check=False, timeout=120)
     if r.returncode != 0:
@@ -430,6 +566,10 @@ def main() -> int:
     validate_dns_label(catalog_name, "OLMINSTALL_CATALOG_NAME")
     validate_dns_label(cluster_pull_secret, "CLUSTER_MARKETPLACE_PULL_SECRET_NAME")
 
+    operator_name, operator_namespace = normalize_odh_olm_targets(
+        operator_name, operator_namespace, update_channel
+    )
+
     print("=========================================")
     print(" ODH/RHOAI Operator Installation")
     print(f" FBCF:      {fbcf_image}")
@@ -527,14 +667,14 @@ def main() -> int:
     wait_global_pull_secret_syncer()
 
     patch_oc_wait_sh(olminstall_dir, operator_namespace)
-    manifest_path, olminstall_operator = resolve_olminstall_manifest(olminstall_dir, operator_name)
+    manifest_path = resolve_olminstall_manifest(olminstall_dir, operator_name)
     patch_manifest_namespace(manifest_path, operator_namespace)
 
     print(
-        f"Running olminstall (./install-operator.sh {olminstall_operator} {update_channel} {catalog_name})..."
+        f"Running olminstall (./install-operator.sh {operator_name} {update_channel} {catalog_name})..."
     )
     r_install = subprocess.run(
-        ["./install-operator.sh", olminstall_operator, update_channel, catalog_name],
+        ["./install-operator.sh", operator_name, update_channel, catalog_name],
         cwd=olminstall_dir,
         timeout=7200,
     )
@@ -544,12 +684,17 @@ def main() -> int:
         oc_run(["describe", "sub", "-n", operator_namespace], capture_output=False, check=False, timeout=120)
         fail()
 
-    csv_version = pick_succeeded_csv_version(operator_namespace, olminstall_operator)
+    csv_version = pick_succeeded_csv_version(operator_namespace, operator_name)
     if not csv_version:
         print(f"❌ No CSV reached Succeeded phase in namespace {operator_namespace}")
         oc_run(["get", "csv", "-n", operator_namespace], capture_output=False, check=False, timeout=120)
         fail()
     Path(operator_version_path).write_text(csv_version, encoding="utf-8")
+
+    setup_dsc_resources()
+    if not wait_dsc_ready(timeout_s=600):
+        print("❌ DataScienceCluster/default-dsc did not become Ready within timeout", file=sys.stderr)
+        fail("DSC not Ready")
 
     print("")
     print("=========================================")

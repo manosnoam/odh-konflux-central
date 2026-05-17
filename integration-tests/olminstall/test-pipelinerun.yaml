@@ -1,5 +1,5 @@
 ---
-# Manual test PipelineRun for olminstall smoke scenario.
+# Manual test PipelineRun for olminstall integration scenario.
 # Usage:
 #   oc create -n rhoai-tenant -f integration-tests/olminstall/test-pipelinerun.yaml
 #
@@ -21,7 +21,7 @@ spec:
       - name: revision
         value: main
       - name: pathInRepo
-        value: integration-tests/olminstall/olminstall-smoke-pipeline.yaml
+        value: integration-tests/olminstall/olminstall-pipeline.yaml
   params:
     - name: SNAPSHOT
       value: |
@@ -36,11 +36,13 @@ spec:
     - name: UPDATE_CHANNEL
       value: odh-stable
     - name: OPERATOR_NAMESPACE
-      value: opendatahub-operators
+      value: redhat-ods-operator
     - name: OPERATOR_NAME
-      value: opendatahub-operator
+      value: rhods-operator
     - name: OLMINSTALL_REPO_URL
       value: https://gitlab.cee.redhat.com/data-hub/olminstall.git
     # ODH uses a different pull-secret name; the pipeline default is rhoai-quay-secret
     - name: QUAY_PULL_SECRET_NAME
       value: odh-quay-secret
+    - name: TESTS
+      value: bvt,smoke
