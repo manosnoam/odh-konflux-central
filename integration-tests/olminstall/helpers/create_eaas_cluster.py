@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -84,6 +85,17 @@ def _emit_cti_yaml(
     path.write_text(text, encoding="utf-8")
 
 
+def _write_secure_kubeconfig(content: str) -> Path:
+    """Write kubeconfig to a unique temp file with mode 0o600 (avoids /tmp/kubeconfig races)."""
+    fd, path_str = tempfile.mkstemp(prefix="kubeconfig-", suffix=".yaml")
+    try:
+        os.write(fd, content.encode("utf-8"))
+        os.fchmod(fd, 0o600)
+    finally:
+        os.close(fd)
+    return Path(path_str)
+
+
 def main() -> int:
     instance_type = require_env("INSTANCE_TYPE")
     version = require_env("VERSION")
@@ -93,9 +105,7 @@ def main() -> int:
     timeout = os.environ.get("TIMEOUT", "30m").strip() or "30m"
     ics_value = os.environ.get("ICS_VALUE", "").strip()
 
-    kubeconfig = Path("/tmp/kubeconfig")
-    kubeconfig.write_text(kubeconfig_value, encoding="utf-8")
-    kubeconfig.chmod(0o600)
+    kubeconfig = _write_secure_kubeconfig(kubeconfig_value)
     os.environ["KUBECONFIG"] = str(kubeconfig)
 
     # konflux-test image provides ``oc``; ``kubectl`` may be absent.

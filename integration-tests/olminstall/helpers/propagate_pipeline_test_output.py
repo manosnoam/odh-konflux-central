@@ -23,6 +23,12 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+_OLMINSTALL = Path(__file__).resolve().parent.parent
+if str(_OLMINSTALL) not in sys.path:
+    sys.path.insert(0, str(_OLMINSTALL))
+
+from helpers.tekton_util import write_result
+
 
 def _in_cluster_get(url: str, token: str, ca_path: Path) -> dict[str, object]:
     ctx = ssl.create_default_context(cafile=str(ca_path))
@@ -72,7 +78,7 @@ def _pick_output(pr: dict[str, object]) -> str:
     pr_name = str(meta.get("name") or "")
 
     sel = urllib.parse.quote(f"tekton.dev/pipelineRun={pr_name}")
-    url = f"{base}/apis/tekton.dev/v1/namespaces/{ns}/taskruns?labelSelector={sel}"
+    url = f"{base}/apis/tekton.dev/v1/namespaces/{urllib.parse.quote(ns)}/taskruns?labelSelector={sel}"
     try:
         tr_list = _in_cluster_get(url, token, ca)
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError) as exc:
@@ -154,7 +160,10 @@ def main() -> int:
         print("KUBERNETES_SERVICE_HOST not set", file=sys.stderr)
         return 1
     base = f"https://{host}:{port}"
-    pr_url = f"{base}/apis/tekton.dev/v1/namespaces/{ns}/pipelineruns/{urllib.parse.quote(pr_name)}"
+    pr_url = (
+        f"{base}/apis/tekton.dev/v1/namespaces/{urllib.parse.quote(ns)}"
+        f"/pipelineruns/{urllib.parse.quote(pr_name)}"
+    )
     try:
         pr = _in_cluster_get(pr_url, token, ca)
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError) as exc:
@@ -162,8 +171,7 @@ def main() -> int:
         return 1
 
     text = _pick_output(pr)
-    Path(result_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(result_path).write_text(text, encoding="utf-8")
+    write_result(result_path, text)
     print(f"Wrote pipeline TEST_OUTPUT ({len(text)} chars) to {result_path}")
     return 0
 

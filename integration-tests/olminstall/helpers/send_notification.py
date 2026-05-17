@@ -104,6 +104,11 @@ def main() -> int:
     )
     try:
         with urlopen(req, timeout=30) as resp:
+            final_url = resp.geturl()
+            if not _slack_incoming_webhook_ok(final_url):
+                raise URLError(
+                    f"Slack webhook redirect left allowlisted host (final URL: {final_url})"
+                )
             resp.read()
         print(f"Slack notification sent to channel {channel_id}")
     except URLError as exc:

@@ -28,14 +28,20 @@ class TestsCatalog:
 def _load_yaml_document(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise AppError(f"Tests config not found: {path}", 2)
-    text = path.read_text(encoding="utf-8")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise AppError(f"Cannot read tests config {path}: {exc}", 2) from exc
 
     try:
         import yaml as pyyaml  # type: ignore[import-untyped, import-not-found]
     except ImportError:
         pyyaml = None
     if pyyaml is not None:
-        loaded = pyyaml.safe_load(text)
+        try:
+            loaded = pyyaml.safe_load(text)
+        except pyyaml.YAMLError as exc:
+            raise AppError(f"Invalid YAML in {path}: {exc}", 2) from exc
         if isinstance(loaded, dict):
             return loaded
         raise AppError(f"Tests config root must be a mapping: {path}", 2)

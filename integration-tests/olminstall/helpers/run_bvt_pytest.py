@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 _KNOWN_ROOTS = [
@@ -106,9 +107,13 @@ def _bvt_timeout_seconds() -> float | None:
         return None
     try:
         secs = float(raw)
-    except ValueError:
-        return None
-    return secs if secs > 0 else None
+    except ValueError as exc:
+        raise ValueError(
+            f"BVT_RUN_TIMEOUT_SECS must be a positive number, got: {raw!r}"
+        ) from exc
+    if secs <= 0:
+        raise ValueError(f"BVT_RUN_TIMEOUT_SECS must be a positive number, got: {raw!r}")
+    return secs
 
 
 def _run_with_tee(
@@ -123,7 +128,12 @@ def _run_with_tee(
     *timeout* overrides ``BVT_RUN_TIMEOUT_SECS`` when not ``None`` (omit for env-based timeout).
     """
     timeout_s = _bvt_timeout_seconds() if timeout is None else (timeout if timeout > 0 else None)
-    with open(log_path, "w") as log:
+    attempt_header = (
+        f"\n--- BVT pytest attempt {datetime.now(timezone.utc).isoformat()} "
+        f"({' '.join(cmd[:3])}...) ---\n"
+    )
+    with open(log_path, "a", encoding="utf-8") as log:
+        log.write(attempt_header)
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,

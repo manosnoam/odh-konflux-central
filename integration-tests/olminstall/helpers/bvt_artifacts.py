@@ -80,7 +80,10 @@ def list_taskruns_in_cluster(pipeline_run: str, namespace: str) -> list[dict[str
         return []
     token = token_path.read_text(encoding="utf-8")
     sel = urllib.parse.quote(f"tekton.dev/pipelineRun={pipeline_run}")
-    url = f"https://{host}:{port}/apis/tekton.dev/v1/namespaces/{namespace}/taskruns?labelSelector={sel}"
+    url = (
+        f"https://{host}:{port}/apis/tekton.dev/v1/namespaces/{urllib.parse.quote(namespace)}"
+        f"/taskruns?labelSelector={sel}"
+    )
     try:
         doc = _in_cluster_get(url, token, ca_path)
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError):
