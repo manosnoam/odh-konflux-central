@@ -14,6 +14,11 @@ _ITS_RUN_NOW_SNAPSHOT_BY_NAME: dict[str, str] = {
     "odh-olminstall-testops-rh-nightly": "config/test-snapshot-rh-nightly.yaml",
 }
 
+# metadata.name -> Konflux Application when ``--konflux-app`` differs from DEFAULT_APP
+_ITS_DEFAULT_KONFLUX_APP_BY_NAME: dict[str, str] = {
+    "odh-olminstall-testops-rh-nightly": "rhoai-fbc-fragment-ocp-420",
+}
+
 
 def validate_integration_test_scenario_name(name: str) -> str:
     text = (name or "").strip()
@@ -45,6 +50,12 @@ def _load_manifest_doc(path: Path) -> dict:
     if not isinstance(doc, dict):
         raise AppError(f"ITS manifest {path} is empty or not a mapping.", 1)
     return doc
+
+
+def integration_test_scenario_default_konflux_app(name: str) -> str:
+    """Return the Konflux Application for ``--enable-its NAME`` when not testops-playpen."""
+    validated = validate_integration_test_scenario_name(name)
+    return _ITS_DEFAULT_KONFLUX_APP_BY_NAME.get(validated, "")
 
 
 def integration_test_scenario_application(manifest_path: Path) -> str:

@@ -303,7 +303,7 @@ def _add_konflux_group(parser: CliArgumentParser) -> None:
             "Apply an in-tree IntegrationTestScenario manifest by metadata.name "
             "(under tekton/its/). Uses --konflux-namespace and --konflux-app; "
             "manifest spec.application must match --konflux-app when set. "
-            "Rh-nightly ITS also runs catalog sync once (skip if digest unchanged). "
+            "Rh-nightly ITS: use --konflux-app rhoai-fbc-fragment-ocp-420. "
             "With --run-now: one direct PipelineRun from ITS params (does not apply ITS)."
         ),
     )

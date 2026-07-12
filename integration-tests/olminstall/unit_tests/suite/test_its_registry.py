@@ -9,6 +9,7 @@ import pytest
 from suite.errors import AppError
 from suite.its_registry import (
     integration_test_scenario_application,
+    integration_test_scenario_default_konflux_app,
     list_integration_test_scenario_manifests,
     resolve_integration_test_scenario_manifest,
     resolve_integration_test_scenario_run_now_snapshot,
@@ -41,7 +42,15 @@ def test_resolve_rh_nightly_manifest() -> None:
         "odh-olminstall-testops-rh-nightly",
     )
     assert path.name == "its-olminstall-testops-rh-nightly.yaml"
-    assert integration_test_scenario_application(path) == "testops-playpen"
+    assert integration_test_scenario_application(path) == "rhoai-fbc-fragment-ocp-420"
+
+
+def test_rh_nightly_default_konflux_app() -> None:
+    assert (
+        integration_test_scenario_default_konflux_app("odh-olminstall-testops-rh-nightly")
+        == "rhoai-fbc-fragment-ocp-420"
+    )
+    assert integration_test_scenario_default_konflux_app("odh-olminstall-testops-eaas") == ""
 
 
 def test_resolve_run_now_snapshot_rh_nightly() -> None:

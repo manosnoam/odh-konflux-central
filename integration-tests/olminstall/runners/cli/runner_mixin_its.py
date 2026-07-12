@@ -10,7 +10,6 @@ import tempfile
 from pathlib import Path
 
 from k8s.oc_util import filter_warning_lines, run_cmd
-from suite.constants import OLMINSTALL_RH_NIGHTLY_ITS_NAME
 from suite.errors import AppError
 from suite.its_registry import (
     integration_test_scenario_application,
@@ -27,8 +26,6 @@ class RunnerItsAdminMixin:
     def enable_integration_test_scenario(self) -> int:
         name = validate_integration_test_scenario_name(self.args.enable_its)
         self._apply_integration_test_scenario(name)
-        if name == OLMINSTALL_RH_NIGHTLY_ITS_NAME:
-            return self.sync_rh_nightly_catalog(skip_its_apply=True, wait_for_run=False)
         return 0
 
     def enable_integration_test_scenario_run_now(self) -> int:

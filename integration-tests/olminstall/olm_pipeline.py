@@ -32,7 +32,7 @@ Run rules:
   • Default --tests bvt,smoke with existing: pass --external-kubeconfig for component smoke.
   • -w / --watch, -l / --list-pipelines, --delete-pending-pipelines, --enable-its, --disable-its = Konflux query/maintenance (pick one).
   • --enable-its / --disable-its apply or remove an in-tree IntegrationTestScenario by name (uses --konflux-namespace / --konflux-app).
-  • --enable-its odh-olminstall-testops-rh-nightly also runs catalog sync once (skip if digest unchanged).
+  • --enable-its odh-olminstall-testops-rh-nightly: apply ITS on --konflux-app rhoai-fbc-fragment-ocp-420 (native FBC auto-trigger).
   • --enable-its NAME --run-now: direct PipelineRun from ITS manifest params (descriptive generateName; no ITS on cluster).
   • --list-supported-ocp = supported OCP query (product & catalog; pick alone or with --ocp-version).
   • Do not mix trigger-only flags with -w, -l, --delete-pending-pipelines, --enable-its, --disable-its, or --list-supported-ocp.

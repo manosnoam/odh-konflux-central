@@ -8,11 +8,9 @@ metadata:
   name: odh-olminstall-testops-rh-nightly
   namespace: rhoai-tenant
 spec:
-  application: testops-playpen
+  application: rhoai-fbc-fragment-ocp-420
   contexts:
-    - description: Playpen push Snapshots from catalog sync / manual verify
-      name: push
-    - description: rhoai-fbc-fragment-ocp-420 component builds (playpen snapshots)
+    - description: olminstall on rhoai-fbc-fragment-ocp-420 FBC build Snapshots
       name: component_rhoai-fbc-fragment-ocp-420
   params:
     - name: CLUSTER_SOURCE
