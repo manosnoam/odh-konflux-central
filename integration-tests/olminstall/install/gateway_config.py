@@ -882,6 +882,58 @@ def wait_openshift_gateway_istio_ready(
     return False
 
 
+_OPENSHIFT_GATEWAY_CONTROLLER_DEPLOYMENTS = (
+    "istiod-openshift-gateway",
+    "data-science-gateway-data-science-gateway-class",
+)
+
+
+def wait_openshift_gateway_controller_deployments(
+    *,
+    namespace: str = _OPENSHIFT_GATEWAY_NS,
+    timeout_sec: int = 300,
+) -> bool:
+    """Wait for istiod and data-science-gateway controller deployments (rh-ai route backend)."""
+    ready = True
+    for name in _OPENSHIFT_GATEWAY_CONTROLLER_DEPLOYMENTS:
+        r = oc_run(
+            [
+                "wait",
+                "--for=condition=available",
+                f"--timeout={timeout_sec}s",
+                f"deployment/{name}",
+                "-n",
+                namespace,
+            ],
+            check=False,
+            capture_output=True,
+            timeout=timeout_sec + 30,
+        )
+        if r.returncode == 0:
+            print(f"✓ deployment/{name} in {namespace} is Available", flush=True)
+            continue
+        err = (r.stderr or r.stdout or "").strip()
+        print(
+            f"WARN: deployment/{name} in {namespace} not Available within {timeout_sec}s"
+            f"{f': {err}' if err else ''}",
+            file=sys.stderr,
+            flush=True,
+        )
+        ready = False
+    return ready
+
+
+def ensure_openshift_gateway_istio_for_verify(namespace: str = "openshift-operators") -> bool:
+    """verify-operator-ready: patch EOL openshift-gateway Istio and wait for controller pods."""
+    deploy_wait = int(os.environ.get("OPENSHIFT_GATEWAY_CONTROLLER_WAIT_SEC", "300"))
+    if openshift_gateway_istio_stack_ready():
+        return wait_openshift_gateway_controller_deployments(timeout_sec=deploy_wait)
+    reconcile_openshift_gateway_istio_eol(namespace)
+    if not wait_openshift_gateway_istio_ready(timeout_sec=_openshift_gateway_istio_wait_sec()):
+        return False
+    return wait_openshift_gateway_controller_deployments(timeout_sec=deploy_wait)
+
+
 def ensure_openshift_gateway_istio_for_dep_operators(namespace: str = "openshift-operators") -> bool:
     """install-dep-operators: fix EOL openshift-gateway Istio before RHOAI gateway stack install."""
     target_version = _servicemesh_istio_version_from_csv(namespace)
