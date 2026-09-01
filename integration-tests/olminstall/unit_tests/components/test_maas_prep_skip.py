@@ -205,12 +205,13 @@ def test_maas_billing_prep_enables_models_as_service_after_gateway() -> None:
         patch(
             "components.maas_billing.prep.ensure_dsc_models_as_service",
             side_effect=_track("models_as_service"),
-        ),
+        ) as models_as_service,
         patch("components.maas_billing.prep._restart_maas_api_after_gateway"),
         patch("components.maas_billing.prep.mark_maas_gateway_mas_done"),
     ):
         maas_prep.ensure_maas_gateway_before_models_as_service()
         assert call_order.index("gateway") < call_order.index("models_as_service")
+        models_as_service.assert_called_once_with(wait_timeout_sec=900)
 
 def test_maas_prep_probes_only_on_existing_without_install_dependencies(monkeypatch) -> None:
     monkeypatch.setenv("PRODUCT", "")
