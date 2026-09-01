@@ -86,9 +86,21 @@ class InstallMinimalDepsTest(unittest.TestCase):
             return_value=0,
         )
         cls._reconcile_servicemesh_patcher.start()
+        cls._approve_installplans_patcher = patch(
+            "install.install_minimal_deps.approve_pending_installplans",
+            return_value=0,
+        )
+        cls._approve_installplans_patcher.start()
+        cls._wait_servicemesh_csv_patcher = patch(
+            "install.install_minimal_deps.wait_servicemesh_csv_succeeded",
+            return_value=True,
+        )
+        cls._wait_servicemesh_csv_patcher.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
+        cls._wait_servicemesh_csv_patcher.stop()
+        cls._approve_installplans_patcher.stop()
         cls._reconcile_servicemesh_patcher.stop()
         cls._openshift_gateway_patcher.stop()
         cls._jobset_lws_patcher.stop()

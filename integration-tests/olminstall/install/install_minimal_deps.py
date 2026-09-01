@@ -43,9 +43,11 @@ from install.llama_stack_deps import (
     try_prepare_llama_stack_operator,
 )
 from install.dsc_install import ensure_dsc_models_as_service, _install_requires_dashboard_gateway, _smoke_components_need_servicemesh
+from install.approve_transitive_installplans import approve_pending_installplans
 from install.gateway_config import (
     ensure_openshift_gateway_istio_for_dep_operators,
     reconcile_servicemesh_olm_conflicts,
+    wait_servicemesh_csv_succeeded,
 )
 from suite.its_trigger_params import is_pooled_external_cluster_source
 from install.rhcl_deps import (
@@ -173,6 +175,15 @@ def _ensure_openshift_gateway_istio_stack(components_csv: str) -> None:
             print(
                 f"✓ Reconciled {removed} orphan Service Mesh CSV(s) before openshift-gateway Istio",
                 flush=True,
+            )
+        approved = approve_pending_installplans("openshift-operators")
+        if approved:
+            print(
+                f"✓ Approved {approved} Service Mesh InstallPlan(s) before openshift-gateway Istio",
+                flush=True,
+            )
+            wait_servicemesh_csv_succeeded(
+                timeout_sec=int(os.environ.get("SERVICEMESH_CSV_WAIT_SEC", "300")),
             )
         if not ensure_openshift_gateway_istio_for_dep_operators():
             msg = (

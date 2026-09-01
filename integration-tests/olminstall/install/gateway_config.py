@@ -548,21 +548,46 @@ def repair_servicemesh_subscription_stale_refs(namespace: str = "openshift-opera
 
 def _istio_resource_not_found(stderr: str, stdout: str = "") -> bool:
     combined = f"{stderr}\n{stdout}".lower()
-    return "notfound" in combined or "not found" in combined
+    return (
+        "notfound" in combined
+        or "not found" in combined
+        or "doesn't have a resource type" in combined
+        or "no matches for kind" in combined
+    )
+
+
+def _parse_openshift_gateway_istio_json(stdout: str) -> tuple[dict | None, str]:
+    if not (stdout or "").strip():
+        return None, "missing"
+    try:
+        doc = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None, "error"
+    if not isinstance(doc, dict):
+        return None, "error"
+    return doc, "ok"
 
 
 def _fetch_openshift_gateway_istio_doc() -> tuple[dict | None, str]:
     """Return (doc, status) where status is ``ok``, ``missing``, or ``error``."""
-    r = oc_run(
+    get_commands = (
         ["get", "istio", _OPENSHIFT_GATEWAY_ISTIO_NAME, "-o", "json"],
-        check=False,
-        capture_output=True,
-        timeout=30,
+        ["get", "istios.sailoperator.io", _OPENSHIFT_GATEWAY_ISTIO_NAME, "-o", "json"],
     )
-    if r.returncode != 0:
+    last_err = ""
+    for command in get_commands:
+        r = oc_run(
+            command,
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+        if r.returncode == 0:
+            return _parse_openshift_gateway_istio_json(r.stdout or "")
         err = (r.stderr or r.stdout or "").strip()
+        last_err = err or last_err
         if _istio_resource_not_found(r.stderr or "", r.stdout or ""):
-            return None, "missing"
+            continue
         print(
             f"WARN: could not read Istio/{_OPENSHIFT_GATEWAY_ISTIO_NAME}: "
             f"{err or 'unknown error'}",
@@ -570,15 +595,14 @@ def _fetch_openshift_gateway_istio_doc() -> tuple[dict | None, str]:
             flush=True,
         )
         return None, "error"
-    if not (r.stdout or "").strip():
-        return None, "missing"
-    try:
-        doc = json.loads(r.stdout)
-    except json.JSONDecodeError:
-        return None, "error"
-    if not isinstance(doc, dict):
-        return None, "error"
-    return doc, "ok"
+    if last_err:
+        print(
+            f"WARN: Istio/{_OPENSHIFT_GATEWAY_ISTIO_NAME} not found via istio or "
+            f"istios.sailoperator.io: {last_err}",
+            file=sys.stderr,
+            flush=True,
+        )
+    return None, "missing"
 
 
 def _openshift_gateway_istio_doc() -> dict | None:
@@ -867,7 +891,7 @@ def ensure_openshift_gateway_istio_for_dep_operators(namespace: str = "openshift
     if status == "missing":
         return True
     if status == "error" or not doc:
-        return False
+        return _openshift_gateway_istio_stack_ready(target_version=target_version)
     if _openshift_gateway_istio_reconciled(doc):
         if target_version:
             istio_version = str((doc.get("spec") or {}).get("version") or "").strip()
@@ -934,6 +958,19 @@ def reconcile_servicemesh_olm_conflicts(namespace: str = "openshift-operators") 
     except json.JSONDecodeError:
         return 0
 
+    upgrade_stale_csvs: set[str] = set()
+    for item in sub_doc.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        name = ((item.get("metadata") or {}).get("name") or "").lower()
+        if not _is_servicemesh_csv_name(name):
+            continue
+        status = item.get("status") or {}
+        current_csv = str(status.get("currentCSV") or "").strip()
+        installed_csv = str(status.get("installedCSV") or "").strip()
+        if current_csv and installed_csv and current_csv != installed_csv:
+            upgrade_stale_csvs.add(installed_csv)
+
     orphan_names: list[str] = []
     for item in csv_doc.get("items") or []:
         if not isinstance(item, dict):
@@ -947,6 +984,8 @@ def reconcile_servicemesh_olm_conflicts(namespace: str = "openshift-operators") 
         if csv_name in target_csvs and phase in ("Installing", "Replacing"):
             continue
         if phase in ("Pending", "Failed") and csv_name not in target_csvs:
+            orphan_names.append(csv_name)
+        elif phase == "Pending" and csv_name in upgrade_stale_csvs:
             orphan_names.append(csv_name)
         elif resolution_failed and phase == "Pending" and len(target_csvs) == 1 and csv_name in target_csvs:
             orphan_names.append(csv_name)
