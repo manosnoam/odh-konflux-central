@@ -436,6 +436,31 @@ class OpenshiftGatewayIstioTest(unittest.TestCase):
         ):
             self.assertTrue(gw_mod.ensure_openshift_gateway_istio_for_dep_operators())
 
+    def test_ensure_istio_for_verify_patches_eol_and_waits_controllers(self) -> None:
+        with mock.patch.object(
+            gw_mod, "openshift_gateway_istio_stack_ready", side_effect=[False, True]
+        ), mock.patch.object(
+            gw_mod, "reconcile_openshift_gateway_istio_eol", return_value=True
+        ), mock.patch.object(
+            gw_mod, "wait_openshift_gateway_istio_ready", return_value=True
+        ), mock.patch.object(
+            gw_mod, "wait_openshift_gateway_controller_deployments", return_value=True
+        ) as wait_dep:
+            self.assertTrue(gw_mod.ensure_openshift_gateway_istio_for_verify())
+        wait_dep.assert_called_once()
+
+    def test_ensure_istio_for_verify_skips_eol_when_stack_ready(self) -> None:
+        with mock.patch.object(
+            gw_mod, "openshift_gateway_istio_stack_ready", return_value=True
+        ), mock.patch.object(
+            gw_mod, "reconcile_openshift_gateway_istio_eol"
+        ) as eol, mock.patch.object(
+            gw_mod, "wait_openshift_gateway_controller_deployments", return_value=True
+        ) as wait_dep:
+            self.assertTrue(gw_mod.ensure_openshift_gateway_istio_for_verify())
+        eol.assert_not_called()
+        wait_dep.assert_called_once()
+
     def test_fetch_istio_doc_uses_sailoperator_gvr_when_istio_kind_missing(self) -> None:
         istio_doc = {"metadata": {"name": "openshift-gateway"}, "status": {"state": "Healthy"}}
         with mock.patch.object(gw_mod, "oc_run") as oc_run:
