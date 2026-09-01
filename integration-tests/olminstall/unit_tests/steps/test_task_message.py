@@ -489,9 +489,9 @@ def test_publish_results_writes_summary_before_gate_check() -> None:
     step_names = [s.get("name") for s in publish["taskSpec"]["steps"] if isinstance(s, dict)]
     summary_idx = step_names.index("write-konflux-task-summary")
     gate_idx = step_names.index("check-requested-gates-ran")
-    assert summary_idx < gate_idx, "write-konflux-task-summary must run before gate check so Results survive gate failure"
+    assert summary_idx < gate_idx, "write-konflux-task-summary must run before gate check so TEST_OUTPUT records hollow-green"
     gate_step = next(s for s in publish["taskSpec"]["steps"] if s["name"] == "check-requested-gates-ran")
-    assert gate_step.get("onError") != "continue"
+    assert gate_step.get("onError") == "continue", "gate check must not fail TaskRun so Konflux shows Results (ARTIFACTS_URL)"
 
 def test_publish_results_task_results_fit_tekton_budget() -> None:
     from runners.report.junit_suite_report import (
