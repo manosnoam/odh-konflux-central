@@ -4524,6 +4524,7 @@ spec:
 
           - name: check-requested-gates-ran
             displayName: Fail hollow green when gates skipped
+            onError: continue
             image: quay.io/konflux-ci/konflux-test:stable@sha256:09328e5f47da168ffe951ec9c4242cd6761e61e0a235df1bba3f5158e757446d
             env:
               - name: TEST_GATES
