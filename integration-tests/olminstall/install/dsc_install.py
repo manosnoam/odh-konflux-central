@@ -676,7 +676,13 @@ def batch_ensure_dsc_managed_for_smoke(component_ids: set[str]) -> None:
         ensure_dsc_component_managed(key)
 
 
-def ensure_dsc_models_as_service() -> None:
+def _aigateway_maas_wait_sec(wait_timeout_sec: int | None = None) -> int:
+    if wait_timeout_sec is not None:
+        return wait_timeout_sec
+    return int(os.environ.get("MAAS_PREP_TIMEOUT_SEC", "900"))
+
+
+def ensure_dsc_models_as_service(*, wait_timeout_sec: int | None = None) -> None:
     """Ensure MaaS is Managed on default-dsc (kserve.modelsAsService pre-3.5; aigateway.modelsAsAService on 3.5+)."""
     if not _cr_exists("datasciencecluster", "default-dsc"):
         print("WARN: default-dsc missing; skipping modelsAsService patch", file=sys.stderr)
@@ -720,7 +726,9 @@ def ensure_dsc_models_as_service() -> None:
         raise RuntimeError(f"Could not patch {label} on default-dsc: {err or 'unknown error'}")
     print(f"✓ Patched DataScienceCluster/default-dsc {label}=Managed")
     if uses_aigateway_models_as_a_service():
-        ensure_aigateway_models_as_a_service_managed()
+        ensure_aigateway_models_as_a_service_managed(
+            wait_timeout_sec=_aigateway_maas_wait_sec(wait_timeout_sec)
+        )
 
 
 _AIGATEWAY_CR = "default-aigateway"
@@ -771,15 +779,16 @@ def _maas_api_deployment_ready() -> bool:
     return False
 
 
-def ensure_aigateway_models_as_a_service_managed(*, wait_timeout_sec: int = 180) -> None:
+def ensure_aigateway_models_as_a_service_managed(*, wait_timeout_sec: int | None = None) -> None:
     """Sync default-aigateway when DSC has modelsAsAService Managed but AIGateway CR lags."""
     if not uses_aigateway_models_as_a_service():
         return
-    deadline = time.time() + wait_timeout_sec
+    timeout_sec = _aigateway_maas_wait_sec(wait_timeout_sec)
+    deadline = time.time() + timeout_sec
     while not _cr_exists("aigateway", _AIGATEWAY_CR):
         if time.time() >= deadline:
             raise RuntimeError(
-                f"AIGateway/{_AIGATEWAY_CR} not found after {wait_timeout_sec}s"
+                f"AIGateway/{_AIGATEWAY_CR} not found after {timeout_sec}s"
             )
         print(f"Waiting for AIGateway/{_AIGATEWAY_CR} CR...", flush=True)
         time.sleep(12)
