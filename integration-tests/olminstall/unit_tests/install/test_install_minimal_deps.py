@@ -572,6 +572,24 @@ class InstallMinimalDepsTest(unittest.TestCase):
                     self.assertEqual(main(), 0)
                     reconcile.assert_called_once()
 
+    def test_maas_bvt_prereqs_defer_aigateway_when_maas_api_missing(self) -> None:
+        self._maas_bvt_patcher.stop()
+        try:
+            with patch("components.maas_billing.database.ensure_maas_database"):
+                with patch(
+                    "components.maas_billing.common.maas_api_deployment_exists",
+                    return_value=False,
+                ):
+                    with patch(
+                        "install.install_minimal_deps.ensure_dsc_models_as_service",
+                    ) as dsc:
+                        from install.install_minimal_deps import _ensure_maas_bvt_prerequisites
+
+                        _ensure_maas_bvt_prerequisites()
+                        dsc.assert_called_once_with(wait_for_aigateway=False)
+        finally:
+            self._maas_bvt_patcher.start()
+
 
 if __name__ == "__main__":
     raise SystemExit(unittest.main())
