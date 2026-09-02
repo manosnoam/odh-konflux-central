@@ -682,7 +682,11 @@ def _aigateway_maas_wait_sec(wait_timeout_sec: int | None = None) -> int:
     return int(os.environ.get("MAAS_PREP_TIMEOUT_SEC", "900"))
 
 
-def ensure_dsc_models_as_service(*, wait_timeout_sec: int | None = None) -> None:
+def ensure_dsc_models_as_service(
+    *,
+    wait_timeout_sec: int | None = None,
+    wait_for_aigateway: bool = True,
+) -> None:
     """Ensure MaaS is Managed on default-dsc (kserve.modelsAsService pre-3.5; aigateway.modelsAsAService on 3.5+)."""
     if not _cr_exists("datasciencecluster", "default-dsc"):
         print("WARN: default-dsc missing; skipping modelsAsService patch", file=sys.stderr)
@@ -727,7 +731,8 @@ def ensure_dsc_models_as_service(*, wait_timeout_sec: int | None = None) -> None
     print(f"✓ Patched DataScienceCluster/default-dsc {label}=Managed")
     if uses_aigateway_models_as_a_service():
         ensure_aigateway_models_as_a_service_managed(
-            wait_timeout_sec=_aigateway_maas_wait_sec(wait_timeout_sec)
+            wait_timeout_sec=_aigateway_maas_wait_sec(wait_timeout_sec),
+            wait=wait_for_aigateway,
         )
 
 
@@ -779,7 +784,11 @@ def _maas_api_deployment_ready() -> bool:
     return False
 
 
-def ensure_aigateway_models_as_a_service_managed(*, wait_timeout_sec: int | None = None) -> None:
+def ensure_aigateway_models_as_a_service_managed(
+    *,
+    wait_timeout_sec: int | None = None,
+    wait: bool = True,
+) -> None:
     """Sync default-aigateway when DSC has modelsAsAService Managed but AIGateway CR lags."""
     if not uses_aigateway_models_as_a_service():
         return
@@ -811,6 +820,12 @@ def ensure_aigateway_models_as_a_service_managed(*, wait_timeout_sec: int | None
                 f"{err or 'unknown error'}"
             )
         print(f"✓ Patched AIGateway/{_AIGATEWAY_CR} modelsAsAService=Managed", flush=True)
+    if not wait:
+        print(
+            f"NOTE: deferring AIGateway/{_AIGATEWAY_CR} modelsAsAService reconcile wait",
+            flush=True,
+        )
+        return
     _wait_aigateway_models_as_a_service_reconciled(timeout_sec=remaining)
 
 

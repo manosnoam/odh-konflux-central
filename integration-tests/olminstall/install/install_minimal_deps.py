@@ -113,10 +113,18 @@ def _ensure_yq_on_path(env: dict[str, str]) -> dict[str, str]:
 
 def _ensure_maas_bvt_prerequisites() -> None:
     """MaaS DB secret and modelsAsService=Managed before BVT when MaaS smoke ids are selected."""
+    from components.maas_billing.common import maas_api_deployment_exists
     from components.maas_billing.database import ensure_maas_database
 
     ensure_maas_database()
-    ensure_dsc_models_as_service()
+    wait_aigateway = maas_api_deployment_exists()
+    if not wait_aigateway:
+        print(
+            "NOTE: maas-api not deployed yet; patching DSC modelsAsAService only and "
+            "deferring AIGateway reconcile wait to prepare-components-prerequisites",
+            flush=True,
+        )
+    ensure_dsc_models_as_service(wait_for_aigateway=wait_aigateway)
 
 
 def _ensure_kubectl_on_path(env: dict[str, str]) -> dict[str, str]:

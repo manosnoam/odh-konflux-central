@@ -64,7 +64,19 @@ class EnsureAigatewayMaasTest(unittest.TestCase):
 
         with patch("install.dsc_install.oc_run", return_value=MagicMock(returncode=0)):
             ensure_dsc_models_as_service(wait_timeout_sec=600)
-        mock_aigateway.assert_called_once_with(wait_timeout_sec=600)
+        mock_aigateway.assert_called_once_with(wait_timeout_sec=600, wait=True)
+
+    @patch("install.dsc_install.ensure_aigateway_models_as_a_service_managed")
+    @patch("install.dsc_install._cr_exists", return_value=True)
+    @patch("install.dsc_install.uses_aigateway_models_as_a_service", return_value=True)
+    def test_ensure_dsc_models_as_service_can_defer_aigateway_wait(
+        self, _use, _exists, mock_aigateway
+    ) -> None:
+        from install.dsc_install import ensure_dsc_models_as_service
+
+        with patch("install.dsc_install.oc_run", return_value=MagicMock(returncode=0)):
+            ensure_dsc_models_as_service(wait_for_aigateway=False)
+        mock_aigateway.assert_called_once_with(wait_timeout_sec=900, wait=False)
 
     @patch("install.dsc_install._cr_exists", return_value=False)
     @patch("install.dsc_install.uses_aigateway_models_as_a_service", return_value=True)
