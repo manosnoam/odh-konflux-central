@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -38,6 +39,32 @@ class EnsureAigatewayMaasTest(unittest.TestCase):
         mock_oc.assert_not_called()
         mock_wait.assert_called_once()
         self.assertLessEqual(mock_wait.call_args.kwargs["timeout_sec"], 5)
+
+    @patch("install.dsc_install._wait_aigateway_models_as_a_service_reconciled")
+    @patch("install.dsc_install._aigateway_models_as_a_service_state", return_value="Managed")
+    @patch("install.dsc_install._cr_exists", return_value=True)
+    @patch("install.dsc_install.uses_aigateway_models_as_a_service", return_value=True)
+    def test_default_wait_uses_maas_prep_timeout(self, _use, _exists, _state, mock_wait) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MAAS_PREP_TIMEOUT_SEC", None)
+            with patch("install.dsc_install.oc_run") as mock_oc:
+                ensure_aigateway_models_as_a_service_managed()
+        mock_oc.assert_not_called()
+        mock_wait.assert_called_once()
+        self.assertGreaterEqual(mock_wait.call_args.kwargs["timeout_sec"], 890)
+        self.assertLessEqual(mock_wait.call_args.kwargs["timeout_sec"], 900)
+
+    @patch("install.dsc_install.ensure_aigateway_models_as_a_service_managed")
+    @patch("install.dsc_install._cr_exists", return_value=True)
+    @patch("install.dsc_install.uses_aigateway_models_as_a_service", return_value=True)
+    def test_ensure_dsc_models_as_service_forwards_wait_budget(
+        self, _use, _exists, mock_aigateway
+    ) -> None:
+        from install.dsc_install import ensure_dsc_models_as_service
+
+        with patch("install.dsc_install.oc_run", return_value=MagicMock(returncode=0)):
+            ensure_dsc_models_as_service(wait_timeout_sec=600)
+        mock_aigateway.assert_called_once_with(wait_timeout_sec=600)
 
     @patch("install.dsc_install._cr_exists", return_value=False)
     @patch("install.dsc_install.uses_aigateway_models_as_a_service", return_value=True)
