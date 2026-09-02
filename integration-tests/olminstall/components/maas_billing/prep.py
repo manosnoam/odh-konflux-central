@@ -102,7 +102,17 @@ def ensure_maas_gateway_before_models_as_service(*, https_wait_sec: int | None =
     # A cleanup reinstall can leave kserve controllers still converging after the
     # gateway service is ready.  Keep the AIGateway reconcile within the full
     # MaaS preparation budget instead of the install helper's short default.
-    ensure_dsc_models_as_service(wait_timeout_sec=maas_prep_timeout_sec())
+    wait_aigateway = maas_api_deployment_exists()
+    if not wait_aigateway:
+        print(
+            "NOTE: maas-api not deployed yet; patching DSC modelsAsAService only and "
+            "deferring AIGateway reconcile wait to prepare-components-prerequisites",
+            flush=True,
+        )
+    ensure_dsc_models_as_service(
+        wait_timeout_sec=maas_prep_timeout_sec(),
+        wait_for_aigateway=wait_aigateway,
+    )
     _restart_maas_api_after_gateway()
     mark_maas_gateway_mas_done()
 
