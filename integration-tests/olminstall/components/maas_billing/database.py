@@ -400,18 +400,55 @@ def _maas_api_deployment_ready() -> bool:
     return False
 
 
-def _needs_maas_postgres_reset() -> bool:
-    version = _read_maas_postgres_schema_version()
-    if version is None or version <= 0:
+def _maas_postgres_has_missing_schema() -> bool:
+    """True when infra Postgres is up but schema_migrations was never created."""
+    infra_ns = _maas_infra_namespace()
+    if not _postgres_deploy_ready(infra_ns):
         return False
+    proc = oc_run(
+        [
+            "exec",
+            "-n",
+            infra_ns,
+            f"deploy/{_maas_postgres_service()}",
+            "--",
+            "psql",
+            "-U",
+            "maas",
+            "-d",
+            "maas",
+            "-tAc",
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+        ],
+        check=False,
+        capture_output=True,
+        timeout=60,
+    )
+    if proc.returncode == 0:
+        return False
+    combined = f"{proc.stderr or ''}\n{proc.stdout or ''}".lower()
+    return "schema_migrations" in combined and "does not exist" in combined
+
+
+def _needs_maas_postgres_reset() -> bool:
     if _maas_api_deployment_ready():
         return False
-    print(
-        f"WARN: MaaS Postgres schema_migrations version={version} with maas-api not ready "
-        "(likely incompatible with current maas-api image)",
-        flush=True,
-    )
-    return True
+    version = _read_maas_postgres_schema_version()
+    if version is not None and version > 0:
+        print(
+            f"WARN: MaaS Postgres schema_migrations version={version} with maas-api not ready "
+            "(likely incompatible with current maas-api image)",
+            flush=True,
+        )
+        return True
+    if _maas_postgres_has_missing_schema():
+        print(
+            "WARN: MaaS Postgres is running without schema_migrations while maas-api is not ready "
+            "(resetting stale infra before setup-database.sh)",
+            flush=True,
+        )
+        return True
+    return False
 
 
 def _apps_namespace_ready_for_secrets() -> bool:
