@@ -1476,6 +1476,9 @@ spec:
         - wait-for-conforma
         - prepare-cluster-registry
       when:
+        - input: "$(tasks.wait-for-conforma.results.CONFORMA_GATE)"
+          operator: in
+          values: ["pass"]
         - input: "$(tasks.prepare-cluster-registry.results.INSTALL_CHAIN_ARMED)"
           operator: in
           values: ["true"]
@@ -1536,6 +1539,9 @@ spec:
         - prepare-cluster-registry
         - install-dep-operators
       when:
+        - input: "$(tasks.wait-for-conforma.results.CONFORMA_GATE)"
+          operator: in
+          values: ["pass"]
         - input: "$(params.PRODUCT)"
           operator: in
           values: ["rhoai"]
@@ -1603,6 +1609,9 @@ spec:
         - prepare-cluster-registry
         - install-dep-operators
       when:
+        - input: "$(tasks.wait-for-conforma.results.CONFORMA_GATE)"
+          operator: in
+          values: ["pass"]
         - input: "$(params.PRODUCT)"
           operator: in
           values: ["odh"]
@@ -1662,6 +1671,9 @@ spec:
         external test cluster). Stages the dashboard URL for component tests.
       timeout: 90m0s
       when:
+        - input: "$(tasks.wait-for-conforma.results.CONFORMA_GATE)"
+          operator: in
+          values: ["pass"]
         - input: "$(params.PRODUCT)-$(params.CLUSTER_SOURCE)"
           operator: notin
           values: ["-"]
@@ -1721,6 +1733,9 @@ spec:
         - external-cluster-ready
         - install-dep-operators
       when:
+        - input: "$(tasks.wait-for-conforma.results.CONFORMA_GATE)"
+          operator: in
+          values: ["pass"]
         - input: "$(tasks.verify-operator-ready.results.OPERATOR_VERIFY_ARMED)"
           operator: in
           values: ["true"]
@@ -3978,6 +3993,9 @@ spec:
         Collect cluster diagnostics after the run: pod logs, DSC status, and
         optional OLM dumps. Writes a diagnostic log for upload in publish-results.
       when:
+        - input: "$(tasks.wait-for-conforma.results.CONFORMA_GATE)"
+          operator: in
+          values: ["pass"]
         - input: "$(tasks.status)"
           operator: in
           values: ["Succeeded", "Failed", "Completed"]
