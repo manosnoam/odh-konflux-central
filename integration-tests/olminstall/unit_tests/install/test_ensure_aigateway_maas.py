@@ -7,10 +7,35 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
-from install.dsc_install import ensure_aigateway_models_as_a_service_managed
+from install.dsc_install import (
+    _dsc_crd_supports_aigateway_models_as_a_service,
+    ensure_aigateway_models_as_a_service_managed,
+    uses_aigateway_models_as_a_service,
+)
 
 
 class EnsureAigatewayMaasTest(unittest.TestCase):
+    def tearDown(self) -> None:
+        import install.dsc_install as dsc_install
+
+        dsc_install._aigateway_maas_crd_probed = None
+        dsc_install._aigateway_maas_crd_supported = False
+
+    @patch("install.dsc_install.oc_run")
+    def test_uses_kserve_when_dsc_crd_lacks_aigateway_maas(self, mock_oc) -> None:
+        mock_oc.return_value = MagicMock(returncode=1, stdout="", stderr="not found")
+        self.assertFalse(_dsc_crd_supports_aigateway_models_as_a_service())
+        self.assertFalse(uses_aigateway_models_as_a_service("3.5.0-ea.2"))
+
+    @patch("install.dsc_install.oc_run")
+    def test_uses_aigateway_when_dsc_crd_exposes_maas_field(self, mock_oc) -> None:
+        mock_oc.return_value = MagicMock(
+            returncode=0,
+            stdout="FIELD: modelsAsAService <Object>\n",
+            stderr="",
+        )
+        self.assertTrue(_dsc_crd_supports_aigateway_models_as_a_service())
+        self.assertTrue(uses_aigateway_models_as_a_service("3.5.0"))
     @patch("install.dsc_install.uses_aigateway_models_as_a_service", return_value=False)
     def test_skips_before_35(self, _use) -> None:
         with patch("install.dsc_install.oc_run") as mock_oc:

@@ -185,8 +185,36 @@ def _probe_update_channel_from_cluster() -> str:
     return (r.stdout or "").strip()
 
 
+_aigateway_maas_crd_probed: bool | None = None
+_aigateway_maas_crd_supported: bool = False
+
+
+def _dsc_crd_supports_aigateway_models_as_a_service() -> bool:
+    """True when DSC exposes spec.components.aigateway.modelsAsAService (not all 3.5 builds)."""
+    global _aigateway_maas_crd_probed, _aigateway_maas_crd_supported
+    if _aigateway_maas_crd_probed is not None:
+        return _aigateway_maas_crd_supported
+    r = oc_run(
+        ["explain", "datasciencecluster.spec.components.aigateway.modelsAsAService"],
+        check=False,
+        capture_output=True,
+        timeout=30,
+    )
+    out = f"{r.stdout or ''}\n{r.stderr or ''}"
+    _aigateway_maas_crd_supported = r.returncode == 0 and "FIELD: modelsAsAService" in out
+    _aigateway_maas_crd_probed = True
+    if not _aigateway_maas_crd_supported:
+        print(
+            "NOTE: DSC has no aigateway.modelsAsAService field; using kserve.modelsAsService for MaaS",
+            flush=True,
+        )
+    return _aigateway_maas_crd_supported
+
+
 def uses_aigateway_models_as_a_service(operator_version: str = "") -> bool:
-    """RHOAI 3.5+ moved MaaS from kserve.modelsAsService to aigateway.modelsAsAService."""
+    """RHOAI 3.5+ may move MaaS to aigateway.modelsAsAService when the DSC CRD exposes it."""
+    if not _dsc_crd_supports_aigateway_models_as_a_service():
+        return False
     ver = (operator_version or _resolve_operator_version_for_dsc()).strip()
     if ver and ver != "(unknown)":
         return rhoai_version_at_least(ver, "3.5")
