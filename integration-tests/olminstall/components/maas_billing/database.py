@@ -23,6 +23,7 @@ from components.maas_billing.common import (
     _MODELS_AS_SERVICE_REPO,
     _kubectl_shim_dir,
     _secret_exists,
+    maas_api_deployment_exists,
     maas_api_namespace,
 )
 
@@ -118,6 +119,32 @@ def _repair_apps_maas_db_connection_url_if_needed() -> bool:
     return True
 
 
+def _maas_api_deployment_available_replicas() -> int:
+    """Ready replicas for maas-api when the deployment exists, else 0."""
+    for ns in _MAAS_API_NS_CANDIDATES:
+        r = oc_run(
+            [
+                "get",
+                "deployment",
+                "maas-api",
+                "-n",
+                ns,
+                "-o",
+                "jsonpath={.status.availableReplicas}",
+            ],
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+        if r.returncode != 0:
+            continue
+        try:
+            return int((r.stdout or "0").strip() or "0")
+        except ValueError:
+            return 0
+    return 0
+
+
 def _restart_maas_api_after_db_config() -> None:
     """Roll maas-api so it picks up maas-db-config in redhat-ods-applications."""
     ns = maas_api_namespace()
@@ -136,6 +163,14 @@ def _restart_maas_api_after_db_config() -> None:
 
     rollout_timeout = int(os.environ.get("MAAS_API_ROLLOUT_TIMEOUT_SEC", "300"))
     ready_timeout = int(os.environ.get("MAAS_API_READY_TIMEOUT_SEC", "600"))
+    if _maas_api_deployment_available_replicas() < 1:
+        print(
+            f"NOTE: maas-api in {ns} not yet available; waiting for first rollout "
+            f"instead of restart after {_MAAS_DB_SECRET} update",
+            flush=True,
+        )
+        _wait_maas_api_deployment_ready(timeout_sec=ready_timeout)
+        return
     print(
         f"Rolling out maas-api in {ns} after {_MAAS_DB_SECRET} update...",
         flush=True,
@@ -442,6 +477,13 @@ def _needs_maas_postgres_reset() -> bool:
         )
         return True
     if _maas_postgres_has_missing_schema():
+        if not maas_api_deployment_exists():
+            print(
+                "NOTE: MaaS Postgres has no schema_migrations yet and maas-api is not deployed; "
+                "expected on fresh install — skipping infra reset",
+                flush=True,
+            )
+            return False
         print(
             "WARN: MaaS Postgres is running without schema_migrations while maas-api is not ready "
             "(resetting stale infra before setup-database.sh)",

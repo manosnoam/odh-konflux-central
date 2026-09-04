@@ -24,14 +24,29 @@ class MaasDatabaseCleanupTest(unittest.TestCase):
         delete_secrets.assert_called_once_with()
         self.assertEqual(delete_ns.call_count, 2)
 
+    @patch("components.maas_billing.database.maas_api_deployment_exists", return_value=False)
     @patch("components.maas_billing.database._maas_api_deployment_ready", return_value=False)
     @patch("components.maas_billing.database._read_maas_postgres_schema_version", return_value=None)
     @patch("components.maas_billing.database._maas_postgres_has_missing_schema", return_value=True)
-    def test_needs_reset_when_schema_table_missing(
+    def test_skips_reset_when_schema_missing_before_maas_api_exists(
         self,
         _missing_schema,
         _schema,
         _api_ready,
+        _api_exists,
+    ) -> None:
+        self.assertFalse(_needs_maas_postgres_reset())
+
+    @patch("components.maas_billing.database.maas_api_deployment_exists", return_value=True)
+    @patch("components.maas_billing.database._maas_api_deployment_ready", return_value=False)
+    @patch("components.maas_billing.database._read_maas_postgres_schema_version", return_value=None)
+    @patch("components.maas_billing.database._maas_postgres_has_missing_schema", return_value=True)
+    def test_needs_reset_when_schema_table_missing_and_api_exists(
+        self,
+        _missing_schema,
+        _schema,
+        _api_ready,
+        _api_exists,
     ) -> None:
         self.assertTrue(_needs_maas_postgres_reset())
 
@@ -39,17 +54,6 @@ class MaasDatabaseCleanupTest(unittest.TestCase):
     @patch("components.maas_billing.database._read_maas_postgres_schema_version", return_value=5)
     def test_needs_reset_when_schema_present_and_api_not_ready(
         self,
-        _schema,
-        _api_ready,
-    ) -> None:
-        self.assertTrue(_needs_maas_postgres_reset())
-
-    @patch("components.maas_billing.database._maas_api_deployment_ready", return_value=False)
-    @patch("components.maas_billing.database._read_maas_postgres_schema_version", return_value=None)
-    @patch("components.maas_billing.database._maas_postgres_has_missing_schema", return_value=True)
-    def test_needs_reset_when_schema_table_missing(
-        self,
-        _missing_schema,
         _schema,
         _api_ready,
     ) -> None:
