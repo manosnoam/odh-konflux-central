@@ -173,7 +173,31 @@ class EnsureAigatewayMaasTest(unittest.TestCase):
         with patch("install.dsc_install.oc_run", side_effect=fake_oc):
             with self.assertRaisesRegex(RuntimeError, "not reconciled after"):
                 _wait_aigateway_models_as_a_service_reconciled(timeout_sec=120)
-        mock_nudge.assert_called_once()
+        mock_nudge.assert_called_once_with(cycle_spec=True)
+
+    @patch("install.dsc_install.time.time", return_value=1000.0)
+    def test_nudge_restarts_both_operators_and_annotates(self, _time) -> None:
+        from install.dsc_install import _AIGATEWAY_CR, _nudge_maas_api_after_aigateway_deployments
+
+        rollout_calls: list[str] = []
+
+        def fake_oc(args, **kwargs):
+            if args[:2] == ["rollout", "restart"]:
+                rollout_calls.append(args[2])
+                return MagicMock(returncode=0)
+            if args[:2] == ["patch", "aigateway"]:
+                return MagicMock(returncode=0)
+            return MagicMock(returncode=1)
+
+        with patch("install.dsc_install.oc_run", side_effect=fake_oc):
+            _nudge_maas_api_after_aigateway_deployments(cycle_spec=False)
+        self.assertEqual(
+            rollout_calls,
+            [
+                "deployment/ai-gateway-operator",
+                "deployment/maas-controller",
+            ],
+        )
 
 
 if __name__ == "__main__":

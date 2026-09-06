@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -870,23 +871,67 @@ def ensure_aigateway_models_as_a_service_managed(
     _wait_aigateway_models_as_a_service_reconciled(timeout_sec=remaining)
 
 
-def _nudge_maas_api_after_aigateway_deployments() -> None:
+def _patch_aigateway_models_as_a_service_state(state: str) -> bool:
+    patch_doc = json.dumps(
+        {"spec": {"modelsAsAService": {"managementState": state}}}
+    )
+    r = oc_run(
+        ["patch", "aigateway", _AIGATEWAY_CR, "--type=merge", "-p", patch_doc],
+        check=False,
+        capture_output=True,
+        timeout=60,
+    )
+    return r.returncode == 0
+
+
+def _cycle_aigateway_models_as_a_service_state() -> None:
+    """Bump AIGateway generation when DeploymentsAvailable is stale without maas-api."""
+    print(
+        f"NOTE: cycling AIGateway/{_AIGATEWAY_CR} modelsAsAService Removed→Managed "
+        "to force maas-api reconcile",
+        flush=True,
+    )
+    if not _patch_aigateway_models_as_a_service_state("Removed"):
+        print(
+            f"WARN: could not patch AIGateway/{_AIGATEWAY_CR} modelsAsAService=Removed",
+            flush=True,
+        )
+        return
+    time.sleep(20)
+    if _patch_aigateway_models_as_a_service_state("Managed"):
+        print(
+            f"✓ Patched AIGateway/{_AIGATEWAY_CR} modelsAsAService back to Managed",
+            flush=True,
+        )
+
+
+def _nudge_maas_api_after_aigateway_deployments(*, cycle_spec: bool = False) -> None:
     """DeploymentsAvailable covers gateway infra; maas-api is reconciled separately."""
     print(
         f"NOTE: AIGateway/{_AIGATEWAY_CR} DeploymentsAvailable but maas-api missing; "
         "nudging operator reconcile",
         flush=True,
     )
-    patch_doc = json.dumps(
-        {"spec": {"modelsAsAService": {"managementState": "Managed"}}}
+    if cycle_spec:
+        _cycle_aigateway_models_as_a_service_state()
+    else:
+        _patch_aigateway_models_as_a_service_state("Managed")
+    nudge_ts = datetime.now(timezone.utc).isoformat()
+    ann_patch = json.dumps(
+        {
+            "metadata": {
+                "annotations": {"olminstall.io/maas-api-nudge": nudge_ts}
+            }
+        }
     )
     oc_run(
-        ["patch", "aigateway", _AIGATEWAY_CR, "--type=merge", "-p", patch_doc],
+        ["patch", "aigateway", _AIGATEWAY_CR, "--type=merge", "-p", ann_patch],
         check=False,
         capture_output=True,
         timeout=60,
     )
-    for deployment in ("maas-controller", "ai-gateway-operator"):
+    restarted: list[str] = []
+    for deployment in ("ai-gateway-operator", "maas-controller"):
         r = oc_run(
             ["rollout", "restart", f"deployment/{deployment}", "-n", "redhat-ods-applications"],
             check=False,
@@ -894,13 +939,18 @@ def _nudge_maas_api_after_aigateway_deployments() -> None:
             timeout=60,
         )
         if r.returncode == 0:
-            print(f"✓ Restarted {deployment} to reconcile maas-api", flush=True)
-            return
+            restarted.append(deployment)
+    if restarted:
+        print(
+            f"✓ Restarted {', '.join(restarted)} to reconcile maas-api",
+            flush=True,
+        )
 
 
 def _wait_aigateway_models_as_a_service_reconciled(*, timeout_sec: int) -> None:
     deadline = time.time() + timeout_sec
     last_nudge = 0.0
+    nudge_count = 0
     while time.time() < deadline:
         if _maas_api_deployment_ready():
             print(
@@ -946,7 +996,10 @@ def _wait_aigateway_models_as_a_service_reconciled(*, timeout_sec: int) -> None:
             now = time.time()
             if now - last_nudge >= 60:
                 last_nudge = now
-                _nudge_maas_api_after_aigateway_deployments()
+                nudge_count += 1
+                _nudge_maas_api_after_aigateway_deployments(
+                    cycle_spec=(nudge_count % 3 == 1)
+                )
         if int(time.time()) % 60 < 12:
             print(
                 f"Waiting for AIGateway/{_AIGATEWAY_CR} modelsAsAService reconcile "
