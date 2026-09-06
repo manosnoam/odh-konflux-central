@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from components.maas_billing.database import (
+    _maas_postgres_location,
     _needs_maas_postgres_reset,
     cleanup_maas_database_infra,
     ensure_maas_database,
@@ -15,14 +16,30 @@ from components.maas_billing.database import (
 class MaasDatabaseCleanupTest(unittest.TestCase):
     @patch("components.maas_billing.database._delete_namespace_if_present")
     @patch("components.maas_billing.database._delete_maas_db_secrets")
+    @patch(
+        "components.maas_billing.database._maas_postgres_location",
+        return_value=("odh-ai-gateway-infra", "postgres"),
+    )
     def test_cleanup_removes_secrets_and_namespaces(
         self,
+        _location,
         delete_secrets,
         delete_ns,
     ) -> None:
         cleanup_maas_database_infra()
         delete_secrets.assert_called_once_with()
         self.assertEqual(delete_ns.call_count, 2)
+
+    @patch(
+        "components.maas_billing.database._deployment_exists",
+        side_effect=lambda ns, name: ns == "redhat-ai-gateway-infra"
+        and name == "maas-postgres",
+    )
+    def test_maas_postgres_location_prefers_operator_postgres(self, _exists) -> None:
+        self.assertEqual(
+            _maas_postgres_location(),
+            ("redhat-ai-gateway-infra", "maas-postgres"),
+        )
 
     @patch("components.maas_billing.database.maas_api_deployment_exists", return_value=False)
     @patch("components.maas_billing.database._maas_api_deployment_ready", return_value=False)
@@ -49,6 +66,15 @@ class MaasDatabaseCleanupTest(unittest.TestCase):
         _api_exists,
     ) -> None:
         self.assertFalse(_needs_maas_postgres_reset())
+
+    @patch("components.maas_billing.database._maas_api_deployment_ready", return_value=False)
+    @patch("components.maas_billing.database._read_maas_postgres_schema_version", return_value=6)
+    def test_needs_reset_when_operator_postgres_has_stale_schema(
+        self,
+        _schema,
+        _api_ready,
+    ) -> None:
+        self.assertTrue(_needs_maas_postgres_reset())
 
     @patch("components.maas_billing.database._maas_api_deployment_ready", return_value=False)
     @patch("components.maas_billing.database._read_maas_postgres_schema_version", return_value=5)
