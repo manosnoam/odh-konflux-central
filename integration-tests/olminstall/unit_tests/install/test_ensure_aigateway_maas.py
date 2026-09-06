@@ -15,7 +15,14 @@ from install.dsc_install import (
 
 
 class EnsureAigatewayMaasTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._hpa_rbac_patcher = patch(
+            "components.maas_billing.bbr_pre_processing.ensure_maas_controller_openshift_ingress_hpa_rbac",
+        )
+        self._hpa_rbac_patcher.start()
+
     def tearDown(self) -> None:
+        self._hpa_rbac_patcher.stop()
         import install.dsc_install as dsc_install
 
         dsc_install._aigateway_maas_crd_probed = None
@@ -189,7 +196,12 @@ class EnsureAigatewayMaasTest(unittest.TestCase):
                 return MagicMock(returncode=0)
             return MagicMock(returncode=1)
 
-        with patch("install.dsc_install.oc_run", side_effect=fake_oc):
+        with (
+            patch(
+                "components.maas_billing.bbr_pre_processing.ensure_maas_controller_openshift_ingress_hpa_rbac",
+            ),
+            patch("install.dsc_install.oc_run", side_effect=fake_oc),
+        ):
             _nudge_maas_api_after_aigateway_deployments(cycle_spec=False)
         self.assertEqual(
             rollout_calls,

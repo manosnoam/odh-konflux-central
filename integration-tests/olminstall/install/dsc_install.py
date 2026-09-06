@@ -868,6 +868,11 @@ def ensure_aigateway_models_as_a_service_managed(
             flush=True,
         )
         return
+    from components.maas_billing.bbr_pre_processing import (
+        ensure_maas_controller_openshift_ingress_hpa_rbac,
+    )
+
+    ensure_maas_controller_openshift_ingress_hpa_rbac()
     _wait_aigateway_models_as_a_service_reconciled(timeout_sec=remaining)
 
 
@@ -935,6 +940,11 @@ def _cycle_aigateway_models_as_a_service_state() -> None:
 
 def _nudge_maas_api_after_aigateway_deployments(*, cycle_spec: bool = False) -> None:
     """DeploymentsAvailable covers gateway infra; maas-api is reconciled separately."""
+    from components.maas_billing.bbr_pre_processing import (
+        ensure_maas_controller_openshift_ingress_hpa_rbac,
+    )
+
+    ensure_maas_controller_openshift_ingress_hpa_rbac()
     print(
         f"NOTE: AIGateway/{_AIGATEWAY_CR} DeploymentsAvailable but maas-api missing; "
         "nudging operator reconcile",
