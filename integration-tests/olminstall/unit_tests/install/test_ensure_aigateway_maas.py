@@ -199,6 +199,27 @@ class EnsureAigatewayMaasTest(unittest.TestCase):
             ],
         )
 
+    @patch("install.dsc_install.time.sleep")
+    @patch("install.dsc_install._cr_exists", return_value=True)
+    @patch("install.dsc_install.uses_aigateway_models_as_a_service", return_value=True)
+    def test_cycle_patches_dsc_and_aigateway(self, _use, _exists, _sleep) -> None:
+        from install.dsc_install import _cycle_aigateway_models_as_a_service_state
+
+        patched: list[tuple[str, str, str]] = []
+
+        def fake_oc(args, **kwargs):
+            if args[:2] == ["patch", "datasciencecluster"]:
+                patched.append(("dsc", args[2], kwargs.get("capture_output") and "ok" or "ok"))
+                return MagicMock(returncode=0)
+            if args[:2] == ["patch", "aigateway"]:
+                patched.append(("aigateway", args[2], "ok"))
+                return MagicMock(returncode=0)
+            return MagicMock(returncode=1)
+
+        with patch("install.dsc_install.oc_run", side_effect=fake_oc):
+            _cycle_aigateway_models_as_a_service_state()
+        self.assertEqual([p[0] for p in patched], ["dsc", "aigateway", "dsc", "aigateway"])
+
 
 if __name__ == "__main__":
     raise SystemExit(unittest.main())

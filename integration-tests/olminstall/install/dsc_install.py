@@ -884,13 +884,40 @@ def _patch_aigateway_models_as_a_service_state(state: str) -> bool:
     return r.returncode == 0
 
 
+def _patch_dsc_aigateway_maas_state(state: str) -> bool:
+    if not _cr_exists("datasciencecluster", "default-dsc"):
+        return False
+    if not uses_aigateway_models_as_a_service():
+        return False
+    patch_doc = json.dumps(
+        {
+            "spec": {
+                "components": {
+                    "aigateway": {
+                        "managementState": "Managed",
+                        "modelsAsAService": {"managementState": state},
+                    }
+                }
+            }
+        }
+    )
+    r = oc_run(
+        ["patch", "datasciencecluster", "default-dsc", "--type=merge", "-p", patch_doc],
+        check=False,
+        capture_output=True,
+        timeout=60,
+    )
+    return r.returncode == 0
+
+
 def _cycle_aigateway_models_as_a_service_state() -> None:
-    """Bump AIGateway generation when DeploymentsAvailable is stale without maas-api."""
+    """Bump DSC + AIGateway generation when DeploymentsAvailable is stale without maas-api."""
     print(
-        f"NOTE: cycling AIGateway/{_AIGATEWAY_CR} modelsAsAService Removed→Managed "
+        "NOTE: cycling DSC+AIGateway modelsAsAService Removed→Managed "
         "to force maas-api reconcile",
         flush=True,
     )
+    _patch_dsc_aigateway_maas_state("Removed")
     if not _patch_aigateway_models_as_a_service_state("Removed"):
         print(
             f"WARN: could not patch AIGateway/{_AIGATEWAY_CR} modelsAsAService=Removed",
@@ -898,9 +925,10 @@ def _cycle_aigateway_models_as_a_service_state() -> None:
         )
         return
     time.sleep(20)
+    _patch_dsc_aigateway_maas_state("Managed")
     if _patch_aigateway_models_as_a_service_state("Managed"):
         print(
-            f"✓ Patched AIGateway/{_AIGATEWAY_CR} modelsAsAService back to Managed",
+            f"✓ Patched DSC+AIGateway modelsAsAService back to Managed",
             flush=True,
         )
 
