@@ -24,6 +24,19 @@ def _tag_exists(repo: str, tag: str) -> bool:
     return probe.returncode == 0
 
 
+def prior_minor_ga_tags(csv_version: str) -> list[str]:
+    """Older GA minor tags when the installed CSV minor has no published test image."""
+    m = _EA_RE.match(csv_version)
+    if m:
+        major, minor = int(m.group(1)), int(m.group(2))
+    else:
+        m = _MAJOR_MINOR_RE.match(csv_version)
+        if not m:
+            return []
+        major, minor = int(m.group(1)), int(m.group(2))
+    return [f"{major}.{prior}" for prior in range(minor - 1, 0, -1)]
+
+
 def ea_fallback_tags(csv_version: str) -> list[str]:
     """Candidate tags for RHOAI EA CSV versions (newest EA first)."""
     m = _EA_RE.match(csv_version)
@@ -66,6 +79,13 @@ def resolve_versioned_image(repo: str, csv_version: str) -> str:
             print(f"Versioned image tag exists: {candidate}")
             return candidate
         print(f"Tag not found: {candidate}")
+
+    for tag in prior_minor_ga_tags(csv_version):
+        candidate = f"{repo}:{tag}"
+        if _tag_exists(repo, tag):
+            print(f"Prior minor GA image tag exists: {candidate}")
+            return candidate
+        print(f"Prior minor GA tag not found: {candidate}")
 
     print(f"No matching tag for CSV {csv_version} -- falling back to {latest_img}")
     return latest_img

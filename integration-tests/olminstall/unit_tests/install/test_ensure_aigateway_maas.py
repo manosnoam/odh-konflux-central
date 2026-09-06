@@ -142,6 +142,39 @@ class EnsureAigatewayMaasTest(unittest.TestCase):
         with patch("install.dsc_install.oc_run", side_effect=fake_oc):
             _wait_aigateway_models_as_a_service_reconciled(timeout_sec=30)
 
+    @patch("install.dsc_install._nudge_maas_api_after_aigateway_deployments")
+    @patch("install.dsc_install.time.sleep")
+    @patch("install.dsc_install.time.time")
+    def test_deployments_available_without_maas_api_keeps_waiting(
+        self, mock_time, _sleep, mock_nudge
+    ) -> None:
+        from install.dsc_install import _AIGATEWAY_CR, _wait_aigateway_models_as_a_service_reconciled
+
+        class _AdvancingClock:
+            def __init__(self) -> None:
+                self.value = 0.0
+
+            def __call__(self) -> float:
+                self.value += 30.0
+                return self.value
+
+        mock_time.side_effect = _AdvancingClock()
+
+        def fake_oc(args, **kwargs):
+            if args[:3] == ["get", "deployment", "maas-api"]:
+                return MagicMock(returncode=1, stdout="", stderr="not found")
+            if args[:3] == ["get", "aigateway", _AIGATEWAY_CR]:
+                if "observedGeneration" in args[-1]:
+                    return MagicMock(returncode=0, stdout="1\t1")
+                if "DeploymentsAvailable" in args[-1]:
+                    return MagicMock(returncode=0, stdout="True")
+            return MagicMock(returncode=1, stdout="", stderr="")
+
+        with patch("install.dsc_install.oc_run", side_effect=fake_oc):
+            with self.assertRaisesRegex(RuntimeError, "not reconciled after"):
+                _wait_aigateway_models_as_a_service_reconciled(timeout_sec=120)
+        mock_nudge.assert_called_once()
+
 
 if __name__ == "__main__":
     raise SystemExit(unittest.main())

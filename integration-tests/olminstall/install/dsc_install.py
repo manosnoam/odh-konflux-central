@@ -786,6 +786,19 @@ def _aigateway_models_as_a_service_state() -> str:
     return (r.stdout or "").strip()
 
 
+def _maas_api_deployment_exists() -> bool:
+    for ns in _MAAS_API_DEPLOY_NS:
+        r = oc_run(
+            ["get", "deployment", "maas-api", "-n", ns],
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+        if r.returncode == 0:
+            return True
+    return False
+
+
 def _maas_api_deployment_ready() -> bool:
     for ns in _MAAS_API_DEPLOY_NS:
         r = oc_run(
@@ -857,8 +870,37 @@ def ensure_aigateway_models_as_a_service_managed(
     _wait_aigateway_models_as_a_service_reconciled(timeout_sec=remaining)
 
 
+def _nudge_maas_api_after_aigateway_deployments() -> None:
+    """DeploymentsAvailable covers gateway infra; maas-api is reconciled separately."""
+    print(
+        f"NOTE: AIGateway/{_AIGATEWAY_CR} DeploymentsAvailable but maas-api missing; "
+        "nudging operator reconcile",
+        flush=True,
+    )
+    patch_doc = json.dumps(
+        {"spec": {"modelsAsAService": {"managementState": "Managed"}}}
+    )
+    oc_run(
+        ["patch", "aigateway", _AIGATEWAY_CR, "--type=merge", "-p", patch_doc],
+        check=False,
+        capture_output=True,
+        timeout=60,
+    )
+    for deployment in ("maas-controller", "ai-gateway-operator"):
+        r = oc_run(
+            ["rollout", "restart", f"deployment/{deployment}", "-n", "redhat-ods-applications"],
+            check=False,
+            capture_output=True,
+            timeout=60,
+        )
+        if r.returncode == 0:
+            print(f"✓ Restarted {deployment} to reconcile maas-api", flush=True)
+            return
+
+
 def _wait_aigateway_models_as_a_service_reconciled(*, timeout_sec: int) -> None:
     deadline = time.time() + timeout_sec
+    last_nudge = 0.0
     while time.time() < deadline:
         if _maas_api_deployment_ready():
             print(
@@ -894,13 +936,17 @@ def _wait_aigateway_models_as_a_service_reconciled(*, timeout_sec: int) -> None:
         generation = parts[0] if parts else ""
         observed = parts[1] if len(parts) > 1 else ""
         dep_status = (dep_r.stdout or "").strip()
-        if generation and observed and generation == observed and dep_status == "True":
-            print(
-                f"✓ AIGateway/{_AIGATEWAY_CR} reconciled "
-                f"(observedGeneration={observed}, DeploymentsAvailable=True)",
-                flush=True,
-            )
-            return
+        if (
+            generation
+            and observed
+            and generation == observed
+            and dep_status == "True"
+            and not _maas_api_deployment_exists()
+        ):
+            now = time.time()
+            if now - last_nudge >= 60:
+                last_nudge = now
+                _nudge_maas_api_after_aigateway_deployments()
         if int(time.time()) % 60 < 12:
             print(
                 f"Waiting for AIGateway/{_AIGATEWAY_CR} modelsAsAService reconcile "
