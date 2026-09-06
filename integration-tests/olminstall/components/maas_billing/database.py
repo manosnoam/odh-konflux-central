@@ -477,19 +477,14 @@ def _needs_maas_postgres_reset() -> bool:
         )
         return True
     if _maas_postgres_has_missing_schema():
-        if not maas_api_deployment_exists():
-            print(
-                "NOTE: MaaS Postgres has no schema_migrations yet and maas-api is not deployed; "
-                "expected on fresh install — skipping infra reset",
-                flush=True,
-            )
-            return False
+        # Fresh install: postgres comes up before maas-api runs migrations. Resetting here
+        # deletes odh-ai-gateway-infra while maas-api is still starting (iter59 mtqfx).
         print(
-            "WARN: MaaS Postgres is running without schema_migrations while maas-api is not ready "
-            "(resetting stale infra before setup-database.sh)",
+            "NOTE: MaaS Postgres has no schema_migrations yet; "
+            "maas-api creates them on startup — skipping infra reset",
             flush=True,
         )
-        return True
+        return False
     return False
 
 
