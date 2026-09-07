@@ -456,6 +456,8 @@ def _reset_maas_postgres_database(infra_ns: str, deploy: str) -> None:
         flush=True,
     )
     for sql in (
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+        "WHERE datname = 'maas' AND pid <> pg_backend_pid();",
         "DROP DATABASE IF EXISTS maas;",
         "CREATE DATABASE maas OWNER maas;",
     ):

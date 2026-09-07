@@ -14,6 +14,43 @@ from components.maas_billing.database import (
 
 
 class MaasDatabaseCleanupTest(unittest.TestCase):
+    @patch("components.maas_billing.database._reset_maas_postgres_database")
+    @patch("components.maas_billing.database._delete_namespace_if_present")
+    @patch("components.maas_billing.database._delete_maas_db_secrets")
+    @patch(
+        "components.maas_billing.database._maas_postgres_location",
+        return_value=("redhat-ai-gateway-infra", "maas-postgres"),
+    )
+    def test_cleanup_resets_operator_postgres_instead_of_deleting_ns(
+        self,
+        _location,
+        delete_secrets,
+        delete_ns,
+        reset_db,
+    ) -> None:
+        from components.maas_billing.database import cleanup_maas_postgres_infra
+
+        cleanup_maas_postgres_infra()
+        delete_secrets.assert_called_once_with()
+        reset_db.assert_called_once_with("redhat-ai-gateway-infra", "maas-postgres")
+        delete_ns.assert_not_called()
+
+    @patch("components.maas_billing.database._postgres_deploy_ready", return_value=True)
+    @patch("components.maas_billing.database.oc_run")
+    def test_reset_terminates_backends_before_drop(self, oc_run, _ready) -> None:
+        from components.maas_billing.database import _reset_maas_postgres_database
+
+        oc_run.return_value.returncode = 0
+        _reset_maas_postgres_database("redhat-ai-gateway-infra", "maas-postgres")
+        executed_sql = [
+            call.args[0][-1]
+            for call in oc_run.call_args_list
+            if call.args and call.args[0][0] == "exec"
+        ]
+        self.assertIn("pg_terminate_backend", executed_sql[0])
+        self.assertIn("DROP DATABASE IF EXISTS maas;", executed_sql[1])
+        self.assertIn("CREATE DATABASE maas OWNER maas;", executed_sql[2])
+
     @patch("components.maas_billing.database._delete_namespace_if_present")
     @patch("components.maas_billing.database._delete_maas_db_secrets")
     @patch(
