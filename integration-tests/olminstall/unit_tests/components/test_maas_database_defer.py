@@ -68,6 +68,17 @@ class MaasDatabasePromoteTest(unittest.TestCase):
         )
         self.assertIn("postgres.odh-ai-gateway-infra.svc.cluster.local:5432", url)
 
+    def test_rewrite_operator_postgres_host_to_infra_fqdn(self) -> None:
+        url = _rewrite_db_connection_url_for_apps_namespace(
+            "postgresql://maas:secret@maas-postgres:5432/maas",
+            infra_ns="redhat-ai-gateway-infra",
+            postgres_service="maas-postgres",
+        )
+        self.assertIn(
+            "maas-postgres.redhat-ai-gateway-infra.svc.cluster.local:5432",
+            url,
+        )
+
     def test_rewrite_leaves_external_host_unchanged(self) -> None:
         url = "postgresql://maas@db.example.com:5432/maas"
         self.assertEqual(

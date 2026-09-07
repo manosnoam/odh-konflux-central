@@ -134,5 +134,49 @@ class MaasDatabaseCleanupTest(unittest.TestCase):
         restart_api.assert_called_once()
 
 
+class MaasOperatorPostgresDeferTest(unittest.TestCase):
+    @patch("components.maas_billing.database._restart_maas_api_after_db_config")
+    @patch("components.maas_billing.database._defer_maas_db_config_until_operator_install")
+    @patch("components.maas_billing.database._promote_maas_db_secret_to_apps_namespace", return_value=False)
+    @patch("components.maas_billing.database._operator_maas_postgres_active", return_value=True)
+    @patch("components.maas_billing.database._secret_exists", return_value=False)
+    @patch("components.maas_billing.database._apps_namespace_ready_for_secrets", return_value=True)
+    @patch("components.maas_billing.database._clone_models_as_a_service")
+    def test_skips_setup_database_when_operator_postgres_active(
+        self,
+        clone_repo,
+        _apps_ready,
+        _secret_exists,
+        operator_active,
+        promote,
+        defer,
+        restart_api,
+    ) -> None:
+        ensure_maas_database()
+        clone_repo.assert_not_called()
+        defer.assert_called_once_with()
+        restart_api.assert_not_called()
+
+    @patch("components.maas_billing.database._restart_maas_api_after_db_config")
+    @patch("components.maas_billing.database._promote_maas_db_secret_to_apps_namespace", return_value=True)
+    @patch("components.maas_billing.database._operator_maas_postgres_active", return_value=True)
+    @patch("components.maas_billing.database._secret_exists", return_value=False)
+    @patch("components.maas_billing.database._apps_namespace_ready_for_secrets", return_value=True)
+    @patch("components.maas_billing.database._clone_models_as_a_service")
+    def test_promotes_operator_infra_secret_before_setup_database(
+        self,
+        clone_repo,
+        _apps_ready,
+        _secret_exists,
+        operator_active,
+        promote,
+        restart_api,
+    ) -> None:
+        ensure_maas_database()
+        clone_repo.assert_not_called()
+        promote.assert_called_once_with()
+        restart_api.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

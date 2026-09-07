@@ -78,9 +78,15 @@ def _maas_postgres_location() -> tuple[str, str]:
     return _maas_infra_namespace(), _maas_postgres_service()
 
 
+def _postgres_service_for_infra_ns(infra_ns: str) -> str:
+    if infra_ns == _RHOAI_GATEWAY_INFRA_NS:
+        return _OPERATOR_MAAS_POSTGRES_DEPLOY
+    return _maas_postgres_service()
+
+
 def _postgres_host_for_apps_namespace(infra_ns: str | None = None) -> str:
     ns = (infra_ns or _maas_infra_namespace()).strip()
-    service = _maas_postgres_service()
+    service = _postgres_service_for_infra_ns(ns)
     return f"{service}.{ns}.svc.cluster.local"
 
 
@@ -88,10 +94,11 @@ def _rewrite_db_connection_url_for_apps_namespace(
     connection_url: str,
     *,
     infra_ns: str | None = None,
+    postgres_service: str | None = None,
 ) -> str:
     """maas-api runs in apps ns; Postgres from setup-database.sh is in the infra ns."""
     infra = (infra_ns or _maas_infra_namespace()).strip()
-    service = _maas_postgres_service()
+    service = (postgres_service or _postgres_service_for_infra_ns(infra)).strip()
     target_host = _postgres_host_for_apps_namespace(infra)
     parsed = urlparse(connection_url)
     if not parsed.hostname:
@@ -202,19 +209,20 @@ def _restart_maas_api_after_db_config() -> None:
     _wait_maas_api_deployment_ready(timeout_sec=ready_timeout)
 
 
-def _promote_maas_db_secret_to_apps_namespace() -> bool:
-    """Copy maas-db-config into redhat-ods-applications when setup-database.sh left it in infra."""
+def _promote_maas_db_secret_from_infra(infra_ns: str) -> bool:
+    """Copy maas-db-config from an infra namespace into redhat-ods-applications."""
     if _secret_exists(_MAAS_APPS_NS, _MAAS_DB_SECRET):
         return True
-    infra_ns = _maas_infra_namespace()
     if not _namespace_exists(infra_ns) or not _secret_exists(infra_ns, _MAAS_DB_SECRET):
         return False
     connection_url = _read_secret_data_key(infra_ns, _MAAS_DB_SECRET, "DB_CONNECTION_URL")
     if not connection_url:
         return False
+    service = _postgres_service_for_infra_ns(infra_ns)
     connection_url = _rewrite_db_connection_url_for_apps_namespace(
         connection_url,
         infra_ns=infra_ns,
+        postgres_service=service,
     )
     print(
         f"Promoting {_MAAS_DB_SECRET} from {infra_ns} to {_MAAS_APPS_NS} "
@@ -223,6 +231,29 @@ def _promote_maas_db_secret_to_apps_namespace() -> bool:
     )
     _create_maas_db_config_secret(_MAAS_APPS_NS, connection_url)
     return _secret_exists(_MAAS_APPS_NS, _MAAS_DB_SECRET)
+
+
+def _promote_maas_db_secret_to_apps_namespace() -> bool:
+    """Copy maas-db-config into redhat-ods-applications when setup-database.sh left it in infra."""
+    for infra_ns in (_RHOAI_GATEWAY_INFRA_NS, _maas_infra_namespace()):
+        if _promote_maas_db_secret_from_infra(infra_ns):
+            return True
+    return False
+
+
+def _operator_maas_postgres_active() -> bool:
+    infra_ns, deploy = _maas_postgres_location()
+    return infra_ns == _RHOAI_GATEWAY_INFRA_NS and deploy == _OPERATOR_MAAS_POSTGRES_DEPLOY
+
+
+def _defer_maas_db_config_until_operator_install() -> None:
+    """Skip setup-database.sh when operator maas-postgres owns the DB on RHOAI 3.5+."""
+    print(
+        f"NOTE: operator {_OPERATOR_MAAS_POSTGRES_DEPLOY} in {_RHOAI_GATEWAY_INFRA_NS}; "
+        f"skipping setup-database.sh (legacy {_MAAS_INFRA_NS} postgres must not block). "
+        f"Deferring {_MAAS_DB_SECRET} until install-rhoai / prepare-components",
+        flush=True,
+    )
 
 
 def _create_maas_db_config_secret(namespace: str, connection_url: str) -> None:
@@ -651,6 +682,14 @@ def ensure_maas_database() -> None:
         _create_maas_db_config_secret(_MAAS_APPS_NS, external_url)
         print(f"✓ MaaS database secret {_MAAS_APPS_NS}/{_MAAS_DB_SECRET} created", flush=True)
         _restart_maas_api_after_db_config()
+        return
+
+    if _operator_maas_postgres_active():
+        if _promote_maas_db_secret_to_apps_namespace():
+            print(f"✓ MaaS database ready ({_MAAS_APPS_NS}/{_MAAS_DB_SECRET})", flush=True)
+            _restart_maas_api_after_db_config()
+            return
+        _defer_maas_db_config_until_operator_install()
         return
 
     repo = _clone_models_as_a_service()
