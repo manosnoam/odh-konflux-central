@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import quote_plus, urlparse, urlunparse
 
 from install.dsc_install import oc_run
 from install.dependency_operators import unblock_terminating_namespace
@@ -253,6 +253,83 @@ def _defer_maas_db_config_until_operator_install() -> None:
         f"skipping setup-database.sh (legacy {_MAAS_INFRA_NS} postgres must not block). "
         f"Deferring {_MAAS_DB_SECRET} until install-rhoai / prepare-components",
         flush=True,
+    )
+
+
+def _read_operator_maas_postgres_credentials() -> tuple[str, str, str] | None:
+    """Read user/password/db from operator maas-postgres deployment env."""
+    infra_ns = _RHOAI_GATEWAY_INFRA_NS
+    deploy = _OPERATOR_MAAS_POSTGRES_DEPLOY
+    if not _postgres_deploy_ready(infra_ns, deploy):
+        return None
+    proc = oc_run(
+        ["get", "deployment", deploy, "-n", infra_ns, "-o", "json"],
+        check=False,
+        capture_output=True,
+        timeout=30,
+    )
+    if proc.returncode != 0:
+        return None
+    try:
+        body = json.loads(proc.stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+    containers = body.get("spec", {}).get("template", {}).get("spec", {}).get("containers") or []
+    if not containers:
+        return None
+    env_map: dict[str, str] = {}
+    for item in containers[0].get("env") or []:
+        name = (item.get("name") or "").strip()
+        if name and "value" in item:
+            env_map[name] = str(item["value"])
+    user = env_map.get("POSTGRESQL_USER") or env_map.get("POSTGRES_USER") or "maas"
+    password = env_map.get("POSTGRESQL_PASSWORD") or env_map.get("POSTGRES_PASSWORD") or ""
+    dbname = env_map.get("POSTGRESQL_DATABASE") or env_map.get("POSTGRES_DB") or "maas"
+    if not password:
+        return None
+    return user, password, dbname
+
+
+def _build_operator_maas_db_connection_url() -> str | None:
+    creds = _read_operator_maas_postgres_credentials()
+    if creds is None:
+        return None
+    user, password, dbname = creds
+    host = _postgres_host_for_apps_namespace(_RHOAI_GATEWAY_INFRA_NS)
+    return (
+        f"postgresql://{quote_plus(user)}:{quote_plus(password)}"
+        f"@{host}:5432/{quote_plus(dbname)}"
+    )
+
+
+def _ensure_operator_maas_db_config_secrets() -> bool:
+    """Create maas-db-config for operator postgres (maas-api reads gateway infra NS)."""
+    connection_url = _build_operator_maas_db_connection_url()
+    if not connection_url:
+        return False
+    gateway_url = connection_url
+    apps_url = _rewrite_db_connection_url_for_apps_namespace(
+        connection_url,
+        infra_ns=_RHOAI_GATEWAY_INFRA_NS,
+    )
+    targets = (
+        (_RHOAI_GATEWAY_INFRA_NS, gateway_url),
+        (_MAAS_APPS_NS, apps_url),
+    )
+    for ns, url in targets:
+        if not _namespace_exists(ns):
+            continue
+        if _secret_exists(ns, _MAAS_DB_SECRET):
+            continue
+        print(
+            f"Creating {_MAAS_DB_SECRET} in {ns} from operator "
+            f"{_OPERATOR_MAAS_POSTGRES_DEPLOY} credentials...",
+            flush=True,
+        )
+        _create_maas_db_config_secret(ns, url)
+    return (
+        _secret_exists(_RHOAI_GATEWAY_INFRA_NS, _MAAS_DB_SECRET)
+        and _secret_exists(_MAAS_APPS_NS, _MAAS_DB_SECRET)
     )
 
 
@@ -687,6 +764,14 @@ def ensure_maas_database() -> None:
     if _operator_maas_postgres_active():
         if _promote_maas_db_secret_to_apps_namespace():
             print(f"✓ MaaS database ready ({_MAAS_APPS_NS}/{_MAAS_DB_SECRET})", flush=True)
+            _restart_maas_api_after_db_config()
+            return
+        if _ensure_operator_maas_db_config_secrets():
+            print(
+                f"✓ MaaS database ready (operator {_OPERATOR_MAAS_POSTGRES_DEPLOY} "
+                f"in {_RHOAI_GATEWAY_INFRA_NS})",
+                flush=True,
+            )
             _restart_maas_api_after_db_config()
             return
         _defer_maas_db_config_until_operator_install()

@@ -137,6 +137,7 @@ class MaasDatabaseCleanupTest(unittest.TestCase):
 class MaasOperatorPostgresDeferTest(unittest.TestCase):
     @patch("components.maas_billing.database._restart_maas_api_after_db_config")
     @patch("components.maas_billing.database._defer_maas_db_config_until_operator_install")
+    @patch("components.maas_billing.database._ensure_operator_maas_db_config_secrets", return_value=False)
     @patch("components.maas_billing.database._promote_maas_db_secret_to_apps_namespace", return_value=False)
     @patch("components.maas_billing.database._operator_maas_postgres_active", return_value=True)
     @patch("components.maas_billing.database._secret_exists", return_value=False)
@@ -149,13 +150,37 @@ class MaasOperatorPostgresDeferTest(unittest.TestCase):
         _secret_exists,
         operator_active,
         promote,
+        ensure_operator,
         defer,
         restart_api,
     ) -> None:
         ensure_maas_database()
         clone_repo.assert_not_called()
+        ensure_operator.assert_called_once_with()
         defer.assert_called_once_with()
         restart_api.assert_not_called()
+
+    @patch("components.maas_billing.database._restart_maas_api_after_db_config")
+    @patch("components.maas_billing.database._ensure_operator_maas_db_config_secrets", return_value=True)
+    @patch("components.maas_billing.database._promote_maas_db_secret_to_apps_namespace", return_value=False)
+    @patch("components.maas_billing.database._operator_maas_postgres_active", return_value=True)
+    @patch("components.maas_billing.database._secret_exists", return_value=False)
+    @patch("components.maas_billing.database._apps_namespace_ready_for_secrets", return_value=True)
+    @patch("components.maas_billing.database._clone_models_as_a_service")
+    def test_creates_operator_db_config_when_promote_unavailable(
+        self,
+        clone_repo,
+        _apps_ready,
+        _secret_exists,
+        operator_active,
+        promote,
+        ensure_operator,
+        restart_api,
+    ) -> None:
+        ensure_maas_database()
+        clone_repo.assert_not_called()
+        ensure_operator.assert_called_once_with()
+        restart_api.assert_called_once()
 
     @patch("components.maas_billing.database._restart_maas_api_after_db_config")
     @patch("components.maas_billing.database._promote_maas_db_secret_to_apps_namespace", return_value=True)
