@@ -63,6 +63,8 @@ def _oci_guest_apps_hostname(hostname: str) -> bool:
 
 _API_PROBE_ATTEMPTS = 3
 _API_PROBE_INTERVAL_SEC = 10.0
+_WEBHOOK_PROBE_ATTEMPTS = 3
+_WEBHOOK_PROBE_INTERVAL_SEC = 10.0
 
 
 def _probe_cluster_api_unreachable_once() -> str:
@@ -140,8 +142,15 @@ def operator_admission_webhook_unavailable_reason(*, probe: bool = True) -> str:
         return ""
     ns = (os.environ.get("OPERATOR_NAMESPACE") or "redhat-ods-operator").strip()
     svc = _discover_operator_admission_webhook_service(ns)
-    ready, reason = _service_has_ready_endpoints(service=svc, namespace=ns)
-    return "" if ready else reason
+    last = ""
+    for attempt in range(_WEBHOOK_PROBE_ATTEMPTS):
+        ready, reason = _service_has_ready_endpoints(service=svc, namespace=ns)
+        if ready:
+            return ""
+        last = reason
+        if attempt < _WEBHOOK_PROBE_ATTEMPTS - 1:
+            time.sleep(_WEBHOOK_PROBE_INTERVAL_SEC)
+    return last
 
 
 def _console_hostname_unreachable_reason(hostname: str) -> str:

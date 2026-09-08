@@ -83,8 +83,11 @@ class OperatorWebhookUnavailableReasonTest(unittest.TestCase):
     @patch("suite.cluster_api_health.oc_run")
     def test_detects_missing_endpoints(self, mock_oc_run: MagicMock, _mock_discover: MagicMock) -> None:
         mock_oc_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        reason = operator_admission_webhook_unavailable_reason()
+        with patch("suite.cluster_api_health.time.sleep") as mock_sleep:
+            reason = operator_admission_webhook_unavailable_reason()
         self.assertIn("webhook has no endpoints", reason)
+        self.assertEqual(mock_oc_run.call_count, 3)
+        self.assertGreaterEqual(mock_sleep.call_count, 2)
 
     @patch("install.dsc_install._discover_operator_admission_webhook_service", return_value="rhods-operator-service")
     @patch("suite.cluster_api_health.oc_run")
