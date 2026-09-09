@@ -80,6 +80,14 @@ def resolve_versioned_image(repo: str, csv_version: str) -> str:
             return candidate
         print(f"Tag not found: {candidate}")
 
+    # EA installs often need pytest paths absent from the prior GA image (e.g. maas_billing on 3.6-ea).
+    if _EA_RE.match(csv_version) and _tag_exists(repo, "latest"):
+        print(
+            f"EA CSV {csv_version}: no versioned tag; using {latest_img} "
+            "(newer tests than prior GA image)"
+        )
+        return latest_img
+
     for tag in prior_minor_ga_tags(csv_version):
         candidate = f"{repo}:{tag}"
         if _tag_exists(repo, tag):
