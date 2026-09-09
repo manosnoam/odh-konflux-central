@@ -73,20 +73,35 @@ def resolve_versioned_image(repo: str, csv_version: str) -> str:
         print(f"skopeo not found in PATH -- using {latest_img}")
         return latest_img
 
-    for tag in tags:
-        candidate = f"{repo}:{tag}"
-        if _tag_exists(repo, tag):
-            print(f"Versioned image tag exists: {candidate}")
-            return candidate
-        print(f"Tag not found: {candidate}")
-
-    # EA installs often need pytest paths absent from the prior GA image (e.g. maas_billing on 3.6-ea).
-    if _EA_RE.match(csv_version) and _tag_exists(repo, "latest"):
-        print(
-            f"EA CSV {csv_version}: no versioned tag; using {latest_img} "
-            "(newer tests than prior GA image)"
-        )
-        return latest_img
+    if _EA_RE.match(csv_version):
+        hyphen_ea_tags = [tag for tag in tags if "-ea." in tag]
+        shorthand_ea_tags = [tag for tag in tags if tag not in hyphen_ea_tags]
+        for tag in hyphen_ea_tags:
+            candidate = f"{repo}:{tag}"
+            if _tag_exists(repo, tag):
+                print(f"Versioned image tag exists: {candidate}")
+                return candidate
+            print(f"Tag not found: {candidate}")
+        # Shorthand EA tags (e.g. 3.6ea1) may exist but lack newest pytest paths; prefer :latest.
+        if _tag_exists(repo, "latest"):
+            print(
+                f"EA CSV {csv_version}: no exact EA tag; using {latest_img} "
+                "(newer tests than shorthand EA / prior GA image)"
+            )
+            return latest_img
+        for tag in shorthand_ea_tags:
+            candidate = f"{repo}:{tag}"
+            if _tag_exists(repo, tag):
+                print(f"Versioned image tag exists: {candidate}")
+                return candidate
+            print(f"Tag not found: {candidate}")
+    else:
+        for tag in tags:
+            candidate = f"{repo}:{tag}"
+            if _tag_exists(repo, tag):
+                print(f"Versioned image tag exists: {candidate}")
+                return candidate
+            print(f"Tag not found: {candidate}")
 
     for tag in prior_minor_ga_tags(csv_version):
         candidate = f"{repo}:{tag}"

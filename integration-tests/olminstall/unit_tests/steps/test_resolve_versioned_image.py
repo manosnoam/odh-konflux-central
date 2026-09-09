@@ -37,6 +37,19 @@ class ResolveVersionedImageTest(unittest.TestCase):
         )
 
     @patch("suite.resolve_versioned_image._tag_exists")
+    def test_ea_prefers_latest_over_shorthand_ea_tag(self, exists) -> None:
+        repo = "quay.io/opendatahub/opendatahub-tests"
+
+        def _side_effect(_repo: str, tag: str) -> bool:
+            return tag in {"3.6ea1", "latest"}
+
+        exists.side_effect = _side_effect
+        self.assertEqual(
+            resolve_versioned_image(repo, "3.6.0-ea.1"),
+            f"{repo}:latest",
+        )
+
+    @patch("suite.resolve_versioned_image._tag_exists")
     def test_ea_falls_back_to_latest_before_prior_minor_ga(self, exists) -> None:
         repo = "quay.io/opendatahub/opendatahub-tests"
 
