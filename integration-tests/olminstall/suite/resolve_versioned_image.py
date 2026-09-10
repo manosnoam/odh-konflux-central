@@ -82,11 +82,17 @@ def resolve_versioned_image(repo: str, csv_version: str) -> str:
                 print(f"Versioned image tag exists: {candidate}")
                 return candidate
             print(f"Tag not found: {candidate}")
-        # Shorthand EA tags (e.g. 3.6ea1) may exist but lack newest pytest paths; prefer :latest.
+        # Prior GA minors (e.g. 3.5 on 3.6 EA) carry full pytest trees Jenkins uses; :latest
+        # and shorthand EA tags (3.6ea1) often omit paths like tests/model_serving/maas_billing.
+        for tag in prior_minor_ga_tags(csv_version):
+            candidate = f"{repo}:{tag}"
+            if _tag_exists(repo, tag):
+                print(f"EA CSV {csv_version}: using prior GA image {candidate}")
+                return candidate
+            print(f"Prior minor GA tag not found: {candidate}")
         if _tag_exists(repo, "latest"):
             print(
-                f"EA CSV {csv_version}: no exact EA tag; using {latest_img} "
-                "(newer tests than shorthand EA / prior GA image)"
+                f"EA CSV {csv_version}: no exact EA or prior GA tag; using {latest_img}"
             )
             return latest_img
         for tag in shorthand_ea_tags:
