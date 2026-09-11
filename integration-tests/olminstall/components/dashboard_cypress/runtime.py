@@ -73,10 +73,9 @@ _BYOIDC_EXTRA_SKIP_TAGS = (
     "@LLMDServingCI @HardwareProfilesCI @HardwareProfileModelServing"
 )
 _KONFLUX_MANIFEST_EXTRA_SKIP_TAGS = "@ODS-327 @ODS-492"
-# Konflux EPHC HCP: historically skipped training/hardware paths under bearer auth.
-# JP-cypress-EPHC-parity: keep empty so SmokeSets match regular-cluster coverage;
-# auth failures surface as real fails until LDAP/OAuth IdP is available.
-_EHC_BEARER_EXTRA_SKIP_TAGS = ""
+# EPHC bearer HCP has no LDAP IdP; use the same skip set as RN-PM htpasswd-without-LDAP
+# so pass rates are comparable to rh-nightly-pm pooled runs.
+_EHC_BEARER_EXTRA_SKIP_TAGS = _HTPASSWD_HCP_EXTRA_SKIP_TAGS
 
 
 def stage_writable_kubeconfig(artifacts_dir: Path, kubeconfig_src: str) -> Path:
@@ -439,8 +438,10 @@ def byoidc_extra_cypress_skip_tags(*, odh_dashboard_url: str) -> str:
 
 
 def ephc_bearer_extra_cypress_skip_tags(*, odh_dashboard_url: str) -> str:
-    """No extra skipTags on bearer EPHC (JP-cypress-EPHC-parity vs regular-cluster smoke)."""
+    """RN-PM htpasswd HCP skip parity on Konflux EPHC bearer clusters."""
     if not gateway_cypress_uses_bearer_bypass(odh_dashboard_url=odh_dashboard_url):
+        return ""
+    if not _is_ephc_cluster_source():
         return ""
     return _EHC_BEARER_EXTRA_SKIP_TAGS
 

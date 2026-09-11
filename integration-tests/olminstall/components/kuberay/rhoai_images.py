@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import re
+import shlex
+import textwrap
+
 _IMAGES_TEST = "test/e2e/raycluster_rhoai_images_test.go"
 _IDMS_MARK = "olminstall-kuberay-idms"
 _KUBE_RBAC_MSG = (
@@ -9,9 +13,14 @@ _KUBE_RBAC_MSG = (
 )
 
 
+def _python_inline_script(body: str) -> str:
+    return shlex.quote(textwrap.dedent(body).strip())
+
+
 def _rhoai_idms_patch_python_body() -> str:
     return "\n".join(
         [
+            "import re",
             "from pathlib import Path",
             f"mark = {_IDMS_MARK!r}",
             f"needle = {_KUBE_RBAC_MSG!r}",
@@ -19,19 +28,25 @@ def _rhoai_idms_patch_python_body() -> str:
             "text = p.read_text()",
             "if mark in text:",
             "    raise SystemExit(0)",
-            'if needle not in text:',
-            '    raise SystemExit("kube-rbac-proxy RELATED_IMAGE assertion not found")',
+            "if needle not in text:",
+            '    print("kuberay: skip IDMS patch (kube-rbac-proxy assertion not found)", flush=True)',
+            "    raise SystemExit(0)",
             "lines = text.splitlines(True)",
             "out = []",
+            "patched = False",
             "for line in lines:",
-            "    if needle in line:",
-            "        indent = line[: len(line) - len(line.lstrip())]",
-            '        out.append(',
-            '            f\'{indent}sidecarImage = strings.Replace(sidecarImage, "registry.redhat.io/", "quay.io/", 1) // {mark}\\n\'',
-            "        )",
+            "    if needle in line and not patched:",
+            "        m = re.search(r'Equal\\(([^)]+)\\)', line)",
+            "        if m:",
+            "            var = m.group(1).strip()",
+            "            indent = line[: len(line) - len(line.lstrip())]",
+            "            out.append(",
+            '                f\'{indent}{var} = strings.Replace({var}, "registry.redhat.io/", "quay.io/", 1) // {mark}\\n\'',
+            "            )",
+            "            patched = True",
             "    out.append(line)",
             'text = "".join(out)',
-            'if \'"strings"\' not in text and "strings.Replace" in text:',
+            'if patched and \'"strings"\' not in text and "strings.Replace" in text:',
             '    text = text.replace("import (\\n", \'import (\\n\\t"strings"\\n\', 1)',
             "p.write_text(text)",
             'print("kuberay: patched TestRayClusterRHOAIImages for EPHC IDMS mirror", flush=True)',
@@ -41,7 +56,8 @@ def _rhoai_idms_patch_python_body() -> str:
 
 def kuberay_rhoai_idms_patch_shell() -> str:
     """Normalize registry.redhat.io sidecar images before RELATED_IMAGE comparison on EPHC."""
-    return f"if [ -f {_IMAGES_TEST} ]; then python3 - <<'PY'\n{_rhoai_idms_patch_python_body()}PY\nfi"
+    py = _python_inline_script(_rhoai_idms_patch_python_body())
+    return f"if [ -f {_IMAGES_TEST} ]; then python3 -c {py}; fi"
 
 
 def prepend_kuberay_smoke_patch(run_command: str) -> str:

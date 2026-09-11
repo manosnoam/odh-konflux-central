@@ -22,4 +22,9 @@ class KuberayRhoaiImagesPatchTest(unittest.TestCase):
         out = prepend_kuberay_smoke_patch("bash run-tests.sh -testTier=Smoke")
         self.assertIn("bash run-tests.sh -testTier=Smoke", out)
         self.assertIn("TestRayClusterAuthOptions", out)
-        self.assertIn("TestRayClusterRHOAIImages", out)
+        self.assertIn("kube-rbac-proxy assertion not found", out)
+
+    def test_idms_patch_python_compiles(self) -> None:
+        from components.kuberay.rhoai_images import _rhoai_idms_patch_python_body
+
+        compile(_rhoai_idms_patch_python_body(), "<kuberay-idms>", "exec")
