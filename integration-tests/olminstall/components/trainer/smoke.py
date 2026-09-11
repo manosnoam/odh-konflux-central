@@ -18,12 +18,57 @@ def _sed_replace(path: str, old: str, new: str) -> str:
 def _ensure_strings_import(path: str) -> str:
     """strings.Replace in patched tests requires a strings import in the same file."""
     return (
-        f"if [ -f {path} ] && grep -Fq 'strings.Replace' {path} "
+        f"if [ -f {path} ] && grep -Eq 'strings\\.(Replace|HasPrefix)' {path} "
         f"&& ! grep -q '\"strings\"' {path}; then "
         f"sed -i '/^import (/a\t\"strings\"' {path} && "
         f"echo 'trainer: added strings import to {path}'; "
         "fi"
     )
+
+
+_SPECULATOR_IDMS_MARK = "olminstall-trainer-speculator-idms"
+_SPECULATOR_REGISTRY_OLD = (
+    "\t\t\texpectedRegistry := GetExpectedRegistry(test)\n"
+    "\t\t\ttest.Expect(foundImage).To(HavePrefix(expectedRegistry+\"/\"),"
+)
+_SPECULATOR_REGISTRY_NEW = (
+    "\t\t\texpectedRegistry := GetExpectedRegistry(test)\n"
+    '\t\t\tif strings.HasPrefix(foundImage, "registry.redhat.io/") {\n'
+    '\t\t\t\texpectedRegistry = "registry.redhat.io"\n'
+    f"\t\t\t}} // {_SPECULATOR_IDMS_MARK}\n"
+    "\t\t\ttest.Expect(foundImage).To(HavePrefix(expectedRegistry+\"/\"),"
+)
+
+
+def trainer_speculator_idms_patch_shell() -> str:
+    """Accept registry.redhat.io/rhaii-fast speculator images on EPHC IDMS clusters."""
+    py = _python_inline_script(
+        "\n".join(
+            [
+                "from pathlib import Path",
+                f"mark = {_SPECULATOR_IDMS_MARK!r}",
+                f"old = {_SPECULATOR_REGISTRY_OLD!r}",
+                f"new = {_SPECULATOR_REGISTRY_NEW!r}",
+                'p = Path("trainer/cluster_training_runtimes_test.go")',
+                "text = p.read_text()",
+                "if mark in text:",
+                "    raise SystemExit(0)",
+                "if old not in text:",
+                "    raise SystemExit('speculator registry block not found')",
+                "p.write_text(text.replace(old, new, 1))",
+                'print("trainer: patched speculator registry check for EPHC IDMS", flush=True)',
+            ]
+        )
+        + "\n"
+    )
+    return f"if [ -f {_RUNTIME_TEST} ]; then python3 -c {py}; fi"
+
+
+def _python_inline_script(body: str) -> str:
+    import shlex
+    import textwrap
+
+    return shlex.quote(textwrap.dedent(body).strip())
 
 
 def trainer_skip_hub_runtime_name_drift_shell() -> str:
@@ -72,6 +117,7 @@ def trainer_smoke_rhoai_idms_patch_shell() -> str:
                 "done; true; "
                 "fi"
             ),
+            trainer_speculator_idms_patch_shell(),
             trainer_skip_hub_runtime_name_drift_shell(),
         ]
     )

@@ -21,6 +21,8 @@ class TrainerSmokeTest(unittest.TestCase):
         # Image name lives in trainer utils, not only cluster_training_runtimes_test.go.
         self.assertIn("find trainer", shell)
         self.assertIn("skip hub runtime name drift", shell)
+        self.assertIn("olminstall-trainer-speculator-idms", shell)
+        self.assertIn("speculator registry check for EPHC IDMS", shell)
 
     def test_sed_uses_hash_delimiter(self) -> None:
         shell = trainer_smoke_rhoai_idms_patch_shell()

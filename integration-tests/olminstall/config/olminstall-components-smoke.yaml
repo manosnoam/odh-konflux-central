@@ -664,6 +664,10 @@ components:
         tier1: 45m
 
   - component:
+      enablement:
+        enable: true
+        odh-stable: true
+        maxRhoai: 3.5
       merge:
         metadata:
           name: distributed-workloads

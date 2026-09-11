@@ -497,6 +497,7 @@ def _apply_cluster_source_pytest_extra_args(extra: str) -> str:
 
 
 _OGX_EA_DISTRIBUTION = "rh-dev"
+_EPHC_SKIP_OGX_FILE_SEARCH = "-k 'not file_search'"
 _OLMINSTALL_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -530,6 +531,9 @@ def _apply_ogx_pytest_extra_args(extra: str) -> str:
         extra = f"-p ogx_ea_distribution_plugin {extra}".strip()
     if "-p ogx_tekton_route_plugin" not in extra:
         extra = f"-p ogx_tekton_route_plugin {extra}".strip()
+    cluster_source = os.environ.get("CLUSTER_SOURCE", "").strip()
+    if is_ephemeral_hosted_cluster_source(cluster_source):
+        extra = _merge_pytest_k_skip(extra, _EPHC_SKIP_OGX_FILE_SEARCH)
     return extra
 
 
