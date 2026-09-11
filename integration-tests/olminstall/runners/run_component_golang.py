@@ -578,9 +578,9 @@ def main() -> int:
 
         run_command = prepend_trainer_smoke_patch(run_command)
     elif filter_id == "kuberay":
-        from components.kuberay.auth_options import prepend_kuberay_auth_options_skip
+        from components.kuberay.rhoai_images import prepend_kuberay_smoke_patch
 
-        run_command = prepend_kuberay_auth_options_skip(run_command)
+        run_command = prepend_kuberay_smoke_patch(run_command)
     elif filter_id == "mlflow":
         from components.mlflow.ephc_tracking import prepend_mlflow_ephc_tracking
 
