@@ -1,4 +1,4 @@
-"""Unit tests for runtime Jenkins Vault shift-left staging (no live Vault)."""
+"""Unit tests for runtime Vault shift-left staging (no live Vault)."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from k8s.jenkins_vault import (
+from k8s.vault_runtime import (
     VAULT_APPROLE_SECRET,
-    jenkins_vault_blob_key,
     load_hcp_install_aws_credentials,
     merge_model_serving_env,
     parse_env_file_blob,
+    shift_left_vault_blob_key,
     stage_shift_left_files,
     vault_login_and_read_shift_left,
 )
@@ -35,25 +35,25 @@ class ParseEnvFileBlobTest(unittest.TestCase):
         self.assertNotIn("# header", parsed)
 
 
-class JenkinsVaultBlobKeyTest(unittest.TestCase):
+class ShiftLeftVaultBlobKeyTest(unittest.TestCase):
     def test_maps_cloned_tenant_secret_names(self) -> None:
-        self.assertEqual(jenkins_vault_blob_key("envfile-mlflow"), "envFileMlflow")
-        self.assertEqual(jenkins_vault_blob_key("envfile-ogx"), "envFileOGX")
-        self.assertEqual(jenkins_vault_blob_key("envfile-pipelines"), "envFilePipelines")
+        self.assertEqual(shift_left_vault_blob_key("envfile-mlflow"), "envFileMlflow")
+        self.assertEqual(shift_left_vault_blob_key("envfile-ogx"), "envFileOGX")
+        self.assertEqual(shift_left_vault_blob_key("envfile-pipelines"), "envFilePipelines")
         self.assertEqual(
-            jenkins_vault_blob_key("envfile-codeflare-sdk"), "envFileCodeflareSdk"
+            shift_left_vault_blob_key("envfile-codeflare-sdk"), "envFileCodeflareSdk"
         )
         self.assertEqual(
-            jenkins_vault_blob_key("envfile-dashboard-cypress"),
+            shift_left_vault_blob_key("envfile-dashboard-cypress"),
             "volumeFileTestVariables",
         )
         self.assertEqual(
-            jenkins_vault_blob_key("shiftleft-envfile-model-serving"),
+            shift_left_vault_blob_key("shiftleft-envfile-model-serving"),
             "envFileModelServing",
         )
 
-    def test_passes_through_jenkins_key_names(self) -> None:
-        self.assertEqual(jenkins_vault_blob_key("envFileMlflow"), "envFileMlflow")
+    def test_passes_through_vault_blob_key_names(self) -> None:
+        self.assertEqual(shift_left_vault_blob_key("envFileMlflow"), "envFileMlflow")
         self.assertEqual(VAULT_APPROLE_SECRET, "vault-approle")
 
 
@@ -124,7 +124,7 @@ class StageShiftLeftFilesTest(unittest.TestCase):
 
 class SecretSourceTest(unittest.TestCase):
     def test_resolve_secret_source_env_and_workspace(self) -> None:
-        from k8s.jenkins_vault import resolve_secret_source
+        from k8s.vault_runtime import resolve_secret_source
 
         self.assertEqual(resolve_secret_source({"SECRET_SOURCE": "vault"}), "vault")
         self.assertEqual(resolve_secret_source({"SECRET_SOURCE": "tenant"}), "tenant")
@@ -132,7 +132,7 @@ class SecretSourceTest(unittest.TestCase):
         self.assertEqual(resolve_secret_source({}), "vault")
 
     def test_copy_tenant_secret_files(self) -> None:
-        from k8s.jenkins_vault import copy_tenant_secret_files
+        from k8s.vault_runtime import copy_tenant_secret_files
 
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "src"
@@ -218,7 +218,7 @@ class LoadHcpInstallAwsCredentialsTest(unittest.TestCase):
                 encoding="utf-8",
             )
             with mock.patch(
-                "k8s.jenkins_vault.vault_login_and_read_kv_data",
+                "k8s.vault_runtime.vault_login_and_read_kv_data",
                 return_value={
                     "aws_access_key_id": "AKIA_OPENSHIFT",
                     "aws_secret_access_key": "openshift-secret",

@@ -304,7 +304,7 @@ def main() -> int:
     artifacts_dir = _artifacts_dir()
     os.environ.setdefault("ARTIFACTS_DIR", str(artifacts_dir))
     prepare_kubeconfig_auth_for_tests(tekton_kubeconfig_path=tekton_kubeconfig)
-    from k8s.jenkins_vault import ensure_runtime_vault_env
+    from k8s.vault_runtime import ensure_runtime_vault_env
 
     ensure_runtime_vault_env()
 

@@ -367,7 +367,7 @@ def inject_ci_auth_bypass(working_dir: Path) -> None:
 
 def load_component_vault_env() -> dict[str, str]:
     """Export vault secret keys into env (except config file keys loaded separately)."""
-    from k8s.jenkins_vault import ensure_runtime_vault_env
+    from k8s.vault_runtime import ensure_runtime_vault_env
 
     ensure_runtime_vault_env()
     out: dict[str, str] = {}

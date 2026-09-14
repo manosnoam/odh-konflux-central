@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import io
 import os
-import subprocess
-import tempfile
 import zipfile
 from pathlib import Path
 
 from install.kubeconfig_cluster_label import cluster_name_from_url
 from k8s.external_credentials import ExternalClusterCredentials
-from k8s.jenkins_vault import VAULT_AUTH_MOUNT, load_hcp_install_aws_credentials
+from k8s.vault_runtime import VAULT_AUTH_MOUNT, load_hcp_install_aws_credentials
 from steps.tekton_util import _kubeconfig_api_server
 
 DEFAULT_S3_BUCKET = "hcp-clusters-mdata"
@@ -55,6 +53,30 @@ def _extract_zip_member(zip_bytes: bytes, member_path: str) -> str:
     return raw.decode("utf-8").strip()
 
 
+def _pip_tools_target() -> Path:
+    override = _env("ROSA_HCP_PIP_TARGET")
+    if override:
+        return Path(override)
+    tests_shared = _env("TESTS_SHARED")
+    if tests_shared:
+        return Path(tests_shared) / ".pip-tools"
+    return Path("/credentials/.pip-tools")
+
+
+def _ensure_boto3() -> None:
+    try:
+        import boto3  # noqa: F401
+        return
+    except ImportError:
+        pass
+    from helpers.pip_bootstrap import pip_install_to_target, prepend_pythonpath
+
+    target = _pip_tools_target()
+    print(f"Installing boto3 to {target} (ROSA HCP install-data S3)...", flush=True)
+    pip_install_to_target("boto3", target)
+    prepend_pythonpath(str(target))
+
+
 def _s3_download_bytes(bucket: str, key: str, aws_env: dict[str, str]) -> bytes:
     access_key = aws_env.get("AWS_ACCESS_KEY_ID", "").strip()
     secret_key = aws_env.get("AWS_SECRET_ACCESS_KEY", "").strip()
@@ -65,6 +87,7 @@ def _s3_download_bytes(bucket: str, key: str, aws_env: dict[str, str]) -> bytes:
         or _env("AWS_DEFAULT_REGION", "us-east-1")
     )
     try:
+        _ensure_boto3()
         import boto3
 
         client = boto3.client(
@@ -78,30 +101,7 @@ def _s3_download_bytes(bucket: str, key: str, aws_env: dict[str, str]) -> bytes:
         return body.read() if body is not None else b""
     except Exception as exc:
         print(f"WARN: boto3 S3 download failed for {_s3_object_uri(bucket, key)}: {exc}", flush=True)
-
-    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-        dest = Path(tmp.name)
-    env = {**os.environ, **aws_env}
-    proc = subprocess.run(
-        ["aws", "s3", "cp", _s3_object_uri(bucket, key), str(dest)],
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=120,
-        check=False,
-    )
-    if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "").strip()
-        print(
-            f"WARN: aws s3 cp failed for {_s3_object_uri(bucket, key)}: {detail or proc.returncode}",
-            flush=True,
-        )
-        dest.unlink(missing_ok=True)
         return b""
-    try:
-        return dest.read_bytes()
-    finally:
-        dest.unlink(missing_ok=True)
 
 
 def load_rosa_admin_credentials_from_install_zip(

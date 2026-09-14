@@ -48,7 +48,7 @@ from runners.component_prereqs import (
 )
 from suite.component_plan import parse_components_selection
 from runners.run_bvt_pytest import run_single as run_single_pytest
-from k8s.jenkins_vault import ensure_runtime_vault_env
+from k8s.vault_runtime import ensure_runtime_vault_env
 from k8s.shift_left_env import (
     apply_cluster_router_ca_from_kubeconfig,
     load_shift_left_env_from_mount,

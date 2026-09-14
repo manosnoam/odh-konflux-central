@@ -1,4 +1,4 @@
-"""Fetch Jenkins VaultSecrets.SHIFT_LEFT at runtime and stage env files for Tekton mounts."""
+"""Fetch Vault shift-left/openshift secrets at runtime and stage env files for Tekton mounts."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ _AWS_KEY_ALIASES: dict[str, tuple[str, ...]] = {
     "AWS_SECRET_ACCESS_KEY": ("aws_secret_access_key", "awsSecretAccessKey", "AWS_SECRET_KEY"),
 }
 
-# Cloned Konflux Secret names → Jenkins KV blob keys on apps/rhods-ci/shift-left.
+# Cloned Konflux Secret names → Vault KV blob keys on apps/rhods-ci/shift-left.
 _TENANT_SECRET_TO_BLOB: dict[str, str] = {
     "envfile-mlflow": "envFileMlflow",
     "envfile-ogx": "envFileOGX",
@@ -71,7 +71,7 @@ def copy_tenant_secret_files(src: Path, dest: Path) -> list[str]:
 
 
 def parse_env_file_blob(blob: str) -> dict[str, str]:
-    """Parse a Jenkins envFile* blob (KEY=value / export KEY=value)."""
+    """Parse an envFile* blob (KEY=value / export KEY=value)."""
     out: dict[str, str] = {}
     for raw_line in (blob or "").splitlines():
         line = raw_line.strip()
@@ -89,8 +89,8 @@ def parse_env_file_blob(blob: str) -> dict[str, str]:
     return out
 
 
-def jenkins_vault_blob_key(name: str) -> str:
-    """Map a catalog/tenant secret name to the Jenkins Vault KV blob key."""
+def shift_left_vault_blob_key(name: str) -> str:
+    """Map a catalog/tenant secret name to the Vault shift-left KV blob key."""
     raw = (name or "").strip()
     if not raw:
         return ""
@@ -139,7 +139,7 @@ def stage_shift_left_files(
     written: list[str] = []
     if include_model_serving:
         written.extend(_write_files(dest, merge_model_serving_env(shift_left)))
-    key = jenkins_vault_blob_key(blob_key) if blob_key else ""
+    key = shift_left_vault_blob_key(blob_key) if blob_key else ""
     if key == "volumeFileTestVariables":
         yaml_blob = (shift_left.get("volumeFileTestVariables") or "").strip()
         if yaml_blob:
@@ -280,7 +280,7 @@ def load_hcp_install_aws_credentials(
     environ: Mapping[str, str] | None = None,
     urlopen: UrlOpen | None = None,
 ) -> dict[str, str]:
-    """AWS keys for openshift-cli-installer S3 (Jenkins apps/rhods-ci/openshift parity)."""
+    """AWS keys for openshift-cli-installer S3 (apps/rhods-ci/openshift, then shift-left)."""
     env: Mapping[str, str] = os.environ if environ is None else environ
     existing = _aws_credentials_from_mapping(env)
     if existing.get("AWS_ACCESS_KEY_ID") and existing.get("AWS_SECRET_ACCESS_KEY"):
@@ -346,9 +346,9 @@ def _blob_key_for_component(component_id: str) -> str:
         return "envFileModelServing"
     runner = comp.runner
     if runner is not None and (runner.vault_secret_key or "").strip():
-        return jenkins_vault_blob_key(runner.vault_secret_key)
+        return shift_left_vault_blob_key(runner.vault_secret_key)
     if (comp.shift_left_env_secret or "").strip():
-        return jenkins_vault_blob_key(comp.shift_left_env_secret)
+        return shift_left_vault_blob_key(comp.shift_left_env_secret)
     return "envFileModelServing"
 
 

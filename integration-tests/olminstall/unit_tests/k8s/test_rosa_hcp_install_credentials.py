@@ -10,6 +10,7 @@ from unittest import mock
 from k8s.external_credentials import ExternalClusterCredentials
 from k8s.rosa_hcp_install_credentials import (
     _extract_zip_member,
+    _s3_download_bytes,
     load_rosa_admin_credentials_from_install_zip,
     resolve_install_cluster_name,
 )
@@ -55,6 +56,24 @@ def test_extract_zip_member_reads_rosa_admin_password() -> None:
     with zipfile.ZipFile(buf, "w") as archive:
         archive.writestr("auth/rosa-admin-password", "secret-pass\n")
     assert _extract_zip_member(buf.getvalue(), "auth/rosa-admin-password") == "secret-pass"
+
+
+def test_s3_download_bytes_returns_empty_without_raising_when_boto3_unavailable() -> None:
+    with mock.patch(
+        "k8s.rosa_hcp_install_credentials._ensure_boto3",
+        side_effect=RuntimeError("pip install boto3 failed"),
+    ):
+        assert (
+            _s3_download_bytes(
+                "hcp-clusters-mdata",
+                "openshift-cli-installer/nmanos-test.zip",
+                {
+                    "AWS_ACCESS_KEY_ID": "AKIA_TEST",
+                    "AWS_SECRET_ACCESS_KEY": "secret",
+                },
+            )
+            == b""
+        )
 
 
 def test_load_rosa_admin_credentials_from_install_zip(tmp_path: Path) -> None:
