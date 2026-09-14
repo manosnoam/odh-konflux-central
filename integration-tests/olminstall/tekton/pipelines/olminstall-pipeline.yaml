@@ -1177,6 +1177,10 @@ spec:
             secret:
               secretName: $(params.ROSA_HCP_KYVERNO_SECRET)
               optional: true
+          - name: vault-approle
+            secret:
+              secretName: vault-approle
+              optional: true
         stepTemplate:
           env:
             - name: OLMINSTALL_OC_VERBOSE
@@ -1211,6 +1215,9 @@ spec:
                 readOnly: true
               - name: credentials-work
                 mountPath: /credentials
+              - name: vault-approle
+                mountPath: /vault-approle
+                readOnly: true
             env:
               - name: CLUSTER_SOURCE
                 value: $(params.CLUSTER_SOURCE)

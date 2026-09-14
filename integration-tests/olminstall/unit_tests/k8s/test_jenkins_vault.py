@@ -11,6 +11,7 @@ from unittest import mock
 from k8s.jenkins_vault import (
     VAULT_APPROLE_SECRET,
     jenkins_vault_blob_key,
+    load_hcp_install_aws_credentials,
     merge_model_serving_env,
     parse_env_file_blob,
     stage_shift_left_files,
@@ -193,6 +194,39 @@ class VaultHttpTest(unittest.TestCase):
         kv_req = opener.call_args_list[1][0][0]
         self.assertIn("/v1/apps/data/rhods-ci/shift-left", kv_req.full_url)
         self.assertEqual(kv_req.get_header("X-vault-token"), "s." + "x" * 20)
+
+
+class LoadHcpInstallAwsCredentialsTest(unittest.TestCase):
+    def test_prefers_environment_when_set(self) -> None:
+        creds = load_hcp_install_aws_credentials(
+            auth_dir=Path("/missing"),
+            environ={
+                "AWS_ACCESS_KEY_ID": "AKIA_ENV",
+                "AWS_SECRET_ACCESS_KEY": "env-secret",
+            },
+        )
+        self.assertEqual(creds["AWS_ACCESS_KEY_ID"], "AKIA_ENV")
+
+    def test_reads_openshift_vault_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            auth = Path(tmp)
+            auth.joinpath("VAULT_ADDR").write_text("https://vault.example:8200\n", encoding="utf-8")
+            auth.joinpath("role_id").write_text("role\n", encoding="utf-8")
+            auth.joinpath("secret_id").write_text("secret\n", encoding="utf-8")
+            auth.joinpath("ca.crt").write_text(
+                "-----BEGIN CERTIFICATE-----\nM\n-----END CERTIFICATE-----\n",
+                encoding="utf-8",
+            )
+            with mock.patch(
+                "k8s.jenkins_vault.vault_login_and_read_kv_data",
+                return_value={
+                    "aws_access_key_id": "AKIA_OPENSHIFT",
+                    "aws_secret_access_key": "openshift-secret",
+                },
+            ):
+                creds = load_hcp_install_aws_credentials(auth_dir=auth, environ={})
+        self.assertEqual(creds["AWS_ACCESS_KEY_ID"], "AKIA_OPENSHIFT")
+        self.assertEqual(creds["AWS_SECRET_ACCESS_KEY"], "openshift-secret")
 
 
 if __name__ == "__main__":
