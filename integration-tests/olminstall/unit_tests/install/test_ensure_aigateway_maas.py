@@ -119,6 +119,15 @@ class EnsureAigatewayMaasTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not found after"):
                 ensure_aigateway_models_as_a_service_managed(wait_timeout_sec=180)
 
+    @patch("install.dsc_install._wait_aigateway_models_as_a_service_reconciled")
+    @patch("install.dsc_install._cr_exists", return_value=False)
+    @patch("install.dsc_install.uses_aigateway_models_as_a_service", return_value=True)
+    def test_defers_when_cr_missing_and_wait_disabled(self, _use, _exists, mock_wait) -> None:
+        with patch("install.dsc_install.oc_run") as mock_oc:
+            ensure_aigateway_models_as_a_service_managed(wait=False)
+        mock_oc.assert_not_called()
+        mock_wait.assert_not_called()
+
     @patch(
         "install.dsc_install._wait_aigateway_models_as_a_service_reconciled",
         side_effect=RuntimeError("not reconciled after 5s"),

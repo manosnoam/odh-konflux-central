@@ -91,6 +91,18 @@ class MergeModelServingEnvTest(unittest.TestCase):
         self.assertEqual(merged["AWS_ACCESS_KEY_ID"], "AKIA_RHEL")
         self.assertEqual(merged["CI_S3_BUCKET_NAME"], "ods-ci-s3")
 
+    def test_preserves_session_token_from_common_aws(self) -> None:
+        data = {
+            "envFileCommon": (
+                "AWS_ACCESS_KEY_ID=AKIA_COMMON\n"
+                "AWS_SECRET_ACCESS_KEY=common-secret\n"
+                "AWS_SESSION_TOKEN=session-token\n"
+            ),
+            "envFileModelServing": "CI_S3_BUCKET_NAME=ods-ci-s3\n",
+        }
+        merged = merge_model_serving_env(data)
+        self.assertEqual(merged["AWS_SESSION_TOKEN"], "session-token")
+
 
 class StageShiftLeftFilesTest(unittest.TestCase):
     def test_writes_one_file_per_key_and_cypress_yaml(self) -> None:

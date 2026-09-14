@@ -226,22 +226,26 @@ _MAAS_INGRESS_CLEANUP_DEPLOYS = (_BBR_PRE_DEPLOY, _BBR_POST_DEPLOY)
 
 
 def _maas_controller_can_manage_openshift_ingress_hpa() -> bool:
-    r = oc_run(
-        [
-            "auth",
-            "can-i",
-            "get",
-            "horizontalpodautoscalers.autoscaling",
-            "--as",
-            f"system:serviceaccount:{_MAAS_CONTROLLER_SA_NS}:{_MAAS_CONTROLLER_SA}",
-            "-n",
-            _GATEWAY_NS,
-        ],
-        check=False,
-        capture_output=True,
-        timeout=30,
-    )
-    return r.returncode == 0 and (r.stdout or "").strip().lower() == "yes"
+    """True when maas-controller has every verb required for openshift-ingress HPAs."""
+    for verb in _HPA_RBAC_RULE["verbs"]:
+        r = oc_run(
+            [
+                "auth",
+                "can-i",
+                verb,
+                "horizontalpodautoscalers.autoscaling",
+                "--as",
+                f"system:serviceaccount:{_MAAS_CONTROLLER_SA_NS}:{_MAAS_CONTROLLER_SA}",
+                "-n",
+                _GATEWAY_NS,
+            ],
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+        if r.returncode != 0 or (r.stdout or "").strip().lower() != "yes":
+            return False
+    return True
 
 
 def ensure_maas_controller_openshift_ingress_hpa_rbac() -> None:
@@ -312,7 +316,7 @@ def ensure_maas_controller_openshift_ingress_hpa_rbac() -> None:
         )
     if not _maas_controller_can_manage_openshift_ingress_hpa():
         raise RuntimeError(
-            f"maas-controller still cannot get HPAs in {_GATEWAY_NS} after RBAC apply"
+            f"maas-controller still cannot manage HPAs in {_GATEWAY_NS} after RBAC apply"
         )
     print(
         f"✓ Granted maas-controller HPA RBAC in {_GATEWAY_NS} "

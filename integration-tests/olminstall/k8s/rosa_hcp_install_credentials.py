@@ -45,12 +45,12 @@ def _install_zip_s3_key(cluster_name: str) -> str:
 
 
 def _extract_zip_member(zip_bytes: bytes, member_path: str) -> str:
-    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as archive:
-        try:
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as archive:
             raw = archive.read(member_path)
-        except KeyError:
-            return ""
-    return raw.decode("utf-8").strip()
+        return raw.decode("utf-8").strip()
+    except (KeyError, UnicodeDecodeError, zipfile.BadZipFile):
+        return ""
 
 
 def _pip_tools_target() -> Path:
@@ -90,12 +90,15 @@ def _s3_download_bytes(bucket: str, key: str, aws_env: dict[str, str]) -> bytes:
         _ensure_boto3()
         import boto3
 
-        client = boto3.client(
-            "s3",
-            region_name=region,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-        )
+        client_kwargs: dict[str, str] = {
+            "region_name": region,
+            "aws_access_key_id": access_key,
+            "aws_secret_access_key": secret_key,
+        }
+        session_token = aws_env.get("AWS_SESSION_TOKEN", "").strip()
+        if session_token:
+            client_kwargs["aws_session_token"] = session_token
+        client = boto3.client("s3", **client_kwargs)
         response = client.get_object(Bucket=bucket, Key=key)
         body = response.get("Body")
         return body.read() if body is not None else b""

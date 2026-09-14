@@ -120,8 +120,13 @@ class MaasDatabasePromoteTest(unittest.TestCase):
     )
     @patch("components.maas_billing.database._secret_exists")
     @patch("components.maas_billing.database._namespace_exists", return_value=True)
+    @patch(
+        "components.maas_billing.database._maas_postgres_location",
+        return_value=("odh-ai-gateway-infra", "postgres"),
+    )
     def test_promote_copies_secret_from_infra_namespace(
         self,
+        _postgres_location,
         _ns_exists,
         secret_exists,
         _read_url,
@@ -171,6 +176,7 @@ class MaasDatabasePromoteTest(unittest.TestCase):
         _repair.assert_called_once()
         restart_api.assert_called_once()
 
+    @patch("components.maas_billing.database._operator_maas_postgres_active", return_value=False)
     @patch("components.maas_billing.database._clone_models_as_a_service")
     @patch("components.maas_billing.database.subprocess.run")
     @patch("components.maas_billing.database._promote_maas_db_secret_to_apps_namespace")
@@ -185,6 +191,7 @@ class MaasDatabasePromoteTest(unittest.TestCase):
         promote,
         subprocess_run,
         clone_repo,
+        _operator_active,
     ) -> None:
         secret_exists.return_value = False
         promote.return_value = True

@@ -58,6 +58,40 @@ def test_extract_zip_member_reads_rosa_admin_password() -> None:
     assert _extract_zip_member(buf.getvalue(), "auth/rosa-admin-password") == "secret-pass"
 
 
+def test_extract_zip_member_returns_empty_for_corrupt_archive() -> None:
+    assert _extract_zip_member(b"not-a-zip", "auth/rosa-admin-password") == ""
+
+
+def test_s3_download_bytes_forwards_session_token() -> None:
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def get_object(self, **kwargs):
+            return {"Body": io.BytesIO(b"payload")}
+
+    def fake_client(service_name, **kwargs):
+        captured.update(kwargs)
+        return FakeClient()
+
+    with (
+        mock.patch("k8s.rosa_hcp_install_credentials._ensure_boto3"),
+        mock.patch("boto3.client", side_effect=fake_client),
+    ):
+        assert (
+            _s3_download_bytes(
+                "hcp-clusters-mdata",
+                "openshift-cli-installer/nmanos-test.zip",
+                {
+                    "AWS_ACCESS_KEY_ID": "AKIA_TEST",
+                    "AWS_SECRET_ACCESS_KEY": "secret",
+                    "AWS_SESSION_TOKEN": "session-token",
+                },
+            )
+            == b"payload"
+        )
+    assert captured["aws_session_token"] == "session-token"
+
+
 def test_s3_download_bytes_returns_empty_without_raising_when_boto3_unavailable() -> None:
     with mock.patch(
         "k8s.rosa_hcp_install_credentials._ensure_boto3",

@@ -869,13 +869,21 @@ def ensure_aigateway_models_as_a_service_managed(
         return
     timeout_sec = _aigateway_maas_wait_sec(wait_timeout_sec)
     deadline = time.time() + timeout_sec
-    while not _cr_exists("aigateway", _AIGATEWAY_CR):
+    aigateway_exists = _cr_exists("aigateway", _AIGATEWAY_CR)
+    if not aigateway_exists and not wait:
+        print(
+            f"NOTE: deferring AIGateway/{_AIGATEWAY_CR} modelsAsAService reconcile wait",
+            flush=True,
+        )
+        return
+    while not aigateway_exists:
         if time.time() >= deadline:
             raise RuntimeError(
                 f"AIGateway/{_AIGATEWAY_CR} not found after {timeout_sec}s"
             )
         print(f"Waiting for AIGateway/{_AIGATEWAY_CR} CR...", flush=True)
         time.sleep(12)
+        aigateway_exists = _cr_exists("aigateway", _AIGATEWAY_CR)
     remaining = max(1, int(deadline - time.time()))
     state = _aigateway_models_as_a_service_state()
     if state != "Managed":

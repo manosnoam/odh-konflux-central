@@ -235,10 +235,8 @@ def _promote_maas_db_secret_from_infra(infra_ns: str) -> bool:
 
 def _promote_maas_db_secret_to_apps_namespace() -> bool:
     """Copy maas-db-config into redhat-ods-applications when setup-database.sh left it in infra."""
-    for infra_ns in (_RHOAI_GATEWAY_INFRA_NS, _maas_infra_namespace()):
-        if _promote_maas_db_secret_from_infra(infra_ns):
-            return True
-    return False
+    infra_ns, _ = _maas_postgres_location()
+    return _promote_maas_db_secret_from_infra(infra_ns)
 
 
 def _operator_maas_postgres_active() -> bool:
@@ -764,10 +762,6 @@ def ensure_maas_database() -> None:
         return
 
     if _operator_maas_postgres_active():
-        if _promote_maas_db_secret_to_apps_namespace():
-            print(f"✓ MaaS database ready ({_MAAS_APPS_NS}/{_MAAS_DB_SECRET})", flush=True)
-            _restart_maas_api_after_db_config()
-            return
         if _ensure_operator_maas_db_config_secrets():
             print(
                 f"✓ MaaS database ready (operator {_OPERATOR_MAAS_POSTGRES_DEPLOY} "

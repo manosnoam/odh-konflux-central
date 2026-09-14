@@ -71,6 +71,18 @@ def test_ensure_maas_controller_openshift_ingress_hpa_rbac_skips_when_can_i_yes(
         oc_run.assert_not_called()
 
 
+def test_ensure_maas_controller_openshift_ingress_hpa_rbac_checks_every_verb() -> None:
+    with (
+        patch.object(mod, "_HPA_RBAC_RULE", {"verbs": ["get", "patch"]}),
+        patch.object(mod, "oc_run") as oc_run,
+    ):
+        oc_run.return_value = type("R", (), {"returncode": 0, "stdout": "yes", "stderr": ""})()
+        mod._maas_controller_can_manage_openshift_ingress_hpa()
+        assert oc_run.call_count == 2
+        assert oc_run.call_args_list[0][0][0][2] == "get"
+        assert oc_run.call_args_list[1][0][0][2] == "patch"
+
+
 def test_ensure_maas_controller_openshift_ingress_hpa_rbac_applies_role_binding() -> None:
     with (
         patch.object(

@@ -102,6 +102,7 @@ def trainer_smoke_rhoai_idms_patch_shell() -> str:
                 "expectedImage := imagePrefix + \"/\" + expectedRuntime.Image",
                 'expectedImage := strings.Replace(imagePrefix + "/" + expectedRuntime.Image, "quay.io/rhoai/", "registry.redhat.io/rhoai/", 1)',
             ),
+            trainer_speculator_idms_patch_shell(),
             _ensure_strings_import(_RUNTIME_TEST),
             _sed_replace(
                 _SMOKE_TEST,
@@ -117,7 +118,6 @@ def trainer_smoke_rhoai_idms_patch_shell() -> str:
                 "done; true; "
                 "fi"
             ),
-            trainer_speculator_idms_patch_shell(),
             trainer_skip_hub_runtime_name_drift_shell(),
         ]
     )

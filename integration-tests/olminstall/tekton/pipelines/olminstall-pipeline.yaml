@@ -4548,34 +4548,6 @@ spec:
               bash "${SCRIPTS_REPO_ROOT}/tekton/scripts/run_write_task_message.sh" || true
               exit 0
 
-          - name: check-requested-gates-ran
-            displayName: Fail hollow green when gates skipped
-            onError: continue
-            image: quay.io/konflux-ci/konflux-test:stable@sha256:09328e5f47da168ffe951ec9c4242cd6761e61e0a235df1bba3f5158e757446d
-            env:
-              - name: TEST_GATES
-                value: $(params.TEST_GATES)
-              - name: PRODUCT
-                value: $(params.PRODUCT)
-              - name: CONFORMA_GATE
-                value: $(params.CONFORMA_GATE)
-              - name: PIPELINE_RUN_NAME
-                value: $(context.pipelineRun.name)
-              - name: PIPELINE_NAMESPACE
-                value: $(context.pipelineRun.namespace)
-              - name: BVT_GATE_PATH
-                value: $(results.BVT_GATE.path)
-              - name: SMOKE_GATE_PATH
-                value: $(results.SMOKE_GATE.path)
-              - name: SCRIPTS_REPO_ROOT
-                value: $(workspaces.tests-shared.path)/scripts-repo/integration-tests/olminstall
-            script: |
-              #!/usr/bin/env python3
-              import os, sys
-              sys.path.insert(0, os.environ["SCRIPTS_REPO_ROOT"])
-              from runners.report.check_requested_gates_ran import main
-              raise SystemExit(main())
-
           - name: send-notification
             displayName: Send Slack notification
             onError: continue
@@ -4612,6 +4584,33 @@ spec:
               import os, sys
               os.chdir(os.environ["SCRIPTS_REPO_ROOT"])
               os.execvp(sys.executable, [sys.executable, "-m", "runners.report.send_notification"])
+
+          - name: check-requested-gates-ran
+            displayName: Fail hollow green when gates skipped
+            image: quay.io/konflux-ci/konflux-test:stable@sha256:09328e5f47da168ffe951ec9c4242cd6761e61e0a235df1bba3f5158e757446d
+            env:
+              - name: TEST_GATES
+                value: $(params.TEST_GATES)
+              - name: PRODUCT
+                value: $(params.PRODUCT)
+              - name: CONFORMA_GATE
+                value: $(params.CONFORMA_GATE)
+              - name: PIPELINE_RUN_NAME
+                value: $(context.pipelineRun.name)
+              - name: PIPELINE_NAMESPACE
+                value: $(context.pipelineRun.namespace)
+              - name: BVT_GATE_PATH
+                value: $(results.BVT_GATE.path)
+              - name: SMOKE_GATE_PATH
+                value: $(results.SMOKE_GATE.path)
+              - name: SCRIPTS_REPO_ROOT
+                value: $(workspaces.tests-shared.path)/scripts-repo/integration-tests/olminstall
+            script: |
+              #!/usr/bin/env python3
+              import os, sys
+              sys.path.insert(0, os.environ["SCRIPTS_REPO_ROOT"])
+              from runners.report.check_requested_gates_ran import main
+              raise SystemExit(main())
 
   workspaces:
     - name: tests-shared

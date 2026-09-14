@@ -23,10 +23,11 @@ SHIFT_LEFT_KV_PATH = "apps/data/rhods-ci/shift-left"
 OPENSHIFT_KV_PATH = "apps/data/rhods-ci/openshift"
 APPROLE_LOGIN_PATH = "v1/auth/approle/login"
 
-_AWS_KEYS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+_AWS_KEYS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 _AWS_KEY_ALIASES: dict[str, tuple[str, ...]] = {
     "AWS_ACCESS_KEY_ID": ("aws_access_key_id", "awsAccessKeyId", "AWS_ACCESS_KEY"),
     "AWS_SECRET_ACCESS_KEY": ("aws_secret_access_key", "awsSecretAccessKey", "AWS_SECRET_KEY"),
+    "AWS_SESSION_TOKEN": ("aws_session_token", "awsSessionToken", "token"),
 }
 
 # Cloned Konflux Secret names → Vault KV blob keys on apps/rhods-ci/shift-left.
