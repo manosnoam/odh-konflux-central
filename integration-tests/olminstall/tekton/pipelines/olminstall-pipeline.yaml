@@ -2328,8 +2328,6 @@ spec:
             description: Version-aware smoke flag for ai_pipelines
           - name: RUN_SMOKE_kuberay
             description: Version-aware smoke flag for kuberay
-          - name: RUN_SMOKE_platform
-            description: Version-aware smoke flag for platform
           - name: RUN_SMOKE_mlflow
             description: Version-aware smoke flag for mlflow
           - name: RUN_SMOKE_ogx
@@ -2360,6 +2358,8 @@ spec:
             description: Version-aware smoke flag for workbench_images
           - name: RUN_SMOKE_codeflare_sdk
             description: Version-aware smoke flag for codeflare_sdk
+          - name: RUN_SMOKE_platform
+            description: Version-aware smoke flag for platform
         steps:
           - name: refresh
             image: quay.io/konflux-ci/konflux-test:stable@sha256:09328e5f47da168ffe951ec9c4242cd6761e61e0a235df1bba3f5158e757446d
@@ -2396,9 +2396,6 @@ spec:
 
               - name: RUN_SMOKE_kuberay_PATH
                 value: $(results.RUN_SMOKE_kuberay.path)
-
-              - name: RUN_SMOKE_platform_PATH
-                value: $(results.RUN_SMOKE_platform.path)
 
               - name: RUN_SMOKE_mlflow_PATH
                 value: $(results.RUN_SMOKE_mlflow.path)
@@ -2444,6 +2441,9 @@ spec:
 
               - name: RUN_SMOKE_codeflare_sdk_PATH
                 value: $(results.RUN_SMOKE_codeflare_sdk.path)
+
+              - name: RUN_SMOKE_platform_PATH
+                value: $(results.RUN_SMOKE_platform.path)
 
             script: |
               #!/usr/bin/env python3
@@ -2954,7 +2954,7 @@ spec:
         - name: tests-shared
           workspace: tests-shared
       runAfter:
-        - test-platform
+        - test-kuberay
       when:
         - input: "$(tasks.wait-for-conforma.results.CONFORMA_GATE)"
           operator: in
@@ -3877,7 +3877,7 @@ spec:
 
         - Test framework: golang ginkgo suite.
         - Image: quay.io/opendatahub/opendatahub-operator-e2e:main.
-        - Smoke command: bash run_e2e_tests.sh.
+        - Smoke command: bash run_e2e_tests.sh '--test-component=!sparkoperator'.
         - Timeouts: smoke 45m, tier1 90m.
         - Min pass rate for Tekton success: 97%.
         - Version gate: minRhoai 3.3.
@@ -3887,7 +3887,7 @@ spec:
         - name: tests-shared
           workspace: tests-shared
       runAfter:
-        - test-kuberay
+        - test-codeflare-sdk
       when:
         - input: "$(tasks.wait-for-conforma.results.CONFORMA_GATE)"
           operator: in
@@ -3947,7 +3947,7 @@ spec:
       runAfter:
         - opendatahub-tests-prepare
         - bvt-health-checks
-        - test-codeflare-sdk
+        - test-platform
       when:
         - input: "$(tasks.wait-for-conforma.results.CONFORMA_GATE)"
           operator: in

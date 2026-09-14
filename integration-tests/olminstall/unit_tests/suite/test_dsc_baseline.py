@@ -130,13 +130,19 @@ class RestoreFromBaselineTest(unittest.TestCase):
             import unittest.mock as mock
 
             fake_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
-            with mock.patch("install.dsc_install.run_oc", return_value=fake_result) as mock_oc:
+            with (
+                mock.patch(
+                    "install.dsc_install.dsc_resource_kind",
+                    return_value="datascienceclusters",
+                ),
+                mock.patch("install.dsc_install.run_oc", return_value=fake_result) as mock_oc,
+            ):
                 result = restore_dsc_from_baseline(root)
             self.assertTrue(result)
             call_args = mock_oc.call_args
             args_list = call_args[0][0] if call_args[0] else call_args[1].get("args", [])
             self.assertIn("patch", args_list)
-            self.assertIn("datasciencecluster", args_list)
+            self.assertIn("datascienceclusters", args_list)
 
 class FilterDriftsForComponentTest(unittest.TestCase):
     def test_filters_to_managed_keys(self) -> None:

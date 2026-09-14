@@ -107,6 +107,20 @@ def dsc_crd_available() -> bool:
         return False
     return "datascienceclusters" in (proc.stdout or "").lower()
 
+
+_dsc_resource_kind: str | None = None
+
+
+def dsc_resource_kind() -> str:
+    """oc resource name for DataScienceCluster (plural on CRD v2+ clusters)."""
+    global _dsc_resource_kind
+    if _dsc_resource_kind is not None:
+        return _dsc_resource_kind
+    _dsc_resource_kind = (
+        "datascienceclusters" if dsc_crd_available() else "datasciencecluster"
+    )
+    return _dsc_resource_kind
+
 _DSC_COMPONENT_KEYS = (
     "dashboard",
     "workbenches",

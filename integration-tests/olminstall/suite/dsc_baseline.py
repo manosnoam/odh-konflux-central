@@ -22,10 +22,16 @@ _DRIFT_PREFIX = ".dsc-drift-"
 
 def _oc_get_dsc_components_spec() -> dict[str, Any]:
     """Fetch spec.components from default-dsc as a dict."""
-    from install.dsc_install import oc_run
+    from install.dsc_install import dsc_resource_kind, oc_run
 
     r = oc_run(
-        ["get", "datasciencecluster", "default-dsc", "-o", "jsonpath={.spec.components}"],
+        [
+            "get",
+            dsc_resource_kind(),
+            "default-dsc",
+            "-o",
+            "jsonpath={.spec.components}",
+        ],
         check=False,
         capture_output=True,
         timeout=30,
@@ -164,13 +170,13 @@ def restore_dsc_from_baseline(artifacts_dir: Path) -> bool:
     baseline = load_dsc_baseline(artifacts_dir)
     if baseline is None:
         return False
-    from install.dsc_install import oc_run
+    from install.dsc_install import dsc_resource_kind, oc_run
 
     patch_doc = json.dumps({"spec": {"components": baseline}})
     r = oc_run(
         [
             "patch",
-            "datasciencecluster",
+            dsc_resource_kind(),
             "default-dsc",
             "--type=merge",
             "-p",
