@@ -95,8 +95,8 @@ _DSC_CRD = "datascienceclusters.datasciencecluster.opendatahub.io"
 _DSCI_CRD = "dscinitializations.dscinitialization.opendatahub.io"
 
 
-def dsc_crd_available() -> bool:
-    """True when the cluster exposes the DataScienceCluster CRD."""
+def _probe_dsc_resource_kind() -> tuple[str, bool]:
+    """Resolve oc resource kind; second value True when api-resources probe succeeded."""
     proc = oc_run(
         ["api-resources", "--api-group=datasciencecluster.opendatahub.io", "-o", "name"],
         check=False,
@@ -104,22 +104,41 @@ def dsc_crd_available() -> bool:
         timeout=30,
     )
     if proc.returncode != 0:
+        return "datascienceclusters", False
+    stdout = (proc.stdout or "").lower()
+    if "datascienceclusters" in stdout:
+        return "datascienceclusters", True
+    return "datasciencecluster", True
+
+
+def dsc_crd_available() -> bool:
+    """True when the cluster exposes the DataScienceCluster CRD."""
+    kind, probe_ok = _probe_dsc_resource_kind()
+    if not probe_ok:
         return False
-    return "datascienceclusters" in (proc.stdout or "").lower()
+    return kind == "datascienceclusters"
 
 
 _dsc_resource_kind: str | None = None
 
 
-def dsc_resource_kind() -> str:
+def reset_dsc_resource_kind_cache() -> None:
+    """Clear cached kind after transient api-resources failure or restore retry."""
+    global _dsc_resource_kind
+    _dsc_resource_kind = None
+
+
+def dsc_resource_kind(*, force_refresh: bool = False) -> str:
     """oc resource name for DataScienceCluster (plural on CRD v2+ clusters)."""
     global _dsc_resource_kind
+    if force_refresh:
+        reset_dsc_resource_kind_cache()
     if _dsc_resource_kind is not None:
         return _dsc_resource_kind
-    _dsc_resource_kind = (
-        "datascienceclusters" if dsc_crd_available() else "datasciencecluster"
-    )
-    return _dsc_resource_kind
+    kind, probe_ok = _probe_dsc_resource_kind()
+    if probe_ok:
+        _dsc_resource_kind = kind
+    return kind
 
 _DSC_COMPONENT_KEYS = (
     "dashboard",
