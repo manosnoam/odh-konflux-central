@@ -574,17 +574,22 @@ def main() -> int:
 
         run_command = prepend_kfto_smoke_patch(run_command)
     elif filter_id == "trainer":
-        from components.trainer.smoke import prepend_trainer_smoke_patch
+        from components.trainer.smoke import prepend_trainer_smoke_patch_if_ephc
 
-        run_command = prepend_trainer_smoke_patch(run_command)
+        run_command = prepend_trainer_smoke_patch_if_ephc(run_command)
     elif filter_id == "kuberay":
         from components.kuberay.rhoai_images import prepend_kuberay_smoke_patch
 
         run_command = prepend_kuberay_smoke_patch(run_command)
     elif filter_id == "mlflow":
-        from components.mlflow.ephc_tracking import prepend_mlflow_ephc_tracking
+        from components.mlflow.ephc_tracking import (
+            prepend_mlflow_ephc_tracking,
+            prepend_mlflow_run_wall_clock,
+        )
 
         run_command = prepend_mlflow_ephc_tracking(run_command)
+        if test_timeout_sec:
+            run_command = prepend_mlflow_run_wall_clock(run_command, test_timeout_sec)
     elif filter_id == "platform":
         from components.platform.smoke import prepend_platform_smoke_command
 

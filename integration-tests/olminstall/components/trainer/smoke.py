@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+
+from suite.its_trigger_params import is_ephemeral_hosted_cluster_source
+
 _RUNTIME_TEST = "trainer/cluster_training_runtimes_test.go"
 _SMOKE_TEST = "trainer/trainer_smoke_test.go"
 
@@ -123,8 +127,19 @@ def trainer_smoke_rhoai_idms_patch_shell() -> str:
     )
 
 
+def trainer_idms_patch_enabled() -> bool:
+    """EPHC IDMS mirror patches break RN-PM/P-K trainer repos (speculator block shape differs)."""
+    return is_ephemeral_hosted_cluster_source(os.environ.get("CLUSTER_SOURCE", ""))
+
+
 def prepend_trainer_smoke_patch(run_command: str) -> str:
     cmd = (run_command or "").strip()
     if not cmd:
         return cmd
     return f"{trainer_smoke_rhoai_idms_patch_shell()} && {cmd}"
+
+
+def prepend_trainer_smoke_patch_if_ephc(run_command: str) -> str:
+    if not trainer_idms_patch_enabled():
+        return (run_command or "").strip()
+    return prepend_trainer_smoke_patch(run_command)

@@ -7,6 +7,7 @@ import unittest
 
 from components.trainer.smoke import (  # noqa: E402
     prepend_trainer_smoke_patch,
+    prepend_trainer_smoke_patch_if_ephc,
     trainer_smoke_rhoai_idms_patch_shell,
 )
 
@@ -32,4 +33,22 @@ class TrainerSmokeTest(unittest.TestCase):
         out = prepend_trainer_smoke_patch("bash run-test.sh ./trainer")
         self.assertTrue(out.startswith("if [ -f trainer/cluster_training_runtimes_test.go ]"))
         self.assertTrue(out.endswith("bash run-test.sh ./trainer"))
+
+    def test_prepend_skipped_on_rh_nightly_pm(self) -> None:
+        import os
+        from unittest import mock
+
+        cmd = "bash run-test.sh ./trainer"
+        with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": "olminstall-kubeconfig-rh-nightly-pm"}, clear=False):
+            self.assertEqual(prepend_trainer_smoke_patch_if_ephc(cmd), cmd)
+
+    def test_prepend_applied_on_ephc(self) -> None:
+        import os
+        from unittest import mock
+
+        cmd = "bash run-test.sh ./trainer"
+        with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": "EPHC"}, clear=False):
+            out = prepend_trainer_smoke_patch_if_ephc(cmd)
+        self.assertNotEqual(out, cmd)
+        self.assertTrue(out.endswith(cmd))
 
