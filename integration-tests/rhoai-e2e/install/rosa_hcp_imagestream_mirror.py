@@ -63,8 +63,6 @@ def _patch_tag_from(namespace: str, name: str, tag_name: str, mirrored: str) -> 
             name,
             "-n",
             namespace,
-            "--type",
-            "merge",
             "-p",
             json.dumps(patch),
         ],

@@ -33,7 +33,7 @@ prepare-kubeconfig-ephc: |
   import sys
 
   rhoai_e2e_dir = "/workspace/repo/integration-tests/rhoai-e2e"
-  os.chdir(operator_install_dir)
+  os.chdir(rhoai_e2e_dir)
   os.environ["EPHC_KUBECONFIG_REL"] = "$(steps.get-kubeconfig.results.kubeconfig)"
   os.execvp(sys.executable, [sys.executable, "-m", "steps.stage_kubeconfig_for_task"])
   # Requires volumeMount: credentials → /credentials
@@ -45,7 +45,7 @@ prepare-kubeconfig-external: |
   import sys
 
   rhoai_e2e_dir = "/workspace/repo/integration-tests/rhoai-e2e"
-  os.chdir(operator_install_dir)
+  os.chdir(rhoai_e2e_dir)
   os.environ["CLUSTER_SOURCE"] = "$(params.CLUSTER_SOURCE)"
   os.execvp(sys.executable, [sys.executable, "-m", "steps.stage_kubeconfig_for_task"])
   # Env: CLUSTER_SOURCE — EPHC or tenant Secret name (key kubeconfig)
@@ -78,6 +78,6 @@ pipeline-run-summary-step: |
   import sys
 
   rhoai_e2e_dir = "/workspace/repo/integration-tests/rhoai-e2e"
-  os.chdir(operator_install_dir)
+  os.chdir(rhoai_e2e_dir)
   os.environ["RHOAI_E2E_SUMMARY_STEP"] = "gather"  # gather | collect-ui | patch
   os.execvp(sys.executable, [sys.executable, "-m", "steps.pipeline_run_summary_steps"])

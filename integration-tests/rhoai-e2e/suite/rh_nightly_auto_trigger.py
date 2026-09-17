@@ -18,6 +18,9 @@ _RHOAI_FBC_V_TAIL_RE = re.compile(r"^v(\d+)-(\d+)", re.IGNORECASE)
 _DEFAULT_MIN_RHOAI = "3.5"
 _DEFAULT_STATE_PATH = Path.home() / ".cache" / "rhoai-e2e" / "rh-nightly-last-triggered.json"
 _LEGACY_STATE_PATH = Path.home() / ".cache" / "rhoai-e2e" / "rh-nightly-fan-in.json"
+_OLMINSTALL_CACHE_DIR = Path.home() / ".cache" / "olminstall"
+_OLMINSTALL_LAST_TRIGGERED = _OLMINSTALL_CACHE_DIR / "rh-nightly-last-triggered.json"
+_OLMINSTALL_FAN_IN = _OLMINSTALL_CACHE_DIR / "rh-nightly-fan-in.json"
 
 
 @dataclass(frozen=True)
@@ -56,9 +59,16 @@ def last_triggered_state_key(cluster_id: str, fbc_component: str) -> str:
 
 
 def load_last_triggered_state(path: Path = _DEFAULT_STATE_PATH) -> dict[str, Any]:
-    if not path.is_file() and _LEGACY_STATE_PATH.is_file():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(_LEGACY_STATE_PATH, path)
+    if not path.is_file():
+        for legacy in (
+            _LEGACY_STATE_PATH,
+            _OLMINSTALL_LAST_TRIGGERED,
+            _OLMINSTALL_FAN_IN,
+        ):
+            if legacy.is_file():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(legacy, path)
+                break
     if not path.is_file():
         return {}
     try:

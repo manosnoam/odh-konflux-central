@@ -259,23 +259,6 @@ def ensure_additional_pull_secret(quay: dict[str, Any]) -> None:
     print("✓ additional-pull-secret created in kube-system")
 
 
-def preflight_openshift_release_dev_pull(*, strict: bool) -> None:
-    """OLM bundle-unpack uses quay.io/openshift-release-dev via the cluster quay.io pull cred."""
-    auths = load_global_pull_secret_auths()
-    ent = auths.get("quay.io") or {}
-    if ent.get("auth"):
-        print(f"✓ Global pull-secret has quay.io credential ({OLM_BUNDLE_UNPACK_UTILITY_IMAGE})")
-        return
-    msg = (
-        "Cluster openshift-config/pull-secret is missing a broad quay.io credential required for "
-        f"OLM bundle-unpack ({OLM_BUNDLE_UNPACK_UTILITY_IMAGE}). "
-        "Merge a valid pull-secret from console.redhat.com (do not replace with RHOAI-only robot auth)."
-    )
-    if strict:
-        raise AppError(f"❌ {msg}", code=1)
-    print(f"WARN: {msg}")
-
-
 def full_pull_setup_requested(product: str, quay_path: str) -> bool:
     from suite.constants import is_test_only_product
 

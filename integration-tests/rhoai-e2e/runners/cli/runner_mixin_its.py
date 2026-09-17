@@ -80,7 +80,10 @@ class RunnerItsAdminMixin:
             prefix = ocp_install_prefix(ocp_version)
             if prefix:
                 self.args.ocp_version = prefix
-        if not getattr(self.args, "components_explicit", False):
+        if not (
+            getattr(self.args, "components_explicit", False)
+            or getattr(self.args, "components_inferred", False)
+        ):
             components = its_manifest_param(manifest, "COMPONENTS")
             if components:
                 self.args.components = components
@@ -110,7 +113,9 @@ class RunnerItsAdminMixin:
             target_type, cluster_label = "ephc", ""
         else:
             target_type, cluster_label = "stub", ""
-        if getattr(self.args, "components_explicit", False):
+        if getattr(self.args, "components_explicit", False) or getattr(
+            self.args, "components_inferred", False
+        ):
             components_csv = getattr(self.args, "components", "") or ""
         else:
             components_csv = its_manifest_param(manifest, "COMPONENTS") or (

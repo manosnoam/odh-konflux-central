@@ -33,7 +33,7 @@
 # ``rhoai_e2e.py`` annotates trigger command/type (``rhoai-e2e.*``) and adds ``source.git`` on
 # Snapshot components so Konflux Reference uses an https URL (never raw Quay pullspecs).
 # Watch the rhoai-e2e run:
-#   oc get pipelineruns -n rhoai-tenant | grep olminstall
+#   oc get pipelineruns -n rhoai-tenant | grep rhoai-e2e
 #   or via the Konflux UI:
 #   https://konflux-ui.apps.<cluster-domain>/ns/rhoai-tenant/applications/testops-playpen/activity/pipelineruns
 apiVersion: appstudio.redhat.com/v1alpha1
