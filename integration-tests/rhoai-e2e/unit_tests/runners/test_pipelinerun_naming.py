@@ -18,6 +18,7 @@ class TestPipelinerunNaming(unittest.TestCase):
     def test_compact_version_short(self) -> None:
         self.assertEqual(compact_version_for_name("3.5"), "3.5")
         self.assertEqual(compact_version_for_name("rhoai-v3-5-ea-2"), "3.5ea2")
+        self.assertEqual(compact_version_for_name("2.13.0-rc.2"), "2.13rc2")
 
     def test_compact_version_placeholder(self) -> None:
         self.assertEqual(compact_version_for_name("unspecified (default)"), "")
@@ -60,6 +61,17 @@ class TestPipelinerunNaming(unittest.TestCase):
             run_owner="nmanos",
         )
         self.assertEqual(all_ids, "e2e-cli-nmanos-ephc-rhoai-smoke-")
+
+    def test_full_rhoai_ephc_fbc_catalog_line(self) -> None:
+        prefix = build_rhoai_e2e_generate_prefix(
+            product="rhoai",
+            version="3.5-ea.2",
+            cluster_source="EPHC",
+            target_type="ephc",
+            tests_csv="bvt,smoke",
+            run_owner="nmanos@redhat.com",
+        )
+        self.assertEqual(prefix, "e2e-cli-nmanos-ephc-rhoai-3.5ea2-smoke-")
 
     def test_full_rhoai_ephc(self) -> None:
         prefix = build_rhoai_e2e_generate_prefix(

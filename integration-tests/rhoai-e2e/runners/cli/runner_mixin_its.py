@@ -16,6 +16,7 @@ from suite.its_registry import (
 )
 from suite.its_trigger_params import CLUSTER_SOURCE_EPHC, is_external_cluster_source, ocp_install_prefix
 from suite.pipelinerun_naming import build_rhoai_e2e_generate_prefix
+from suite.snapshot_catalog_line import rhoai_catalog_version_from_fbc_source
 
 
 class RunnerItsAdminMixin:
@@ -121,9 +122,14 @@ class RunnerItsAdminMixin:
             components_csv = its_manifest_param(manifest, "COMPONENTS") or (
                 getattr(self.args, "components", "") or ""
             )
+        fbc_version = rhoai_catalog_version_from_fbc_source(
+            fbc_image=(self.image or "").strip(),
+            fbc_snapshot_meta=getattr(self, "_fbc_source_snapshot_meta", None),
+            resolved_app=(getattr(self, "resolved_app", "") or "").strip(),
+        )
         return build_rhoai_e2e_generate_prefix(
             product=its_manifest_param(manifest, "PRODUCT") or self.args.product,
-            version=its_manifest_param(manifest, "RHOAI_VERSION"),
+            version=fbc_version,
             cluster_source=cluster_source,
             cluster_label=cluster_label,
             target_type=target_type,

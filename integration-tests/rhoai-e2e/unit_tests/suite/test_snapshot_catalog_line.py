@@ -5,9 +5,11 @@ from __future__ import annotations
 import unittest
 
 from suite.snapshot_catalog_line import (
+    catalog_line_from_image_tag,
     catalog_line_from_prname,
     catalog_line_from_snapshot_metadata,
     catalog_line_meets_min_version,
+    rhoai_catalog_version_from_fbc_source,
 )
 
 _LABELS_225 = {
@@ -71,6 +73,35 @@ class SnapshotCatalogLineTest(unittest.TestCase):
         self.assertEqual(
             catalog_line_from_snapshot_metadata({}, {"pac.test.appstudio.openshift.io/on-cel-expression": cel}),
             "3.5-ea.2",
+        )
+
+    def test_image_tag_rc_catalog_line(self) -> None:
+        image = (
+            "quay.io/rhoai/rhoai-fbc-fragment:"
+            "ocp-4.21-rhoai-2.13.0-rc.2-b9f86dc5ee8d2c4e4a146593ac54336531889f9a"
+        )
+        self.assertEqual(catalog_line_from_image_tag(image), "2.13.0-rc.2")
+
+    def test_fbc_source_prefers_snapshot_metadata(self) -> None:
+        image = "quay.io/rhoai/rhoai-fbc-fragment:ocp-4.21-rhoai-9.9.9-deadbeef"
+        self.assertEqual(
+            rhoai_catalog_version_from_fbc_source(
+                fbc_image=image,
+                fbc_snapshot_meta={"labels": _LABELS_35, "annotations": _ANNOTATIONS_35},
+                resolved_app="rhoai-v9-9",
+            ),
+            "3.5-ea.2",
+        )
+
+    def test_fbc_source_falls_back_to_image_then_app(self) -> None:
+        image = _ANNOTATIONS_225["test.appstudio.openshift.io/result-image-url"]
+        self.assertEqual(
+            rhoai_catalog_version_from_fbc_source(fbc_image=image, resolved_app="rhoai-v3-5"),
+            "2.25",
+        )
+        self.assertEqual(
+            rhoai_catalog_version_from_fbc_source(resolved_app="rhoai-v3-5-ea-2"),
+            "3.5",
         )
 
 

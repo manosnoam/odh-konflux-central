@@ -104,6 +104,12 @@ def compact_version_for_name(version: str) -> str:
     text = text.strip()
     if not text:
         return ""
+    rc_match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?-rc\.(\d+)$", text)
+    if rc_match:
+        major, minor, patch, rc = rc_match.groups()
+        base = f"{major}.{minor}" if not patch or patch == "0" else f"{major}.{minor}.{patch}"
+        return f"{base}rc{rc}"[:16]
+
     match = _RHOAI_VERSION_TAIL_RE.match(text)
     if not match:
         compact = re.sub(r"[^a-z0-9]+", "", text)

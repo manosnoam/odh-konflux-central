@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from suite.component_version_gate import normalize_version_for_enablement, rhoai_version_at_least
+from suite.its_trigger_params import rhoai_version_from_app
 
 _PRNAME_VERSION_RE = re.compile(
     r"rhoai-fbc-fragment-rhoai-(\d+)(?:-ea(\d+))?-ocp-",
     re.IGNORECASE,
 )
 _RHOAI_LINE_RE = re.compile(
-    r"rhoai-(\d+(?:\.\d+)*(?:-ea\.\d+)?)",
+    r"rhoai-(\d+(?:\.\d+)*(?:-(?:ea|rc)\.\d+)?)",
     re.IGNORECASE,
 )
 _CEL_CATALOG_PATH_RE = re.compile(
@@ -101,6 +103,29 @@ def catalog_line_from_snapshot_metadata(
         if line := extractor(value):
             return line
     return ""
+
+
+def rhoai_catalog_version_from_fbc_source(
+    *,
+    fbc_image: str = "",
+    fbc_snapshot_meta: dict[str, Any] | None = None,
+    resolved_app: str = "",
+) -> str:
+    """Resolve the RHOAI catalog version from a Konflux FBC snapshot or image pullspec.
+
+    Used for PipelineRun naming at trigger time (not ``RHOAI_VERSION`` / CLI params).
+    """
+    meta = fbc_snapshot_meta if isinstance(fbc_snapshot_meta, dict) else {}
+    line = catalog_line_from_snapshot_metadata(
+        meta.get("labels") if isinstance(meta.get("labels"), dict) else None,
+        meta.get("annotations") if isinstance(meta.get("annotations"), dict) else None,
+    )
+    if line:
+        return line
+    line = catalog_line_from_image_tag(fbc_image)
+    if line:
+        return line
+    return rhoai_version_from_app(resolved_app)
 
 
 def catalog_line_meets_min_version(catalog_line: str, min_version: str) -> bool:

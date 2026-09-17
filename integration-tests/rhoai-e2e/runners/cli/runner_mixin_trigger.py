@@ -38,6 +38,7 @@ from suite.its_registry import integration_test_scenario_application
 from suite.rhoai_fbc_ocp import rhoai_fbc_name_from_ocp_minor, rhoai_fbc_name_from_rhoai_version
 from k8s.cluster_ocp_version import cluster_ocp_minor_from_kubeconfig
 from suite.pipelinerun_naming import build_rhoai_e2e_generate_prefix, default_pipelinerun_generate_prefix, is_rhoai_e2e_pipelinerun_name
+from suite.snapshot_catalog_line import rhoai_catalog_version_from_fbc_source
 from suite.errors import AppError
 from k8s.external_kubeconfig import (
     assert_external_cluster_lock_queryable,
@@ -619,9 +620,14 @@ class RunnerTriggerMixin:
             self._patch_its_cli_override_params(self.its_apply_tmp, odh_overrides)
         )
         slack_channel = (self.args.slack_channel_id or "").strip()
+        fbc_version = rhoai_catalog_version_from_fbc_source(
+            fbc_image=(self.image or "").strip(),
+            fbc_snapshot_meta=getattr(self, "_fbc_source_snapshot_meta", None),
+            resolved_app=(getattr(self, "resolved_app", "") or "").strip(),
+        )
         generate_prefix = build_rhoai_e2e_generate_prefix(
             product=self.args.product,
-            version=(self.args.version or "").strip() or version_display["RHOAI_VERSION"],
+            version=fbc_version,
             cluster_source=cluster_source,
             cluster_label=self._trigger_cluster_label(),
             target_type=self._trigger_target_type(),
