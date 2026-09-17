@@ -211,6 +211,10 @@ class RunnerTriggerMixin:
         """Set ``resolved_app`` from Konflux application naming (channel + UI version labels)."""
         if self.resolved_app or self.args.product != "rhoai":
             return
+        explicit_app = (self.args.app or "").strip()
+        if getattr(self.args, "konflux_app_explicit", False) and explicit_app:
+            self.resolved_app = explicit_app
+            return
         if (self.args.image or "").strip() and self.image:
             if self._resolve_rhoai_konflux_app_from_image():
                 return
