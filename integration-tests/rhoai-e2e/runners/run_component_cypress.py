@@ -400,21 +400,27 @@ def main() -> int:
         extra_skip,
     )
     run_command = inject_auth_into_cypress_run_command(run_command)
+    os.environ.setdefault("ARTIFACT_PREFIX", runner_env["ARTIFACT_PREFIX"])
+    scripts_repo = os.environ.get("SCRIPTS_REPO_ROOT", "").strip()
+    if scripts_repo:
+        os.environ.setdefault("SCRIPTS_REPO_ROOT", scripts_repo)
     run_command = prepend_cypress_shell_env(
         run_command,
         tools_bin=tools_bin,
         kubeconfig=str(staged_kubeconfig),
     )
-    exit_code = run_cypress_shell_command(
-        run_command,
-        test_timeout_sec=timeout_sec,
-    )
-    collect_cypress_junit(
-        artifacts_dir=artifacts_dir,
-        artifact_prefix=runner_env["ARTIFACT_PREFIX"],
-        results_dir=results_dir,
-        results_subdirs=os.environ.get("CYPRESS_RESULTS_SUBDIRS", ""),
-    )
+    try:
+        exit_code = run_cypress_shell_command(
+            run_command,
+            test_timeout_sec=timeout_sec,
+        )
+    finally:
+        collect_cypress_junit(
+            artifacts_dir=artifacts_dir,
+            artifact_prefix=runner_env["ARTIFACT_PREFIX"],
+            results_dir=results_dir,
+            results_subdirs=os.environ.get("CYPRESS_RESULTS_SUBDIRS", ""),
+        )
     payload_root = resolve_tests_payload_root(artifacts_dir.parent)
     plan_path = component_test_plan_path(payload_root)
     exit_path = artifacts_dir / "component-test.exit"

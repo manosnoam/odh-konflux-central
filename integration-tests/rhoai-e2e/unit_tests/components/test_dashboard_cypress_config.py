@@ -122,6 +122,7 @@ class DashboardCypressConfigTest(unittest.TestCase):
         self.assertIn("read -u 3", cmd)
         self.assertIn("echo >&3", cmd)
         self.assertEqual(cmd.count("read -u 3"), 3)
+        self.assertIn("refresh_partial_cypress_junit", cmd)
 
     def test_normalize_cypress_run_config_collapses_yaml_fold_whitespace(self) -> None:
         folded = (

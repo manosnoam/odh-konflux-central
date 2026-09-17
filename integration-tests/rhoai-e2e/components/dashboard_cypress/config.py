@@ -638,6 +638,13 @@ def cypress_parallel_sets_command(
             f"ec=${{PIPESTATUS[0]}}; "
             f"kill $xvfb_pid 2>/dev/null || true; "
             f'echo $ec > "${{ARTIFACTS}}/{item.results_subdir}/exit"; '
+            f'if [ -n "${{SCRIPTS_REPO_ROOT:-}}" ] && [ -n "${{ARTIFACT_PREFIX:-}}" ]; then '
+            f'PYTHONPATH="${{SCRIPTS_REPO_ROOT}}:${{PYTHONPATH:-}}" '
+            f'python3 -c "from pathlib import Path; import os; '
+            f'from components.dashboard_cypress.runtime import refresh_partial_cypress_junit; '
+            f'refresh_partial_cypress_junit(Path(os.environ[\\"ARTIFACTS\\"]), os.environ[\\"ARTIFACT_PREFIX\\"])" '
+            f"2>/dev/null || true; "
+            f"fi; "
             f"{release}"
             ") &"
         )
@@ -972,6 +979,8 @@ def prepend_cypress_shell_env(
         "TEST_USER_USERNAME",
         "TEST_USER_PASSWORD",
         "TEST_USER_AUTH_TYPE",
+        "SCRIPTS_REPO_ROOT",
+        "ARTIFACT_PREFIX",
     ):
         if key == "CLUSTER_AUTH":
             if key not in os.environ:

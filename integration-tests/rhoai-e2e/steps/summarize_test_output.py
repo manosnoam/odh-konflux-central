@@ -169,6 +169,14 @@ def build_single_component_test_output_payload(
     plan_path: Path,
 ) -> tuple[dict[str, object], str]:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if component_id == "dashboard_cypress":
+        from components.dashboard_cypress.runtime import ensure_dashboard_cypress_junit_collected
+
+        ensure_dashboard_cypress_junit_collected(
+            artifacts_dir=artifacts_dir,
+            plan_path=plan_path,
+            component_id=component_id,
+        )
     xml_path = junit_xml_for_component(component_id, artifacts_dir, plan_path)
     if xml_path is None or not xml_path.is_file():
         note = f"{component_id}: infrastructure error - no JUnit file"

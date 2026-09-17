@@ -72,6 +72,43 @@ class EmitComponentTestOutputTest(unittest.TestCase):
             self.assertEqual(payload["skipped"], 0)
             self.assertIn("infrastructure error", note)
 
+    def test_dashboard_cypress_partial_smokeset_junit_is_summarized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan = root / "plan.json"
+            plan.write_text(
+                json.dumps(
+                    {
+                        "components": [
+                            {
+                                "id": "dashboard_cypress",
+                                "artifact_prefix": "dashboard-cypress-smoke",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            report = root / "SmokeSet1" / "e2e"
+            report.mkdir(parents=True)
+            (report / "junit-report.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="SmokeSet1" tests="2" failures="0" errors="0" skipped="0">
+  <testcase classname="a" name="t1"/>
+  <testcase classname="a" name="t2"/>
+</testsuite>
+""",
+                encoding="utf-8",
+            )
+            payload, note = build_test_output_payload(
+                root,
+                component_id="dashboard_cypress",
+                plan_path=plan,
+            )
+            self.assertEqual(payload["result"], "SUCCESS")
+            self.assertIn("2 passed", note)
+            self.assertTrue((root / "dashboard-cypress-smoke.xml").is_file())
+
     def test_version_skip_junit_emits_failure_with_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

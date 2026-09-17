@@ -1170,6 +1170,64 @@ def run_cypress_shell_command(run_command: str, *, test_timeout_sec: float | Non
     return int(proc.returncode)
 
 
+def smokeset_has_report_data(smokeset_dir: Path) -> bool:
+    """True when a parallel Cypress dir has JUnit or mochawesome output."""
+    if not smokeset_dir.is_dir():
+        return False
+    if _find_all_junit_reports(smokeset_dir):
+        return True
+    return bool(_find_mochawesome_json_paths(smokeset_dir))
+
+
+def refresh_partial_cypress_junit(artifacts_dir: Path, artifact_prefix: str) -> bool:
+    """Re-merge JUnit from every SmokeSet dir that already has report data."""
+    subdirs = [
+        name
+        for name in discover_cypress_results_subdirs(artifacts_dir)
+        if smokeset_has_report_data(artifacts_dir / name)
+    ]
+    if not subdirs:
+        return False
+    results_dir = artifacts_dir / "results"
+    return collect_cypress_junit(
+        artifacts_dir=artifacts_dir,
+        artifact_prefix=artifact_prefix,
+        results_dir=results_dir if results_dir.is_dir() else artifacts_dir,
+        results_subdirs=",".join(subdirs),
+    )
+
+
+def ensure_dashboard_cypress_junit_collected(
+    *,
+    artifacts_dir: Path,
+    plan_path: Path,
+    component_id: str = "dashboard_cypress",
+) -> bool:
+    """Merge JUnit from completed SmokeSet dirs when the run step died before collect."""
+    from steps.tests_payload import junit_xml_for_component
+    from suite.component_task_exit import component_from_plan
+
+    if junit_xml_for_component(component_id, artifacts_dir, plan_path) is not None:
+        return True
+    comp = component_from_plan(plan_path, component_id)
+    if comp is None:
+        return False
+    prefix = str(comp.get("artifact_prefix", "")).strip() or "dashboard-cypress-smoke"
+    subdirs = [
+        name
+        for name in discover_cypress_results_subdirs(artifacts_dir)
+        if smokeset_has_report_data(artifacts_dir / name)
+    ]
+    if not subdirs:
+        return False
+    print(
+        f"Collecting partial Cypress JUnit from {len(subdirs)} SmokeSet dir(s): "
+        f"{', '.join(subdirs)}",
+        flush=True,
+    )
+    return refresh_partial_cypress_junit(artifacts_dir, prefix)
+
+
 def collect_cypress_junit(
     *,
     artifacts_dir: Path,
