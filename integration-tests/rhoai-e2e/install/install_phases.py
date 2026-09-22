@@ -21,9 +21,12 @@ from install.dsc_install import (
 )
 from install.gateway_config import (
     cluster_source_is_ephc,
+    ensure_openshift_gateway_istio_for_dep_operators,
     ensure_rhoai_gateway_for_install,
     gateway_config_ready,
     reconcile_servicemesh_olm_conflicts,
+    wait_openshift_gateway_controller_deployments,
+    wait_servicemesh_csv_succeeded,
 )
 
 _INSTALL_OPERATOR_SCRIPT_TIMEOUT_SEC = 2640  # Just under Tekton install-rhoai/odh 45m task limit
@@ -350,11 +353,26 @@ def _ensure_gateway_before_dsc_ready() -> None:
             f"Approved {approved} gateway-stack InstallPlan(s) in openshift-operators (pre-DSC)",
             flush=True,
         )
+    sm_timeout = int(os.environ.get("SERVICEMESH_CSV_WAIT_SEC", "900"))
+    wait_servicemesh_csv_succeeded(timeout_sec=sm_timeout)
+    deploy_wait = int(os.environ.get("OPENSHIFT_GATEWAY_CONTROLLER_WAIT_SEC", "300"))
+    if not ensure_openshift_gateway_istio_for_dep_operators():
+        print(
+            "WARN: openshift-gateway Istio/controller not ready before DSC (pre-DSC)",
+            file=sys.stderr,
+            flush=True,
+        )
+    elif not wait_openshift_gateway_controller_deployments(timeout_sec=deploy_wait):
+        print(
+            "WARN: openshift-gateway controller deployments not Available before DSC (pre-DSC)",
+            file=sys.stderr,
+            flush=True,
+        )
     try:
         gateway_timeout = int(os.environ.get("GATEWAY_CONFIG_WAIT_SEC", "1200"))
         ensure_rhoai_gateway_for_install(
             wait_timeout_sec=gateway_timeout,
-            wait_servicemesh_first=True,
+            wait_servicemesh_first=False,
         )
     except Exception as exc:
         print(f"WARN: pre-DSC gateway prep failed ({exc})", file=sys.stderr)

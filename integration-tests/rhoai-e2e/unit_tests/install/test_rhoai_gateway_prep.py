@@ -187,19 +187,20 @@ class ServicemeshOlmReconcileTest(unittest.TestCase):
                 },
             ]
         }
-        with mock.patch.object(gw_mod, "oc_run") as oc_run:
+        with mock.patch.object(
+            gw_mod, "repair_servicemesh_subscription_stale_refs", return_value=0
+        ), mock.patch.object(gw_mod, "oc_run") as oc_run:
             oc_run.side_effect = [
                 mock.Mock(returncode=0, stdout=json.dumps(sub_json)),
                 mock.Mock(returncode=0, stdout=json.dumps(csv_json)),
-                mock.Mock(returncode=0, stdout=json.dumps(sub_json)),
-                mock.Mock(returncode=0, stdout=json.dumps(csv_json)),
+                mock.Mock(returncode=0, stdout=json.dumps({"items": []})),
                 mock.Mock(returncode=0, stdout="", stderr=""),
                 mock.Mock(returncode=0, stdout="", stderr=""),
                 mock.Mock(returncode=0, stdout=json.dumps({"items": []})),
             ]
             removed = gw_mod.reconcile_servicemesh_olm_conflicts("openshift-operators")
         self.assertEqual(removed, 2)
-        delete_call = oc_run.call_args_list[4][0][0]
+        delete_call = oc_run.call_args_list[3][0][0]
         self.assertIn("delete", delete_call)
         self.assertIn("servicemeshoperator3.v3.2.0", delete_call)
 
@@ -227,18 +228,19 @@ class ServicemeshOlmReconcileTest(unittest.TestCase):
                 },
             ]
         }
-        with mock.patch.object(gw_mod, "oc_run") as oc_run:
+        with mock.patch.object(
+            gw_mod, "repair_servicemesh_subscription_stale_refs", return_value=0
+        ), mock.patch.object(gw_mod, "oc_run") as oc_run:
             oc_run.side_effect = [
                 mock.Mock(returncode=0, stdout=json.dumps(sub_json)),
                 mock.Mock(returncode=0, stdout=json.dumps(csv_json)),
-                mock.Mock(returncode=0, stdout=json.dumps(sub_json)),
-                mock.Mock(returncode=0, stdout=json.dumps(csv_json)),
+                mock.Mock(returncode=0, stdout=json.dumps({"items": []})),
                 mock.Mock(returncode=0, stdout="", stderr=""),
                 mock.Mock(returncode=0, stdout=json.dumps({"items": []})),
             ]
             removed = gw_mod.reconcile_servicemesh_olm_conflicts("openshift-operators")
         self.assertEqual(removed, 1)
-        delete_call = oc_run.call_args_list[4][0][0]
+        delete_call = oc_run.call_args_list[3][0][0]
         self.assertIn("servicemeshoperator3.v3.1.0", delete_call)
 
     def test_recreate_subscription_when_installplan_missing(self) -> None:
@@ -353,6 +355,7 @@ class OpenshiftGatewayIstioTest(unittest.TestCase):
         self.assertTrue(patched)
         patch_call = oc_run.call_args_list[2][0][0]
         self.assertIn("patch", patch_call)
+        self.assertIn("openshift-ingress", patch_call)
         self.assertIn("v1.30.3", patch_call[-1])
 
     def test_reconcile_skips_when_already_reconciled(self) -> None:
@@ -475,7 +478,49 @@ class OpenshiftGatewayIstioTest(unittest.TestCase):
             doc, status = gw_mod._fetch_openshift_gateway_istio_doc()
         self.assertEqual(status, "ok")
         self.assertEqual(doc, istio_doc)
-        self.assertIn("istios.sailoperator.io", oc_run.call_args_list[1][0][0])
+        second_call = oc_run.call_args_list[1][0][0]
+        self.assertIn("istio.sailoperator.io", second_call)
+        self.assertIn("-n", second_call)
+        self.assertIn("openshift-ingress", second_call)
+
+    def test_reconcile_skips_pending_csv_on_active_installplan(self) -> None:
+        sub_json = {
+            "items": [
+                {
+                    "metadata": {"name": "servicemeshoperator3"},
+                    "status": {
+                        "currentCSV": "servicemeshoperator3.v3.1.0",
+                        "installedCSV": "servicemeshoperator3.v3.1.0",
+                    },
+                }
+            ]
+        }
+        csv_json = {
+            "items": [
+                {
+                    "metadata": {"name": "servicemeshoperator3.v3.4.2"},
+                    "status": {"phase": "Pending"},
+                },
+            ]
+        }
+        ip_json = {
+            "items": [
+                {
+                    "spec": {"clusterServiceVersionNames": ["servicemeshoperator3.v3.4.2"]},
+                    "status": {"phase": "Installing"},
+                }
+            ]
+        }
+        with mock.patch.object(
+            gw_mod, "repair_servicemesh_subscription_stale_refs", return_value=0
+        ), mock.patch.object(gw_mod, "oc_run") as oc_run:
+            oc_run.side_effect = [
+                mock.Mock(returncode=0, stdout=json.dumps(sub_json)),
+                mock.Mock(returncode=0, stdout=json.dumps(csv_json)),
+                mock.Mock(returncode=0, stdout=json.dumps(ip_json)),
+            ]
+            removed = gw_mod.reconcile_servicemesh_olm_conflicts("openshift-operators")
+        self.assertEqual(removed, 0)
 
     def test_ensure_istio_does_not_short_circuit_on_stale_reconciled_version(self) -> None:
         istio_doc = {
