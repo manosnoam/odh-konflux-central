@@ -45,6 +45,10 @@ def default_olm_bundle_unpack_timeout_sec() -> int:
         if cluster_source_is_ephc()
         else _DEFAULT_OLM_BUNDLE_UNPACK_TIMEOUT_SEC
     )
+    # install-operator.sh timeout reserves post-unpack work; when that leaves no unpack
+    # budget (common on the 45m Tekton task), use the cluster ceiling — not the 300s floor.
+    if budget < 300:
+        return ceiling
     return max(300, min(ceiling, budget))
 
 
