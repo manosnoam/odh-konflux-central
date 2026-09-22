@@ -35,7 +35,7 @@ from suite.component_catalog import (
     resolve_shift_left_env_secret,
 )
 from suite.component_plan import parse_components_selection
-from suite.its_trigger_params import is_external_cluster_source
+from suite.its_trigger_params import CLUSTER_SOURCE_EPHC, is_external_cluster_source
 from suite.pipelinerun_naming import default_pipelinerun_generate_prefix
 from suite.errors import AppError
 from k8s.external_kubeconfig import (
@@ -203,6 +203,21 @@ class RhoaiE2ERunner(
         if secret:
             return self._cluster_label_for_external_secret(secret)
         return ""
+
+    def _cluster_label_for_naming(self, cluster_source: str) -> str:
+        """Resolve cluster label for PLR ``generateName`` using the same CLUSTER_SOURCE as the ITS patch."""
+        source = (cluster_source or "").strip()
+        if is_external_cluster_source(source):
+            return self._cluster_label_for_external_secret(source)
+        return self._trigger_cluster_label()
+
+    def _target_type_for_naming(self, cluster_source: str) -> str:
+        source = (cluster_source or "").strip()
+        if is_external_cluster_source(source):
+            return "external"
+        if source == CLUSTER_SOURCE_EPHC:
+            return "ephc"
+        return self._trigger_target_type()
 
     def _trigger_cluster_lock_key(self) -> str:
         path, secret = self._trigger_external_cluster_target()

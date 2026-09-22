@@ -463,3 +463,26 @@ class RunItsPostTriggerWatchTest(unittest.TestCase):
         ) as mock_watch:
             self.assertEqual(runner.run_integration_test_scenario(), 0)
         mock_watch.assert_called_once()
+
+
+class ClusterLabelForNamingTest(unittest.TestCase):
+    def _runner(self) -> RhoaiE2ERunner:
+        parser = make_parser("t", "")
+        args = parse_cli_args(parser, ["--product", "rhoai"])
+        return RhoaiE2ERunner(args)
+
+    @patch.object(RhoaiE2ERunner, "_cluster_label_for_external_secret", return_value="nmanos-konflux1")
+    def test_cluster_label_from_its_cluster_source(self, mock_label) -> None:
+        runner = self._runner()
+        self.assertEqual(
+            runner._cluster_label_for_naming("rhoai-e2e-kubeconfig-nmanos-konflux1"),
+            "nmanos-konflux1",
+        )
+        mock_label.assert_called_once_with("rhoai-e2e-kubeconfig-nmanos-konflux1")
+
+    def test_target_type_external_when_cluster_source_is_secret(self) -> None:
+        runner = self._runner()
+        self.assertEqual(
+            runner._target_type_for_naming("rhoai-e2e-kubeconfig-nmanos-konflux1"),
+            "external",
+        )
