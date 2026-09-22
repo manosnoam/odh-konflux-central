@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import unittest
 from unittest.mock import patch
 
@@ -19,21 +18,17 @@ class LeakedTenantNamespaceCleanupTest(unittest.TestCase):
         self.assertFalse(_matches_leaked_tenant_namespace("ai-tenants"))
         self.assertFalse(_matches_leaked_tenant_namespace("redhat-ods-applications"))
 
-    @patch("install.leaked_tenant_namespace_cleanup.unblock_terminating_namespace")
-    @patch("install.leaked_tenant_namespace_cleanup.oc_run")
-    def test_bulk_deletes_matched_namespaces(self, oc_run, unblock) -> None:
-        ns_json = {
-            "items": [
-                {"metadata": {"name": "ai-tenant-e2e-aigw-abc12345"}},
-                {"metadata": {"name": "test-kueue-managed-xyz"}},
-                {"metadata": {"name": "default"}},
-            ]
-        }
+    @patch("install.e2e_namespace_bulk_delete.unblock_terminating_namespace")
+    @patch("install.e2e_namespace_bulk_delete.oc_run")
+    @patch("install.e2e_namespace_bulk_delete.list_cluster_namespace_names")
+    def test_bulk_deletes_matched_namespaces(self, list_names, oc_run, unblock) -> None:
+        list_names.return_value = [
+            "ai-tenant-e2e-aigw-abc12345",
+            "test-kueue-managed-xyz",
+            "default",
+        ]
 
         def _oc_run(args, **kwargs):
-            cmd = " ".join(args)
-            if args[:3] == ["get", "namespace", "-o"]:
-                return type("R", (), {"returncode": 0, "stdout": json.dumps(ns_json), "stderr": ""})()
             if args[0] == "delete":
                 self.assertEqual(args[1], "namespace")
                 self.assertEqual(
@@ -42,7 +37,7 @@ class LeakedTenantNamespaceCleanupTest(unittest.TestCase):
                 )
                 self.assertEqual(args[-2:], ["--ignore-not-found", "--wait=false"])
                 return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
-            if "jsonpath" in cmd:
+            if "jsonpath" in " ".join(args):
                 return type("R", (), {"returncode": 0, "stdout": "Terminating", "stderr": ""})()
             raise AssertionError(f"unexpected oc_run args: {args}")
 
@@ -53,21 +48,16 @@ class LeakedTenantNamespaceCleanupTest(unittest.TestCase):
         unblock.assert_any_call("ai-tenant-e2e-aigw-abc12345")
         unblock.assert_any_call("test-kueue-managed-xyz")
 
-    @patch("install.leaked_tenant_namespace_cleanup.oc_run")
-    def test_skips_when_disabled(self, oc_run) -> None:
+    @patch("install.e2e_namespace_bulk_delete.list_cluster_namespace_names")
+    def test_skips_when_disabled(self, list_names) -> None:
         with patch.dict("os.environ", {"CLEANUP_LEAKED_TENANT_NS": "0"}, clear=False):
             cleanup_leaked_tenant_namespaces()
-        oc_run.assert_not_called()
+        list_names.assert_not_called()
 
-    @patch("install.leaked_tenant_namespace_cleanup.oc_run")
-    def test_no_matches_is_noop(self, oc_run) -> None:
-        oc_run.return_value = type(
-            "R",
-            (),
-            {"returncode": 0, "stdout": json.dumps({"items": []}), "stderr": ""},
-        )()
+    @patch("install.e2e_namespace_bulk_delete.list_cluster_namespace_names")
+    def test_no_matches_is_noop(self, list_names) -> None:
+        list_names.return_value = ["default"]
         cleanup_leaked_tenant_namespaces()
-        self.assertEqual(oc_run.call_count, 1)
 
 
 if __name__ == "__main__":

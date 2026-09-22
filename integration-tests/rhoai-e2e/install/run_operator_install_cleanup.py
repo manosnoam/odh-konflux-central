@@ -27,13 +27,14 @@ def _require_tool(name: str) -> None:
 
 
 def run_cleanup_operator(*, operator_install_dir: Path, kubeconfig: str | Path) -> None:
-    """Run MaaS/dependency pre-cleanup, leaked tenant NS cleanup, ``cleanup.sh -t operator``, then tenant NS cleanup."""
+    """Run MaaS/dependency pre-cleanup, leaked E2E NS cleanup, ``cleanup.sh -t operator``, then tenant NS cleanup."""
     from components.maas_billing.database import (
         cleanup_maas_postgres_infra,
         cleanup_maas_tenant_namespace,
     )
     from components.maas_billing.bbr_pre_processing import cleanup_stale_maas_ingress_workloads
     from install.dependency_operator_csv_cleanup import cleanup_dependency_operator_csvs
+    from install.leaked_component_namespace_cleanup import cleanup_leaked_component_test_namespaces
     from install.leaked_tenant_namespace_cleanup import cleanup_leaked_tenant_namespaces
 
     maas_exc: BaseException | None = None
@@ -60,6 +61,14 @@ def run_cleanup_operator(*, operator_install_dir: Path, kubeconfig: str | Path) 
     except Exception as exc:
         print(
             f"WARN: leaked tenant namespace cleanup failed ({exc}); continuing with operator cleanup",
+            file=sys.stderr,
+            flush=True,
+        )
+    try:
+        cleanup_leaked_component_test_namespaces()
+    except Exception as exc:
+        print(
+            f"WARN: leaked component test namespace cleanup failed ({exc}); continuing with operator cleanup",
             file=sys.stderr,
             flush=True,
         )

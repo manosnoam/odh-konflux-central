@@ -32,8 +32,13 @@ class KuberaySmokePrepTest(unittest.TestCase):
                 )()
             return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
-        with patch("components.kuberay.smoke_prep.oc_run", side_effect=_oc_run), patch(
-            "components.kuberay.smoke_prep.time.sleep",
+        with (
+            patch(
+                "components.kuberay.smoke_prep.list_cluster_namespace_names",
+                return_value=["test-ns-abc123", "default"],
+            ),
+            patch("components.kuberay.smoke_prep.oc_run", side_effect=_oc_run),
+            patch("components.kuberay.smoke_prep.time.sleep"),
         ):
             cleanup_kuberay_smoke_leaks()
             delete_cmds = [c for c in calls if c and c[0] == "delete"]

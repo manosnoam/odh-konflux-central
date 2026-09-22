@@ -2,38 +2,32 @@
 
 from __future__ import annotations
 
-import json
-import re
 import time
 
 from install.dsc_install import oc_run
+from install.e2e_leaked_namespace_patterns import (
+    LEAKED_COMPONENT_TEST_NS_EXACT,
+    LEAKED_COMPONENT_TEST_NS_PATTERNS,
+)
+from install.e2e_namespace_bulk_delete import list_cluster_namespace_names
 
-_DSPA_TEST_NS_RE = re.compile(r"^dspa-test-[a-z0-9]+$")
+_DSPA_TEST_NS_EXACT = frozenset(name for name in LEAKED_COMPONENT_TEST_NS_EXACT if name == "dspa-test")
+_DSPA_TEST_NS_RE = next(
+    pattern for pattern in LEAKED_COMPONENT_TEST_NS_PATTERNS if pattern.pattern == r"^dspa-test-[a-z0-9]+$"
+)
 _NS_GONE_POLL_SEC = 2
 _NS_GONE_MAX_WAIT_SEC = 180
 
 
+def _matches_dspa_test_namespace(name: str) -> bool:
+    return name in _DSPA_TEST_NS_EXACT or bool(_DSPA_TEST_NS_RE.match(name))
+
+
 def _list_dspa_test_namespaces() -> list[str]:
-    listed = oc_run(
-        ["get", "namespace", "-o", "json"],
-        check=False,
-        capture_output=True,
-        timeout=60,
-    )
-    if listed.returncode != 0:
-        return []
     try:
-        doc = json.loads(listed.stdout or "{}")
-    except json.JSONDecodeError:
+        return sorted(name for name in list_cluster_namespace_names() if _matches_dspa_test_namespace(name))
+    except RuntimeError:
         return []
-    names: list[str] = []
-    for item in doc.get("items") or []:
-        if not isinstance(item, dict):
-            continue
-        name = str((item.get("metadata") or {}).get("name") or "")
-        if _DSPA_TEST_NS_RE.match(name):
-            names.append(name)
-    return sorted(names)
 
 
 def _namespace_not_found(result) -> bool:

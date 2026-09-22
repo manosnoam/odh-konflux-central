@@ -32,6 +32,10 @@ class AiPipelinesSmokePrepTest(unittest.TestCase):
             return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
         with (
+            patch(
+                "components.ai_pipelines.smoke_prep.list_cluster_namespace_names",
+                return_value=["dspa-test-abc123", "kube-system"],
+            ),
             patch("components.ai_pipelines.smoke_prep.oc_run", side_effect=_oc_run) as oc_run,
             patch("components.ai_pipelines.smoke_prep.time.sleep"),
         ):

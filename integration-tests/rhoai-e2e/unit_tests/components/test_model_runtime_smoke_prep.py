@@ -39,8 +39,18 @@ class ModelRuntimeSmokePrepTest(unittest.TestCase):
                 )()
             return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
-        with patch("components.model_runtime.smoke_prep.oc_run", side_effect=_oc_run), patch(
-            "components.model_runtime.smoke_prep.time.sleep",
+        with (
+            patch(
+                "components.model_runtime.smoke_prep.list_cluster_namespace_names",
+                return_value=[
+                    "opt-125m-standard-cpu",
+                    "opt-125m-probes",
+                    "onnx-standard-rest",
+                    "default",
+                ],
+            ),
+            patch("components.model_runtime.smoke_prep.oc_run", side_effect=_oc_run),
+            patch("components.model_runtime.smoke_prep.time.sleep"),
         ):
             cleanup_model_runtime_smoke_leaks()
             delete_cmds = [c for c in calls if c and c[0] == "delete"]

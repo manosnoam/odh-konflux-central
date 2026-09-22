@@ -2,39 +2,24 @@
 
 from __future__ import annotations
 
-import json
-import re
 import time
 
 from install.dsc_install import oc_run
+from install.e2e_leaked_namespace_patterns import LEAKED_COMPONENT_TEST_NS_PATTERNS
+from install.e2e_namespace_bulk_delete import list_cluster_namespace_names
 
-# KubeRay pytest fixtures use test-ns-<id> (see integration-tests/kuberay pr-testing-pipeline).
-_KUBERAY_TEST_NS_RE = re.compile(r"^test-ns-[a-z0-9]+$")
+_KUBERAY_TEST_NS_RE = next(
+    pattern for pattern in LEAKED_COMPONENT_TEST_NS_PATTERNS if pattern.pattern == r"^test-ns-[a-z0-9]+$"
+)
 _NS_GONE_POLL_SEC = 2
 _NS_GONE_MAX_WAIT_SEC = 120
 
 
 def _list_kuberay_test_namespaces() -> list[str]:
-    listed = oc_run(
-        ["get", "namespace", "-o", "json"],
-        check=False,
-        capture_output=True,
-        timeout=60,
-    )
-    if listed.returncode != 0:
-        return []
     try:
-        doc = json.loads(listed.stdout or "{}")
-    except json.JSONDecodeError:
+        return sorted(name for name in list_cluster_namespace_names() if _KUBERAY_TEST_NS_RE.match(name))
+    except RuntimeError:
         return []
-    names: list[str] = []
-    for item in doc.get("items") or []:
-        if not isinstance(item, dict):
-            continue
-        name = str((item.get("metadata") or {}).get("name") or "")
-        if _KUBERAY_TEST_NS_RE.match(name):
-            names.append(name)
-    return sorted(names)
 
 
 def _namespace_not_found(result) -> bool:
