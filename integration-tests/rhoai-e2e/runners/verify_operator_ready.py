@@ -85,7 +85,7 @@ def _operator_workload_image_pull_errors() -> str | None:
     """Fail fast when core operator/apps pods cannot pull images."""
     if is_test_only_product(os.environ.get("PRODUCT", "")) or not _dsc_crd_available():
         return None
-    from k8s.oc_util import oc_run
+    from install.dsc_install import oc_run
     from runners.cli.runner_support import _pod_container_waiting_lines
 
     namespaces = [
