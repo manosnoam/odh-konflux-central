@@ -6,12 +6,16 @@ import unittest
 
 from suite.pipelinerun_naming import (
     build_diagnostic_artifact_log_name,
+    build_its_generate_prefix_for_snapshot,
     build_rhoai_e2e_generate_prefix,
+    build_rhoai_e2e_its_generate_prefix,
     cluster_segment_for_name,
     compact_version_for_name,
     diagnostic_version_segment,
     gates_segment_for_name,
     is_rhoai_e2e_pipelinerun_name,
+    its_profile_from_pipelinerun_template,
+    its_profile_from_scenario_name,
 )
 
 class TestPipelinerunNaming(unittest.TestCase):
@@ -186,8 +190,9 @@ class TestPipelinerunNaming(unittest.TestCase):
 
     def test_is_rhoai_e2e_pipelinerun_name(self) -> None:
         self.assertTrue(is_rhoai_e2e_pipelinerun_name("e2e-cli-nmanos-bvt-smoke-abc"))
-        self.assertTrue(is_rhoai_e2e_pipelinerun_name("rhoai-e2e-its-rh-nightly-pm-bvt-smoke-abc"))
-        self.assertTrue(is_rhoai_e2e_pipelinerun_name("olminstall-cli-nmanos-smoke-abc"))
+        self.assertTrue(is_rhoai_e2e_pipelinerun_name("e2e-its-ephc-rhoai-3.5ea2-smoke-abc"))
+        self.assertFalse(is_rhoai_e2e_pipelinerun_name("rhoai-e2e-its-rh-nightly-pm-bvt-smoke-abc"))
+        self.assertFalse(is_rhoai_e2e_pipelinerun_name("olminstall-cli-nmanos-smoke-abc"))
         self.assertFalse(is_rhoai_e2e_pipelinerun_name("other-pipeline-abc"))
         self.assertFalse(is_rhoai_e2e_pipelinerun_name(""))
 
@@ -226,4 +231,56 @@ class TestPipelinerunNaming(unittest.TestCase):
     def test_diagnostic_version_segment_semver(self) -> None:
         self.assertEqual(diagnostic_version_segment("2.4.1"), "2.4.1")
         self.assertEqual(diagnostic_version_segment("rhoai-v3-5-ea-2"), "3.5ea2")
+
+    def test_its_profile_from_scenario_name(self) -> None:
+        self.assertEqual(its_profile_from_scenario_name("rhoai-e2e-ephc-ocp422"), "ephc-ocp422")
+        self.assertEqual(its_profile_from_scenario_name("rhoai-e2e-playpen-a"), "playpen-a")
+        self.assertEqual(
+            its_profile_from_scenario_name("rhoai-e2e-rh-nightly-pm-ocp420"),
+            "rh-nightly-pm-ocp420",
+        )
+        self.assertEqual(its_profile_from_scenario_name(""), "")
+
+    def test_its_profile_from_pipelinerun_template(self) -> None:
+        self.assertEqual(
+            its_profile_from_pipelinerun_template(
+                "integration-tests/rhoai-e2e/tekton/pipelines/rhoai-e2e-pipelinerun-ephc.yaml"
+            ),
+            "ephc",
+        )
+        self.assertEqual(
+            its_profile_from_pipelinerun_template(
+                "integration-tests/rhoai-e2e/tekton/pipelines/rhoai-e2e-pipelinerun-rh-nightly.yaml"
+            ),
+            "rh-nightly",
+        )
+        self.assertEqual(
+            its_profile_from_pipelinerun_template(
+                "integration-tests/rhoai-e2e/tekton/pipelines/rhoai-e2e-pipelinerun.yaml"
+            ),
+            "",
+        )
+
+    def test_its_generate_prefix_with_version(self) -> None:
+        prefix = build_rhoai_e2e_its_generate_prefix(
+            its_profile="ocp422",
+            version="3.5-ea.2",
+            tests_csv="bvt,smoke",
+        )
+        self.assertEqual(prefix, "e2e-its-ocp422-rhoai-3.5ea2-smoke-")
+
+    def test_its_generate_prefix_without_version(self) -> None:
+        prefix = build_rhoai_e2e_its_generate_prefix(
+            its_profile="my-slice",
+            tests_csv="bvt,smoke",
+        )
+        self.assertEqual(prefix, "e2e-its-my-slice-rhoai-smoke-")
+
+    def test_its_generate_prefix_for_snapshot_metadata(self) -> None:
+        prefix = build_its_generate_prefix_for_snapshot(
+            its_profile=its_profile_from_scenario_name("rhoai-e2e-ephc-ocp422"),
+            konflux_application="rhoai-v3-5-ea-2",
+            tests_csv="bvt,smoke",
+        )
+        self.assertEqual(prefix, "e2e-its-ephc-ocp422-rhoai-3.5ea2-smoke-")
 
