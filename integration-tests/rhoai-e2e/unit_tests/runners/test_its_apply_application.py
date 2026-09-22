@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import argparse
 
 import pytest
@@ -21,10 +22,10 @@ def _resolve_its_apply_application(
 @pytest.mark.parametrize(
     ("manifest_app", "cli_app", "explicit", "expected_apply", "expected_patch"),
     [
-        ("rhoai-fbc-fragment-ocp-420", "testops-playpen", False, "rhoai-fbc-fragment-ocp-420", ""),
-        ("rhoai-fbc-fragment-ocp-420", "testops-playpen", True, "testops-playpen", "testops-playpen"),
+        ("rhoai-fbc-fragment-ocp-420", DEFAULT_APP, False, "rhoai-fbc-fragment-ocp-420", ""),
+        ("rhoai-fbc-fragment-ocp-420", DEFAULT_APP, True, DEFAULT_APP, DEFAULT_APP),
         ("rhoai-fbc-fragment-ocp-420", "rhoai-fbc-fragment-ocp-420", True, "rhoai-fbc-fragment-ocp-420", ""),
-        ("", "testops-playpen", False, "testops-playpen", ""),
+        ("", DEFAULT_APP, False, DEFAULT_APP, ""),
     ],
 )
 def test_resolve_its_apply_application(

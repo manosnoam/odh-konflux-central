@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from runners.cli.cli import make_parser, parse_cli_args
 from runners.cli.runner import RhoaiE2ERunner
-from suite.constants import RHOAI_FBCF_IMAGE_REF_PATTERN
+from suite.constants import RHOAI_FBCF_IMAGE_REF_PATTERN, DEFAULT_APP, DEFAULT_NAMESPACE
 
 _FBC_IMAGE = (
     "quay.io/rhoai/rhoai-fbc-fragment@sha256:"
@@ -55,7 +55,7 @@ class LatestNamedComponentImageOnApplicationTest(unittest.TestCase):
 
         with patch("runners.cli.runner_mixin_list.run_cmd", side_effect=fake_run):
             ts, img, meta = runner.latest_named_component_image_on_application(
-                "rhoai-tenant",
+                DEFAULT_NAMESPACE,
                 "rhoai-fbc-fragment-ocp-421",
                 "rhoai-fbc-fragment-ocp-421",
                 RHOAI_FBCF_IMAGE_REF_PATTERN,
@@ -89,7 +89,7 @@ class LatestNamedComponentImageOnApplicationTest(unittest.TestCase):
 
         with patch("runners.cli.runner_mixin_list.run_cmd", side_effect=fake_run):
             ts, img, meta = runner.latest_named_component_image_on_application(
-                "rhoai-tenant",
+                DEFAULT_NAMESPACE,
                 "rhoai-fbc-fragment-ocp-421",
                 "rhoai-fbc-fragment-ocp-421",
                 RHOAI_FBCF_IMAGE_REF_PATTERN,

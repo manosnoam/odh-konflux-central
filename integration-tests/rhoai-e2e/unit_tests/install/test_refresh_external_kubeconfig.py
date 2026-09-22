@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 from pathlib import Path
 from unittest import mock
 
@@ -29,7 +30,7 @@ def test_refresh_external_kubeconfig_uses_credentials(
     shared.mkdir()
 
     monkeypatch.setenv("CLUSTER_SOURCE", "rhoai-e2e-kubeconfig-rh-nightly-pm")
-    monkeypatch.setenv("NAMESPACE", "rhoai-tenant")
+    monkeypatch.setenv("NAMESPACE", DEFAULT_NAMESPACE)
     monkeypatch.setenv("KUBECONFIG_BOOTSTRAP", str(bootstrap))
     monkeypatch.setenv("KUBECONFIG", str(work))
     monkeypatch.setenv("TESTS_SHARED", str(shared))
@@ -61,7 +62,7 @@ def test_refresh_external_kubeconfig_falls_back_to_bootstrap(
     work = tmp_path / "kubeconfig"
 
     monkeypatch.setenv("CLUSTER_SOURCE", "rhoai-e2e-kubeconfig-rh-nightly-pm")
-    monkeypatch.setenv("NAMESPACE", "rhoai-tenant")
+    monkeypatch.setenv("NAMESPACE", DEFAULT_NAMESPACE)
     monkeypatch.setenv("KUBECONFIG_BOOTSTRAP", str(bootstrap))
     monkeypatch.setenv("KUBECONFIG", str(work))
 
@@ -82,7 +83,7 @@ def test_refresh_external_kubeconfig_missing_bootstrap_and_creds(
 ) -> None:
     work = tmp_path / "kubeconfig"
     monkeypatch.setenv("CLUSTER_SOURCE", "rhoai-e2e-kubeconfig-rh-nightly-pm")
-    monkeypatch.setenv("NAMESPACE", "rhoai-tenant")
+    monkeypatch.setenv("NAMESPACE", DEFAULT_NAMESPACE)
     monkeypatch.setenv("KUBECONFIG_BOOTSTRAP", str(tmp_path / "missing" / "kubeconfig"))
     monkeypatch.setenv("KUBECONFIG", str(work))
 
@@ -97,7 +98,7 @@ def test_refresh_external_kubeconfig_write_back_failure(
     work = tmp_path / "kubeconfig"
     work.write_text("refreshed", encoding="utf-8")
     monkeypatch.setenv("CLUSTER_SOURCE", "rhoai-e2e-kubeconfig-rh-nightly-pm")
-    monkeypatch.setenv("NAMESPACE", "rhoai-tenant")
+    monkeypatch.setenv("NAMESPACE", DEFAULT_NAMESPACE)
     monkeypatch.setenv("KUBECONFIG", str(work))
 
     with (
@@ -121,7 +122,7 @@ def test_refresh_external_kubeconfig_login_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CLUSTER_SOURCE", "rhoai-e2e-kubeconfig-rh-nightly-pm")
-    monkeypatch.setenv("NAMESPACE", "rhoai-tenant")
+    monkeypatch.setenv("NAMESPACE", DEFAULT_NAMESPACE)
     monkeypatch.setenv("KUBECONFIG", str(tmp_path / "kubeconfig"))
 
     with mock.patch.object(

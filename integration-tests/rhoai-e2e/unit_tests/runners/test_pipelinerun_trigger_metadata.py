@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from suite.constants import (
+    DEFAULT_APP,
+    DEFAULT_NAMESPACE,
     ANNOTATION_BUILD_COMMIT_SHA,
     ANNOTATION_BUILD_REPO,
     ANNOTATION_FBCF_IMAGE,
@@ -149,7 +151,7 @@ def test_build_cli_trigger_labels(no_github_network: None) -> None:
 
 def test_build_manual_snapshot_trigger_labels(no_github_network: None) -> None:
     labels = build_manual_snapshot_trigger_labels(
-        application="testops-playpen",
+        application=DEFAULT_APP,
         run_owner="nmanos",
         product="",
         target_type="external",
@@ -159,7 +161,7 @@ def test_build_manual_snapshot_trigger_labels(no_github_network: None) -> None:
         scripts_git_revision=_SCRIPTS_REV,
     )
     assert labels[LABEL_TRIGGER_EVENT_TYPE] == EVENT_TYPE_PUSH
-    assert labels[LABEL_KONFLUX_APPLICATION] == "testops-playpen"
+    assert labels[LABEL_KONFLUX_APPLICATION] == DEFAULT_APP
     assert labels[LABEL_RUN_OWNER] == "nmanos"
     assert labels.get(LABEL_PRODUCT, "") == ""
     assert labels[LABEL_CLUSTER] == "nmanos-konflux1"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import base64
 import json
 import unittest
@@ -47,7 +48,7 @@ class BackfillShiftLeftSmokeSecretTest(unittest.TestCase):
         self.patch_payload = None
         with mock.patch("k8s.smoke_aws_credentials.run_cmd", side_effect=fake_run_cmd):
             changed = backfill_shift_left_smoke_secret_from_mlflow(
-                tenant_namespace="rhoai-tenant",
+                tenant_namespace=DEFAULT_NAMESPACE,
                 secret_name="shiftleft-envfile-model-serving",
             )
         self.assertTrue(changed)
@@ -75,7 +76,7 @@ class BackfillShiftLeftSmokeSecretTest(unittest.TestCase):
         with mock.patch("k8s.smoke_aws_credentials.run_cmd", side_effect=fake_run_cmd):
             self.assertFalse(
                 backfill_shift_left_smoke_secret_from_mlflow(
-                    tenant_namespace="rhoai-tenant",
+                    tenant_namespace=DEFAULT_NAMESPACE,
                     secret_name="shiftleft-envfile-model-serving",
                 )
             )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import unittest
 from unittest import mock
 
@@ -12,7 +13,7 @@ from suite.errors import AppError
 class AssertExternalClusterLockQueryableTest(unittest.TestCase):
     def test_skips_ephc(self) -> None:
         assert_external_cluster_lock_queryable(
-            namespace="rhoai-tenant",
+            namespace=DEFAULT_NAMESPACE,
             cluster_source="EPHC",
             cluster_id="",
             force=False,
@@ -25,7 +26,7 @@ class AssertExternalClusterLockQueryableTest(unittest.TestCase):
         ):
             with self.assertRaises(AppError) as ctx:
                 assert_external_cluster_lock_queryable(
-                    namespace="rhoai-tenant",
+                    namespace=DEFAULT_NAMESPACE,
                     cluster_source="rhoai-e2e-kubeconfig-rh-nightly-pm",
                     cluster_id="rh-nightly-pm",
                     force=False,
@@ -38,7 +39,7 @@ class AssertExternalClusterLockQueryableTest(unittest.TestCase):
             return_value=["e2e-cli-nmanos-rh-nightly-pm-rhoai-smoke-czshr"],
         ):
             assert_external_cluster_lock_queryable(
-                namespace="rhoai-tenant",
+                namespace=DEFAULT_NAMESPACE,
                 cluster_source="rhoai-e2e-kubeconfig-rh-nightly-pm",
                 cluster_id="rh-nightly-pm",
                 force=False,

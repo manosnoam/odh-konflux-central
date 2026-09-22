@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 from unittest import mock
 
 from runners.cli.runner_mixin_list import RunnerListMixin
@@ -9,7 +10,7 @@ from runners.cli.runner_mixin_list import RunnerListMixin
 
 class _ListHarness(RunnerListMixin):
     def __init__(self, items: list[dict]) -> None:
-        self.args = mock.Mock(namespace="rhoai-tenant", app="rhoai-fbc-fragment-ocp-420")
+        self.args = mock.Mock(namespace=DEFAULT_NAMESPACE, app="rhoai-fbc-fragment-ocp-420")
         self.run_owner = "nmanos"
         self._items = items
 

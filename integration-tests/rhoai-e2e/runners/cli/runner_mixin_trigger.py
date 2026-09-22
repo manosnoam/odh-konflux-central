@@ -14,6 +14,7 @@ from typing import Any
 
 from suite.constants import (
     ANNOTATION_RUN_OWNER,
+    DEFAULT_NAMESPACE,
     DEFAULT_RHOAI_E2E_PIPELINE_TIMEOUT,
     DEFAULT_UPSTREAM_KONFLUX_GIT,
     ITS_TEST_GATES_PARAM_DEFAULT,
@@ -24,6 +25,7 @@ from suite.constants import (
 from suite.its_trigger_params import (
     is_external_cluster_source,
     resolve_cluster_source_for_trigger,
+    resolve_rhoai_version_display,
     validate_cluster_source,
 )
 from suite.trigger_param_registry import (
@@ -54,6 +56,10 @@ from .runner_support import (
 
 
 class RunnerTriggerMixin:
+    def _konflux_tenant_namespace(self) -> str:
+        """Konflux namespace for Application/Snapshot lookups (``--konflux-namespace``)."""
+        return (getattr(self.args, "namespace", "") or "").strip() or DEFAULT_NAMESPACE
+
     @staticmethod
     def _yq_upsert_its_param(path: Path | str, name: str, value: str) -> None:
         """Replace one ITS ``spec.params`` entry by name (delete then append)."""
@@ -131,14 +137,56 @@ class RunnerTriggerMixin:
         odh_overrides: bool,
         rhoai_version_param: str = "",
     ) -> str:
+        param = (rhoai_version_param or "").strip()
+        if not param:
+            param = resolve_rhoai_version_display(
+                product=self.args.product,
+                cli_version=(self.args.version or "").strip(),
+                resolved_app=(getattr(self, "resolved_app", "") or "").strip(),
+                update_channel=(
+                    (getattr(self, "update_channel_override", "") or "").strip()
+                    or (getattr(self.args, "channel", "") or "").strip()
+                ),
+                explicit_cli=bool((self.args.version or "").strip()),
+            )
         return resolve_catalog_version_for_naming(
             fbc_image=(self.image or "").strip(),
             fbc_snapshot_meta=getattr(self, "_fbc_source_snapshot_meta", None),
             snapshot_json=self._preview_snapshot_json(odh_overrides),
             fbc_component_name=(getattr(self, "resolved_rhoai_fbc_name", "") or "").strip(),
             resolved_app=(getattr(self, "resolved_app", "") or "").strip(),
-            rhoai_version_param=rhoai_version_param,
+            rhoai_version_param=param,
         )
+
+    def _ensure_fbc_snapshot_meta_for_image(self) -> None:
+        """Resolve Konflux Snapshot PAC metadata for digest-only FBC images (PLR naming / params)."""
+        if getattr(self, "_fbc_source_snapshot_meta", None):
+            return
+        digest_m = re.search(r"sha256:[a-f0-9]{64}", (self.image or "").strip(), re.IGNORECASE)
+        if not digest_m:
+            return
+        digest = digest_m.group(0).lower()
+        prefix = f"rhoai-v{self.args.version.replace('.', '-')}" if self.args.version else "rhoai-v"
+        apps = sorted(
+            {
+                *((getattr(self, "resolved_app", "") or "").strip(),),
+                *(
+                    a
+                    for a in self.get_applications(self._konflux_tenant_namespace())
+                    if a.startswith("rhoai-v")
+                    and (not self.args.version or re.match(rf"^{re.escape(prefix)}(-|$)", a))
+                ),
+            }
+            - {""}
+        )
+        for app in apps:
+            _ts, _img, snap_meta = self.find_snapshot_by_image_digest(self._konflux_tenant_namespace(), app, digest)
+            if not snap_meta:
+                continue
+            self._fbc_source_snapshot_meta = snap_meta
+            if not self.resolved_app or self.resolved_app == app or not self.resolved_app.startswith("rhoai-v"):
+                self.resolved_app = app
+            return
 
     def _clear_registry_params_from_staged_its(self, tmp_path: Path | str) -> None:
         names = sorted(trigger_params_to_clear_on_stage())
@@ -246,13 +294,13 @@ class RunnerTriggerMixin:
         if not self.args.version:
             return
         prefix = f"rhoai-v{self.args.version.replace('.', '-')}"
-        apps = [a for a in self.get_applications("rhoai-tenant") if re.match(rf"^{re.escape(prefix)}(-|$)", a)]
+        apps = [a for a in self.get_applications(self._konflux_tenant_namespace()) if re.match(rf"^{re.escape(prefix)}(-|$)", a)]
         if not apps:
             return
         best_ts = ""
         best_app = ""
         for app in apps:
-            ts, _img, _snap_meta = self.latest_matching_image("rhoai-tenant", app, RHOAI_FBCF_IMAGE_REF_PATTERN)
+            ts, _img, _snap_meta = self.latest_matching_image(self._konflux_tenant_namespace(), app, RHOAI_FBCF_IMAGE_REF_PATTERN)
             if ts > best_ts:
                 best_ts = ts
                 best_app = app
@@ -268,15 +316,15 @@ class RunnerTriggerMixin:
         prefix = f"rhoai-v{self.args.version.replace('.', '-')}" if self.args.version else "rhoai-v"
         apps = [
             a
-            for a in self.get_applications("rhoai-tenant")
+            for a in self.get_applications(self._konflux_tenant_namespace())
             if not self.args.version or re.match(rf"^{re.escape(prefix)}(-|$)", a)
         ]
         for app in sorted(apps):
-            _ts, img, _snap_meta = self.latest_matching_image(
-                "rhoai-tenant", app, RHOAI_FBCF_IMAGE_REF_PATTERN
-            )
-            if img and digest in img.lower():
+            _ts, img, snap_meta = self.find_snapshot_by_image_digest(self._konflux_tenant_namespace(), app, digest)
+            if img:
                 self.resolved_app = app
+                if snap_meta:
+                    self._fbc_source_snapshot_meta = snap_meta
                 return True
         return False
 
@@ -306,7 +354,7 @@ class RunnerTriggerMixin:
         best_ts = ""
         for app in apps:
             ts, img, snap_meta = self.latest_named_component_image_on_application(
-                "rhoai-tenant",
+                self._konflux_tenant_namespace(),
                 app,
                 fbc_component_name,
                 RHOAI_FBCF_IMAGE_REF_PATTERN,
@@ -324,7 +372,7 @@ class RunnerTriggerMixin:
         fragment_img = ""
         fragment_meta: dict[str, Any] | None = None
         ts, img, snap_meta = self.latest_named_component_image_on_application(
-            "rhoai-tenant",
+            self._konflux_tenant_namespace(),
             fbc_component_name,
             fbc_component_name,
             RHOAI_FBCF_IMAGE_REF_PATTERN,
@@ -344,7 +392,7 @@ class RunnerTriggerMixin:
         fallback_meta: dict[str, Any] | None = None
         for app in apps:
             ts, img, snap_meta = self.latest_matching_image(
-                "rhoai-tenant",
+                self._konflux_tenant_namespace(),
                 app,
                 RHOAI_FBCF_IMAGE_REF_PATTERN,
             )
@@ -399,7 +447,7 @@ class RunnerTriggerMixin:
 
     def _ordered_rhoai_version_stream_apps(self) -> list[str]:
         """``rhoai-v*`` applications in priority order (3.5 EA streams first)."""
-        apps = [a for a in self.get_applications("rhoai-tenant") if a.startswith("rhoai-v")]
+        apps = [a for a in self.get_applications(self._konflux_tenant_namespace()) if a.startswith("rhoai-v")]
         priority = ("rhoai-v3-5-ea-2", "rhoai-v3-5-ea-1", "rhoai-v3-5")
         ordered_priority = [a for a in priority if a in apps]
         rest = sorted(a for a in apps if a not in priority)
@@ -423,7 +471,7 @@ class RunnerTriggerMixin:
 
         for app in (want, *self._ordered_rhoai_version_stream_apps()):
             ts, img, snap_meta = self.latest_named_component_image(
-                "rhoai-tenant",
+                self._konflux_tenant_namespace(),
                 app,
                 want,
                 RHOAI_FBCF_IMAGE_REF_PATTERN,
@@ -447,7 +495,7 @@ class RunnerTriggerMixin:
         if not want_app or not want_comp:
             return
         _, img, snap_meta = self.latest_named_component_image_on_application(
-            "rhoai-tenant",
+            self._konflux_tenant_namespace(),
             want_app,
             want_comp,
             RHOAI_FBCF_IMAGE_REF_PATTERN,
@@ -479,11 +527,13 @@ class RunnerTriggerMixin:
                 self.resolved_rhoai_fbc_name = fbc_name
                 apps = [
                     a
-                    for a in self.get_applications("rhoai-tenant")
+                    for a in self.get_applications(self._konflux_tenant_namespace())
                     if re.match(rf"^{re.escape(prefix)}(-|$)", a)
                 ]
                 if not apps:
-                    raise AppError(f"No Konflux application found matching {prefix}* in rhoai-tenant")
+                    raise AppError(
+                        f"No Konflux application found matching {prefix}* in {self._konflux_tenant_namespace()}"
+                    )
                 primary_app = prefix if prefix in apps else sorted(apps)[0]
                 ordered_apps = [primary_app] + sorted(a for a in apps if a != primary_app)
                 version_stream_fbc = rhoai_fbc_name_from_rhoai_version(self.args.version)
@@ -541,15 +591,17 @@ class RunnerTriggerMixin:
                 ):
                     apps = [
                         a
-                        for a in self.get_applications("rhoai-tenant")
+                        for a in self.get_applications(self._konflux_tenant_namespace())
                         if re.match(rf"^{re.escape(prefix)}(-|$)", a)
                     ]
                     if not apps:
-                        raise AppError(f"No Konflux application found matching {prefix}* in rhoai-tenant")
+                        raise AppError(
+                        f"No Konflux application found matching {prefix}* in {self._konflux_tenant_namespace()}"
+                    )
                     best_ts = ""
                     for app in apps:
                         ts, img, snap_meta = self.latest_matching_image(
-                            "rhoai-tenant", app, RHOAI_FBCF_IMAGE_REF_PATTERN
+                            self._konflux_tenant_namespace(), app, RHOAI_FBCF_IMAGE_REF_PATTERN
                         )
                         if img and ts > best_ts:
                             best_ts = ts
@@ -592,10 +644,10 @@ class RunnerTriggerMixin:
                 self._apply_pinned_fbcf_fallback(reason=miss_reason)
         elif self.args.product == "rhoai":
             with spin_while("Fetching latest FBCF image across all RHOAI apps (highest version)"):
-                apps = [a for a in self.get_applications("rhoai-tenant") if a.startswith("rhoai-v")]
+                apps = [a for a in self.get_applications(self._konflux_tenant_namespace()) if a.startswith("rhoai-v")]
                 best_key: tuple[tuple[int, ...], str] = ((), "")
                 for app in apps:
-                    ts, img, snap_meta = self.latest_matching_image("rhoai-tenant", app, RHOAI_FBCF_IMAGE_REF_PATTERN)
+                    ts, img, snap_meta = self.latest_matching_image(self._konflux_tenant_namespace(), app, RHOAI_FBCF_IMAGE_REF_PATTERN)
                     version_m = re.match(r"^rhoai-v(\d+(?:-\d+)*)", app)
                     version_key = tuple(int(p) for p in version_m.group(1).split("-")) if version_m else ()
                     if img and (version_key, ts) > best_key:
@@ -624,6 +676,8 @@ class RunnerTriggerMixin:
                 )
                 print(f"Auto-selected channel: {self.update_channel_override} (from {source})")
 
+        if self.args.product == "rhoai" and (self.image or "").strip():
+            self._ensure_fbc_snapshot_meta_for_image()
 
     def ensure_its_applied(self, odh_overrides: bool) -> None:
         self._render_its_for_trigger(odh_overrides)
@@ -726,7 +780,7 @@ class RunnerTriggerMixin:
         url = (getattr(self.args, "konflux_repo", "") or "").strip()
         rev = (getattr(self.args, "konflux_branch", "") or "").strip()
         if not url:
-            url = "https://github.com/opendatahub-io/odh-konflux-central.git"
+            url = DEFAULT_UPSTREAM_KONFLUX_GIT
         if not rev:
             rev = "main"
         return url, rev

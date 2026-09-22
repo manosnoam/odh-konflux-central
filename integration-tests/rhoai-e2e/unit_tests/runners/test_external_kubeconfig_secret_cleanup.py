@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import unittest
 from unittest import mock
 
@@ -60,7 +61,7 @@ class ExternalKubeconfigSecretCleanupTest(unittest.TestCase):
                     return_value="",
                 ):
                     active = list_active_pipelineruns_for_cluster_source(
-                        namespace="rhoai-tenant",
+                        namespace=DEFAULT_NAMESPACE,
                         cluster_source="sec-a",
                         exclude_name="rhoai-e2e-pr-self",
                     )
@@ -72,7 +73,7 @@ class ExternalKubeconfigSecretCleanupTest(unittest.TestCase):
             return_value=mock.Mock(returncode=1, stdout="", stderr="forbidden"),
         ):
             active = list_active_pipelineruns_for_cluster_source(
-                namespace="rhoai-tenant",
+                namespace=DEFAULT_NAMESPACE,
                 cluster_source="sec-a",
             )
         self.assertIsNone(active)

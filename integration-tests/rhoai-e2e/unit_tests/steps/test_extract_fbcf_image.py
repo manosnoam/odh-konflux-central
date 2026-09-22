@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import json
 import unittest
 from pathlib import Path
@@ -58,7 +59,7 @@ class ExtractFbcfImageTest(unittest.TestCase):
 
     def test_extracts_container_image(self) -> None:
         snap = {
-            "application": "testops-playpen",
+            "application": DEFAULT_APP,
             "components": [
                 {
                     "name": "rhoai-fbc-fragment-ocp-421",

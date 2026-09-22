@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import unittest
 
+from suite.constants import DEFAULT_APP
 from suite.rh_nightly_auto_trigger import (
     build_auto_trigger_snapshot_yaml,
     decide_auto_trigger,
@@ -50,11 +52,11 @@ class TestRhNightlyAutoTrigger(unittest.TestCase):
 
     def test_build_snapshot_yaml(self) -> None:
         text = build_auto_trigger_snapshot_yaml(
-            application="testops-playpen",
+            application=DEFAULT_APP,
             fbc_component="rhoai-fbc-fragment-ocp-420",
             fbc_image="quay.io/rhoai/rhoai-fbc-fragment@sha256:abc",
         )
-        self.assertIn("application: testops-playpen", text)
+        self.assertIn(f"application: {DEFAULT_APP}", text)
         self.assertIn("name: rhoai-fbc-fragment-ocp-420", text)
         self.assertIn("containerImage: quay.io/rhoai/rhoai-fbc-fragment@sha256:abc", text)
 

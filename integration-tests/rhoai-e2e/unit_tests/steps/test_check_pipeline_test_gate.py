@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import json
 import os
 import tempfile
@@ -37,7 +38,7 @@ class CheckPipelineTestGateTest(unittest.TestCase):
             env = {
                 "TEST_GATES": "bvt,smoke",
                 "PIPELINE_RUN_NAME": "pr-1",
-                "NAMESPACE": "rhoai-tenant",
+                "NAMESPACE": DEFAULT_NAMESPACE,
                 "SMOKE_TEST_OUTPUT_PATH": str(smoke_path),
             }
             with patch.dict(os.environ, env, clear=False):
@@ -65,7 +66,7 @@ class CheckPipelineTestGateTest(unittest.TestCase):
             env = {
                 "TEST_GATES": "smoke",
                 "PIPELINE_RUN_NAME": "pr-1",
-                "NAMESPACE": "rhoai-tenant",
+                "NAMESPACE": DEFAULT_NAMESPACE,
                 "SMOKE_TEST_OUTPUT_PATH": str(smoke_path),
             }
             with patch.dict(os.environ, env, clear=False):
@@ -89,7 +90,7 @@ class CheckPipelineTestGateTest(unittest.TestCase):
             env = {
                 "TEST_GATES": "tier1",
                 "PIPELINE_RUN_NAME": "pr-1",
-                "NAMESPACE": "rhoai-tenant",
+                "NAMESPACE": DEFAULT_NAMESPACE,
                 "SMOKE_TEST_OUTPUT_PATH": str(sidecar),
             }
             with patch.dict(os.environ, env, clear=False):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import json
 import subprocess
 import unittest
@@ -26,7 +27,7 @@ class TektonInclusterSnapshotTest(unittest.TestCase):
             ):
                 with mock.patch(
                     "steps.tekton_incluster.namespace_from_env",
-                    return_value="rhoai-tenant",
+                    return_value=DEFAULT_NAMESPACE,
                 ):
                     self.assertEqual(pipeline_run_snapshot_label(), "rhoai-snap-1")
 
@@ -54,7 +55,7 @@ class TektonInclusterSnapshotTest(unittest.TestCase):
         }
         with mock.patch("steps.tekton_incluster.subprocess.run") as run:
             run.return_value = mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
-            items = _list_pipelineruns_for_snapshot_oc("rhoai-snap-3", "rhoai-tenant")
+            items = _list_pipelineruns_for_snapshot_oc("rhoai-snap-3", DEFAULT_NAMESPACE)
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["metadata"]["name"], "conforma-fbc-xyz")
 
@@ -66,7 +67,7 @@ class TektonInclusterSnapshotTest(unittest.TestCase):
         ):
             with mock.patch("steps.tekton_incluster.subprocess.run") as run:
                 run.return_value = mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
-                items = list_pipelineruns_for_snapshot("snap-4", "rhoai-tenant")
+                items = list_pipelineruns_for_snapshot("snap-4", DEFAULT_NAMESPACE)
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["metadata"]["name"], "ec-1")
 
@@ -84,7 +85,7 @@ class TektonInclusterSnapshotTest(unittest.TestCase):
                 with mock.patch("steps.tekton_incluster.subprocess.run") as run:
                     run.return_value = mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
                     errors: list[str] = []
-                    items = list_pipelineruns_for_snapshot("snap-5", "rhoai-tenant", error_out=errors)
+                    items = list_pipelineruns_for_snapshot("snap-5", DEFAULT_NAMESPACE, error_out=errors)
         self.assertEqual(len(items), 1)
         self.assertEqual(errors, [])
 
@@ -94,7 +95,7 @@ class TektonInclusterSnapshotTest(unittest.TestCase):
             side_effect=subprocess.TimeoutExpired(cmd=["oc"], timeout=60),
         ):
             errors: list[str] = []
-            items = _list_pipelineruns_for_snapshot_oc("snap-6", "rhoai-tenant", error_out=errors)
+            items = _list_pipelineruns_for_snapshot_oc("snap-6", DEFAULT_NAMESPACE, error_out=errors)
         self.assertEqual(items, [])
         self.assertEqual(len(errors), 1)
         self.assertIn("snap-6", errors[0])
@@ -125,7 +126,7 @@ class TektonInclusterSnapshotTest(unittest.TestCase):
                     "steps.tekton_incluster.in_cluster_get",
                     return_value=api_doc,
                 ) as api_get:
-                    labels, annotations = fetch_snapshot_metadata("snap-7", "rhoai-tenant")
+                    labels, annotations = fetch_snapshot_metadata("snap-7", DEFAULT_NAMESPACE)
         api_get.assert_called_once()
         self.assertEqual(labels["build.appstudio.openshift.io/pipeline"], "fbc")
         self.assertEqual(annotations["foo"], "bar")

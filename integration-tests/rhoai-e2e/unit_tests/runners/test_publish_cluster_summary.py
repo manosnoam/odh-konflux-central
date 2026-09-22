@@ -9,7 +9,7 @@ from runners.report.pipelinerun_metadata import (
     build_runtime_metadata,
     cluster_label_from_cluster_source,
 )
-from suite.constants import ANNOTATION_CLUSTER
+from suite.constants import ANNOTATION_CLUSTER, DEFAULT_APP, DEFAULT_NAMESPACE
 
 class ClusterLabelFromSourceTest(unittest.TestCase):
     def test_external_secret_strips_prefix(self) -> None:
@@ -37,7 +37,7 @@ class BuildRuntimeMetadataClusterTest(unittest.TestCase):
         ]
         ann, _labels = build_runtime_metadata(
             pipeline_run="pr-1",
-            namespace="rhoai-tenant",
+            namespace=DEFAULT_NAMESPACE,
             tests_csv="bvt,smoke",
             prj=prj,
             taskruns=taskruns,
@@ -57,7 +57,7 @@ class BuildRuntimeMetadataClusterTest(unittest.TestCase):
         }
         ann, _labels = build_runtime_metadata(
             pipeline_run="pr-1",
-            namespace="rhoai-tenant",
+            namespace=DEFAULT_NAMESPACE,
             tests_csv="bvt,smoke",
             prj=prj,
             taskruns=[],

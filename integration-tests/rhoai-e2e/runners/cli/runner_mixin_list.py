@@ -563,6 +563,55 @@ class RunnerListMixin(RunnerOcpMixin):
                         best_meta = item.get("metadata")
         return best_ts, best_img, best_meta
 
+    def find_snapshot_by_image_digest(
+        self,
+        namespace: str,
+        app_name: str,
+        digest: str,
+    ) -> tuple[str, str, dict[str, Any] | None]:
+        """Return (creationTimestamp, containerImage, snapshot metadata) for a digest on ``app_name``."""
+        want = (digest or "").strip().lower()
+        app = (app_name or "").strip()
+        if not want or not app:
+            return "", "", None
+        proc = run_cmd(
+            [
+                "oc",
+                "get",
+                "snapshots",
+                "-n",
+                namespace,
+                "-l",
+                f"appstudio.openshift.io/application={app}",
+                "-o",
+                "json",
+            ],
+            capture=True,
+            check=False,
+            timeout=120,
+        )
+        data = _parse_snapshot_json(proc.stdout or "") if proc.returncode == 0 else None
+        if not data:
+            return "", "", None
+        best_ts = ""
+        best_img = ""
+        best_meta: dict[str, Any] | None = None
+        for item in data.get("items", []) or []:
+            if not isinstance(item, dict):
+                continue
+            ts = (item.get("metadata") or {}).get("creationTimestamp", "")
+            meta = item.get("metadata")
+            snap_meta = meta if isinstance(meta, dict) else None
+            for comp in item.get("spec", {}).get("components", []) or []:
+                if not isinstance(comp, dict):
+                    continue
+                img = (comp.get("containerImage") or "").strip()
+                if img and want in img.lower() and ts >= best_ts:
+                    best_ts = ts
+                    best_img = img
+                    best_meta = snap_meta
+        return best_ts, best_img, best_meta
+
     def latest_named_component_image(
         self,
         namespace: str,

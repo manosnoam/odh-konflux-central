@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import unittest
 from unittest import mock
 
@@ -16,7 +17,7 @@ from suite.errors import AppError
 class AssertExternalClusterIdleTest(unittest.TestCase):
     def test_skips_ephc(self) -> None:
         wait_for_external_cluster_idle(
-            namespace="rhoai-tenant",
+            namespace=DEFAULT_NAMESPACE,
             cluster_source="EPHC",
         )
 
@@ -26,7 +27,7 @@ class AssertExternalClusterIdleTest(unittest.TestCase):
             return_value=["pr-other"],
         ):
             wait_for_external_cluster_idle(
-                namespace="rhoai-tenant",
+                namespace=DEFAULT_NAMESPACE,
                 cluster_source="rhoai-e2e-kubeconfig-rh-nightly-pm",
                 force=True,
             )
@@ -38,7 +39,7 @@ class AssertExternalClusterIdleTest(unittest.TestCase):
         ):
             with self.assertRaises(AppError) as ctx:
                 assert_external_cluster_idle(
-                    namespace="rhoai-tenant",
+                    namespace=DEFAULT_NAMESPACE,
                     cluster_source="rhoai-e2e-kubeconfig-rh-nightly-pm",
                 )
         self.assertIn("busy", str(ctx.exception))
@@ -51,7 +52,7 @@ class AssertExternalClusterIdleTest(unittest.TestCase):
         ):
             with mock.patch("k8s.external_kubeconfig.time.sleep"):
                 wait_for_external_cluster_idle(
-                    namespace="rhoai-tenant",
+                    namespace=DEFAULT_NAMESPACE,
                     cluster_source="rhoai-e2e-kubeconfig-rh-nightly-pm",
                     timeout_sec=120,
                     poll_interval_sec=5,
@@ -89,7 +90,7 @@ class AssertExternalClusterIdleTest(unittest.TestCase):
                 return_value="ods-qe-psi-07",
             ):
                 active = list_active_pipelineruns_for_external_cluster(
-                    namespace="rhoai-tenant",
+                    namespace=DEFAULT_NAMESPACE,
                     cluster_source="rhoai-e2e-kubeconfig-ods-qe-psi-07-nmanos",
                     cluster_id="ods-qe-psi-07",
                 )
@@ -123,7 +124,7 @@ class AssertExternalClusterIdleTest(unittest.TestCase):
                     return_value="api.ods-qe-psi-23.osp.rh-ods.com",
                 ):
                     active = list_active_pipelineruns_for_external_cluster(
-                        namespace="rhoai-tenant",
+                        namespace=DEFAULT_NAMESPACE,
                         cluster_source="rhoai-e2e-kubeconfig-other-name",
                         cluster_id="other-label",
                     )

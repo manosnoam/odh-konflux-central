@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 from pathlib import Path
 
 import pytest
@@ -185,8 +186,8 @@ def test_resolve_ephc_playpen_slice_manifests() -> None:
     path_b = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-playpen-b")
     assert path_a.name == "its-rhoai-e2e-ephc-playpen-a.yaml"
     assert path_b.name == "its-rhoai-e2e-ephc-playpen-b.yaml"
-    assert integration_test_scenario_application(path_a) == "testops-playpen"
-    assert integration_test_scenario_application(path_b) == "testops-playpen"
+    assert integration_test_scenario_application(path_a) == DEFAULT_APP
+    assert integration_test_scenario_application(path_b) == DEFAULT_APP
     from suite.its_registry import its_manifest_param
 
     comps_a = its_manifest_param(path_a, "COMPONENTS")

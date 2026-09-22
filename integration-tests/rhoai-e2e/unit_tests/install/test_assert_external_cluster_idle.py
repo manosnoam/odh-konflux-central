@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import unittest
 from unittest import mock
 
@@ -19,7 +20,7 @@ class AssertExternalClusterIdleStepTest(unittest.TestCase):
             "PIPELINE_RUN_NAME": "pr-self",
         }
         with mock.patch.dict("os.environ", env, clear=False):
-            with mock.patch.object(step, "namespace_from_env", return_value="rhoai-tenant"):
+            with mock.patch.object(step, "namespace_from_env", return_value=DEFAULT_NAMESPACE):
                 with mock.patch.object(step, "pipeline_run_name_from_env", return_value="pr-self"):
                     with mock.patch.object(
                         step,
@@ -34,7 +35,7 @@ class AssertExternalClusterIdleStepTest(unittest.TestCase):
             "PIPELINE_RUN_NAME": "pr-self",
         }
         with mock.patch.dict("os.environ", env, clear=False):
-            with mock.patch.object(step, "namespace_from_env", return_value="rhoai-tenant"):
+            with mock.patch.object(step, "namespace_from_env", return_value=DEFAULT_NAMESPACE):
                 with mock.patch.object(step, "pipeline_run_name_from_env", return_value="pr-self"):
                     with mock.patch.object(step, "wait_for_external_cluster_idle"):
                         self.assertEqual(step.main(), 0)

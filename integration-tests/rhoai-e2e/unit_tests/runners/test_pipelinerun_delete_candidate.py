@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -10,7 +11,7 @@ from runners.cli.runner_support import pipelinerun_delete_candidate, try_cancel_
 def _pr(
     name: str,
     *,
-    app: str = "testops-playpen",
+    app: str = DEFAULT_APP,
     reason: str = "",
     owner: str = "",
     completion_time: str = "",
@@ -45,19 +46,19 @@ def _pr(
 class PipelinerunDeleteCandidateTest(unittest.TestCase):
     def test_pending_incomplete(self) -> None:
         item = _pr("e2e-cli-testops-x", reason="PipelineRunPending")
-        ok, why = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, why = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertTrue(ok)
         self.assertEqual(why, "pending")
 
     def test_resolving_pipeline_ref_pending(self) -> None:
         item = _pr("e2e-cli-testops-x", reason="ResolvingPipelineRef")
-        ok, why = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, why = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertTrue(ok)
         self.assertEqual(why, "pending")
 
     def test_owned_incomplete(self) -> None:
         item = _pr("e2e-cli-testops-x", reason="ResolvingTaskRef", owner="alice")
-        ok, why = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, why = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertTrue(ok)
         self.assertEqual(why, "owned")
 
@@ -69,7 +70,7 @@ class PipelinerunDeleteCandidateTest(unittest.TestCase):
         )
         ok, why = pipelinerun_delete_candidate(
             item,
-            app="testops-playpen",
+            app=DEFAULT_APP,
             run_owner="alice",
             snapshot_owner="alice",
         )
@@ -78,7 +79,7 @@ class PipelinerunDeleteCandidateTest(unittest.TestCase):
 
     def test_stuck_running_without_owner_or_tasks_skipped_by_default(self) -> None:
         item = _pr("e2e-cli-testops-x", reason="Running", child_refs=[])
-        ok, why = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, why = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertFalse(ok)
         self.assertEqual(why, "")
 
@@ -86,7 +87,7 @@ class PipelinerunDeleteCandidateTest(unittest.TestCase):
         item = _pr("e2e-cli-testops-x", reason="Running", child_refs=[])
         ok, why = pipelinerun_delete_candidate(
             item,
-            app="testops-playpen",
+            app=DEFAULT_APP,
             run_owner="alice",
             include_unowned_stuck=True,
         )
@@ -100,7 +101,7 @@ class PipelinerunDeleteCandidateTest(unittest.TestCase):
             owner="bob",
             child_refs=[{"name": "tr-1", "kind": "TaskRun"}],
         )
-        ok, _ = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, _ = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertFalse(ok)
 
     def test_skip_owned_running_with_tasks(self) -> None:
@@ -110,7 +111,7 @@ class PipelinerunDeleteCandidateTest(unittest.TestCase):
             owner="alice",
             child_refs=[{"name": "tr-1", "kind": "TaskRun"}],
         )
-        ok, _ = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, _ = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertFalse(ok)
 
     def test_stop_owned_running_includes_active_owned(self) -> None:
@@ -122,7 +123,7 @@ class PipelinerunDeleteCandidateTest(unittest.TestCase):
         )
         ok, why = pipelinerun_delete_candidate(
             item,
-            app="testops-playpen",
+            app=DEFAULT_APP,
             run_owner="alice",
             stop_owned_running=True,
         )
@@ -136,24 +137,24 @@ class PipelinerunDeleteCandidateTest(unittest.TestCase):
             owner="alice",
             completion_time="2026-06-17T10:00:00Z",
         )
-        ok, _ = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, _ = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertFalse(ok)
 
     def test_skip_wrong_app_label(self) -> None:
         item = _pr("e2e-cli-testops-x", reason="PipelineRunPending", app="other-app")
-        ok, _ = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, _ = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertFalse(ok)
 
     def test_pending_without_app_label(self) -> None:
         item = _pr("e2e-cli-testops-x", reason="PipelineRunPending")
         item["metadata"]["labels"].pop("appstudio.openshift.io/application")
-        ok, why = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, why = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertFalse(ok)
         self.assertEqual(why, "")
 
     def test_skip_non_rhoai_e2e(self) -> None:
         item = _pr("other-pipeline-x", reason="PipelineRunPending")
-        ok, _ = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, _ = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertFalse(ok)
 
     def test_skip_smoke_only_stuck(self) -> None:
@@ -163,11 +164,11 @@ class PipelinerunDeleteCandidateTest(unittest.TestCase):
             child_refs=[],
             pipeline_label="rhoai-e2e-smoke-test",
         )
-        ok, _ = pipelinerun_delete_candidate(item, app="testops-playpen", run_owner="alice")
+        ok, _ = pipelinerun_delete_candidate(item, app=DEFAULT_APP, run_owner="alice")
         self.assertFalse(ok)
 
     def test_smoke_gate_name_is_not_legacy_smoke_pipeline(self) -> None:
-        from suite.constants import rhoai_e2e_smoke_only_pipelinerun
+        from suite.constants import rhoai_e2e_smoke_only_pipelinerun, DEFAULT_APP, DEFAULT_NAMESPACE
 
         self.assertTrue(rhoai_e2e_smoke_only_pipelinerun("olminstall-smoke-nmanos-abc12"))
         self.assertTrue(rhoai_e2e_smoke_only_pipelinerun("odh-olminstall-smoke-testops-abc12"))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import os
 import unittest
 from unittest import mock
@@ -87,7 +88,7 @@ class WaitForConformaGateTest(unittest.TestCase):
             note = gate._min_rhoai_skip_note(
                 product="rhoai",
                 snapshot_name="rhoai-fbc-fragment-ocp-421-20260714-164825-000",
-                namespace="rhoai-tenant",
+                namespace=DEFAULT_NAMESPACE,
             )
         self.assertIsNotNone(note)
         self.assertIn("2.25", note or "")
@@ -102,7 +103,7 @@ class WaitForConformaGateTest(unittest.TestCase):
             note = gate._min_rhoai_skip_note(
                 product="rhoai",
                 snapshot_name="rhoai-fbc-fragment-ocp-421-20260703-121508-000",
-                namespace="rhoai-tenant",
+                namespace=DEFAULT_NAMESPACE,
             )
         self.assertIsNone(note)
 
@@ -112,7 +113,7 @@ class WaitForConformaGateTest(unittest.TestCase):
             "MIN_RHOAI_VERSION": "3.5",
             "CONFORMA_GATE_PATH": "/tmp/conforma-gate",
             "TASK_MESSAGE_PATH": "/tmp/conforma-task-message",
-            "PIPELINE_NAMESPACE": "rhoai-tenant",
+            "PIPELINE_NAMESPACE": DEFAULT_NAMESPACE,
             "PRODUCT": "rhoai",
         },
         clear=False,

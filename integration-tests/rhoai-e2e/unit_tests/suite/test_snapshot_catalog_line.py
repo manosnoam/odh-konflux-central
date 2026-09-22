@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import unittest
 
 from suite.snapshot_catalog_line import (
@@ -146,14 +147,14 @@ class SnapshotCatalogLineTest(unittest.TestCase):
             resolve_catalog_version_for_naming(
                 fbc_image="quay.io/rhoai/rhoai-fbc-fragment@sha256:abc",
                 snapshot_json=json.dumps(snapshot),
-                resolved_app="testops-playpen",
+                resolved_app=DEFAULT_APP,
             ),
             "3.5-ea.2",
         )
         self.assertEqual(
             resolve_catalog_version_for_naming(
                 fbc_image="quay.io/rhoai/rhoai-fbc-fragment@sha256:abc",
-                resolved_app="testops-playpen",
+                resolved_app=DEFAULT_APP,
                 rhoai_version_param="rhoai-v3-5-ea-2 (default)",
             ),
             "3.5-ea.2",

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from suite.component_version_gate import _compare_version_strings
+from suite.constants import DEFAULT_UPSTREAM_KONFLUX_GIT
 from suite.errors import AppError
 
 _RHOAI_FBC_PREFIX = "rhoai-fbc-fragment-"
@@ -151,7 +152,7 @@ def build_auto_trigger_snapshot_yaml(
     fbc_component: str,
     fbc_image: str,
     generate_name: str = "rh-nightly-snap-",
-    git_url: str = "https://github.com/opendatahub-io/odh-konflux-central.git",
+    git_url: str = DEFAULT_UPSTREAM_KONFLUX_GIT,
     git_revision: str = "main",
 ) -> str:
     if not application.strip():

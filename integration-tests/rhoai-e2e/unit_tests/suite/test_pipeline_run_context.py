@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from suite.constants import TRIGGER_TYPE_MANUAL, TRIGGER_TYPE_RH_NIGHTLY_AUTO
+from suite.constants import DEFAULT_NAMESPACE, TRIGGER_TYPE_MANUAL, TRIGGER_TYPE_RH_NIGHTLY_AUTO
 from suite.pipeline_run_context import (
     TRIGGER_CONTEXT_RESULT_NAMES,
     build_pipeline_run_context_lines,
@@ -50,7 +50,7 @@ class PipelineRunContextTest(unittest.TestCase):
             test_gates="bvt,smoke",
             trigger_command=(
                 "python3 integration-tests/rhoai-e2e/rhoai_e2e.py "
-                "--enable-its rhoai-e2e-rh-nightly-pm-ocp420 --konflux-namespace rhoai-tenant"
+                f"--enable-its rhoai-e2e-rh-nightly-pm-ocp420 --konflux-namespace {DEFAULT_NAMESPACE}"
             ),
         )
         text = "\n".join(lines)

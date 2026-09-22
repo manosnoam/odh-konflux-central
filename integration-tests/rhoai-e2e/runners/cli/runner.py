@@ -220,7 +220,7 @@ class RhoaiE2ERunner(
         url = (getattr(self.args, "konflux_repo", "") or "").strip()
         rev = (getattr(self.args, "konflux_branch", "") or "").strip()
         if not url:
-            url = "https://github.com/opendatahub-io/odh-konflux-central.git"
+            url = DEFAULT_UPSTREAM_KONFLUX_GIT
         if not rev:
             rev = "main"
         return url, rev

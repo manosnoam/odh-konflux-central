@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -196,11 +197,11 @@ def ok_cases() -> list[OkCase]:
             id="run-its-scoped-smoke",
         ),
         OkCase(
-            ["--enable-its", "rhoai-e2e-rh-nightly-pm-ocp420", "--konflux-app", "testops-playpen"],
+            ["--enable-its", "rhoai-e2e-rh-nightly-pm-ocp420", "--konflux-app", DEFAULT_APP],
             check=lambda a: _checks(
                 a.enable_its == "rhoai-e2e-rh-nightly-pm-ocp420",
                 a.konflux_app_explicit,
-                a.app == "testops-playpen",
+                a.app == DEFAULT_APP,
             ),
             id="enable-its-rh-nightly-playpen-debug",
         ),
@@ -287,9 +288,9 @@ def ok_cases() -> list[OkCase]:
                 "--rhoai-channel",
                 "stable-3.x",
                 "--konflux-namespace",
-                "rhoai-tenant",
+                DEFAULT_NAMESPACE,
                 "--konflux-app",
-                "testops-playpen",
+                DEFAULT_APP,
                 "--image",
                 "quay.io/rhoai/f@sha256:abc",
                 "--konflux-repo",
@@ -305,20 +306,20 @@ def ok_cases() -> list[OkCase]:
                 "--ocp-version",
                 "4.19",
             ],
-            check=lambda a: _checks(a.product == "rhoai", a.version == "3.4", a.channel == "stable-3.x", a.namespace == "rhoai-tenant", a.app == "testops-playpen", a.ocp_version == "4.19", not a.watch_mode, a.konflux_repo.endswith(".git"), a.konflux_branch == "branch"),
+            check=lambda a: _checks(a.product == "rhoai", a.version == "3.4", a.channel == "stable-3.x", a.namespace == DEFAULT_NAMESPACE, a.app == DEFAULT_APP, a.ocp_version == "4.19", not a.watch_mode, a.konflux_repo.endswith(".git"), a.konflux_branch == "branch"),
             id="full-trigger",
         ),
         OkCase(
             [
                 "-w",
                 "--konflux-namespace",
-                "rhoai-tenant",
+                DEFAULT_NAMESPACE,
                 "--konflux-app",
-                "testops-playpen",
+                DEFAULT_APP,
                 "--ka-host",
                 "https://ka.example.com",
             ],
-            check=lambda a: _checks(a.watch_mode, a.namespace == "rhoai-tenant", a.app == "testops-playpen"),
+            check=lambda a: _checks(a.watch_mode, a.namespace == DEFAULT_NAMESPACE, a.app == DEFAULT_APP),
             id="watch-with-namespace",
         ),
     ]

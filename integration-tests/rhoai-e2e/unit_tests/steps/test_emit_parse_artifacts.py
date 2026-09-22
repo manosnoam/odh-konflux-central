@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import os
 import tempfile
 import unittest
@@ -32,7 +33,7 @@ class EmitParseArtifactsTest(unittest.TestCase):
             "--cleanup true --product rhoai --rhoai-version 3.5 "
             "--image quay.io/rhoai/rhoai-fbc-fragment@sha256:a708c3f7a0ed3d901a5b75032cfb359334cc57066311603cf06e842e4848f9f4 "
             "--tests bvt,smoke --konflux-repo https://github.com/manosnoam/odh-konflux-central.git "
-            "--konflux-branch fix/ephc-lease-resilience --konflux-namespace rhoai-tenant --konflux-app testops-playpen"
+            f"--konflux-branch fix/ephc-lease-resilience --konflux-namespace {DEFAULT_NAMESPACE} --konflux-app {DEFAULT_APP}"
         )
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

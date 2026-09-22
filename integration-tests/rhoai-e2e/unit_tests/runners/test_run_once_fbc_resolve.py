@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import tempfile
 import unittest
 from pathlib import Path
@@ -392,6 +393,49 @@ class ResolveRhoaiFbcVersionStreamTest(unittest.TestCase):
                 runner.resolve_image(odh_overrides=False)
         self.assertIn("No FBCF snapshot found", str(ctx.exception))
         self.assertNotIn("rhoai-fbc-fragment-ocp-421", str(ctx.exception))
+
+
+class FbcDigestSnapshotMetaTest(unittest.TestCase):
+    _DIGEST = "sha256:30114f01deadbeef30114f01deadbeef30114f01deadbeef30114f01deadbeef"
+    _IMAGE = f"quay.io/rhoai/rhoai-fbc-fragment@{_DIGEST}"
+    _META = {
+        "labels": {
+            "pac.test.appstudio.openshift.io/original-prname": (
+                "rhoai-fbc-fragment-rhoai-35-ea2-ocp-421-on-push"
+            ),
+        },
+        "annotations": {
+            "pac.test.appstudio.openshift.io/sha-title": "Patching the stage catalog with rhoai-3.5-ea.2",
+        },
+    }
+
+    def _runner(self) -> RhoaiE2ERunner:
+        parser = make_parser()
+        args = parse_cli_args(parser, ["--product", "rhoai", "--tests", "smoke"])
+        runner = RhoaiE2ERunner(args)
+        runner.image = self._IMAGE
+        runner.resolved_app = DEFAULT_APP
+        return runner
+
+    def test_ensure_fbc_snapshot_meta_from_digest(self) -> None:
+        runner = self._runner()
+        with patch.object(
+            runner,
+            "get_applications",
+            return_value=["rhoai-v3-5-ea-2", DEFAULT_APP],
+        ), patch.object(
+            runner,
+            "find_snapshot_by_image_digest",
+            return_value=("2026-01-01T00:00:00Z", self._IMAGE, self._META),
+        ):
+            runner._ensure_fbc_snapshot_meta_for_image()
+        self.assertEqual(runner._fbc_source_snapshot_meta, self._META)
+        self.assertEqual(runner.resolved_app, "rhoai-v3-5-ea-2")
+
+    def test_catalog_version_for_naming_uses_digest_snapshot_meta(self) -> None:
+        runner = self._runner()
+        runner._fbc_source_snapshot_meta = self._META
+        self.assertEqual(runner._catalog_version_for_naming(False), "3.5-ea.2")
 
 
 class RunItsPostTriggerWatchTest(unittest.TestCase):

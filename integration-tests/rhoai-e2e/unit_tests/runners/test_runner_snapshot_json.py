@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import json
 import unittest
 
@@ -20,7 +21,7 @@ class BuildSnapshotJsonTest(unittest.TestCase):
         comp = spec["components"][0]
         self.assertNotIn("containerImage", comp)
         self.assertIn("source", comp)
-        self.assertEqual(spec["application"], "testops-playpen")
+        self.assertEqual(spec["application"], DEFAULT_APP)
 
     def test_existing_with_image_includes_container_image(self) -> None:
         pullspec = "quay.io/rhoai/rhoai-fbc-fragment@sha256:deadbeef"

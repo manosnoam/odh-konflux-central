@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import json
 from pathlib import Path
 from unittest import mock
@@ -48,7 +49,7 @@ def test_load_external_cluster_credentials_ok() -> None:
     with mock.patch("k8s.external_credentials.run_cmd") as run_cmd:
         run_cmd.return_value.returncode = 0
         run_cmd.return_value.stdout = json.dumps(payload)
-        creds = load_external_cluster_credentials(namespace="rhoai-tenant", secret_name="rhoai-e2e-external-x-credentials")
+        creds = load_external_cluster_credentials(namespace=DEFAULT_NAMESPACE, secret_name="rhoai-e2e-external-x-credentials")
     assert creds is not None
     assert creds.username == "dev"
     assert creds.password == "secret"
@@ -184,7 +185,7 @@ def test_update_external_kubeconfig_secret_applies(tmp_path: Path) -> None:
     with mock.patch("k8s.external_credentials.run_cmd", side_effect=[create, apply]) as run_cmd:
         with mock.patch.dict("os.environ", {"KUBECONFIG": "/credentials/kubeconfig"}, clear=False):
             update_external_kubeconfig_secret(
-                namespace="rhoai-tenant",
+                namespace=DEFAULT_NAMESPACE,
                 secret_name="rhoai-e2e-kubeconfig-rh-nightly-pm",
                 kubeconfig_path=str(kubeconfig),
             )
@@ -202,7 +203,7 @@ def test_update_external_kubeconfig_secret_apply_failure(tmp_path: Path) -> None
     with mock.patch("k8s.external_credentials.run_cmd", side_effect=[create, apply]):
         with pytest.raises(AppError, match="Failed to update external kubeconfig Secret"):
             update_external_kubeconfig_secret(
-                namespace="rhoai-tenant",
+                namespace=DEFAULT_NAMESPACE,
                 secret_name="rhoai-e2e-kubeconfig-rh-nightly-pm",
                 kubeconfig_path=str(kubeconfig),
             )
