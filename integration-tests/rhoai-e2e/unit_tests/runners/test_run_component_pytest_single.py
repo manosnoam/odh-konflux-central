@@ -90,15 +90,17 @@ def test_external_existing_pytest_extra_args_skip_rhoai_cluster_sanity() -> None
         )
 
 
-def test_needs_schedulable_nodes_wait_ephc_only() -> None:
+def test_needs_schedulable_nodes_wait_ephc_and_external() -> None:
     with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": "EPHC"}, clear=False):
         assert run_component_pytest._needs_schedulable_nodes_wait() is True
-    with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": "my-secret"}, clear=False):
+    with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": "rh-nightly-pm"}, clear=False):
+        assert run_component_pytest._needs_schedulable_nodes_wait() is True
+    with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": ""}, clear=False):
         assert run_component_pytest._needs_schedulable_nodes_wait() is False
 
 
-def test_wait_for_schedulable_nodes_before_component_pytest_skips_non_ephc() -> None:
-    with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": "my-secret"}, clear=False):
+def test_wait_for_schedulable_nodes_before_component_pytest_skips_without_cluster_source() -> None:
+    with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": ""}, clear=False):
         assert run_component_pytest._wait_for_schedulable_nodes_before_component_pytest() == ""
 
 

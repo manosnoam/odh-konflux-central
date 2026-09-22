@@ -69,7 +69,6 @@ spec:
 
     - name: pytest-bvt-gates
       displayName: Run BVT on external cluster
-      onError: continue
       when:
         - input: "$(params.CLUSTER_SOURCE)"
           operator: notin
@@ -98,7 +97,6 @@ spec:
 
     - name: pytest-bvt-gates-ephc
       displayName: Run BVT on EPHC cluster
-      onError: continue
       when:
         - input: "$(params.CLUSTER_SOURCE)"
           operator: in

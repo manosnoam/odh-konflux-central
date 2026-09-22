@@ -95,6 +95,18 @@ class VerifyOperatorReadyTest(unittest.TestCase):
                 self.assertEqual(verify_operator_ready.main(), 0)
                 verify_mock.assert_not_called()
 
+    @mock.patch(
+        "runners.verify_operator_ready._operator_workload_image_pull_errors",
+        return_value="redhat-ods-applications/rhods-dashboard-abc: Pod rhods-dashboard: ImagePullBackOff",
+    )
+    def test_fails_when_operator_workload_image_pull_blocked(self, _pull: mock.MagicMock) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {"KUBECONFIG": "/tmp/kc", "PRODUCT": "rhoai"},
+            clear=False,
+        ):
+            self.assertEqual(verify_operator_ready.main(), 1)
+
     @mock.patch("runners.verify_operator_ready._dsc_crd_available", return_value=False)
     @mock.patch("runners.verify_operator_ready.verify_dashboard_route_for_prepare", return_value="https://dash.example")
     def test_skips_when_no_dsc_crd_and_not_dashboard_cypress(

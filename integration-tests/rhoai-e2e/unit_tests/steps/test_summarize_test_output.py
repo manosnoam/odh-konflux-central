@@ -11,6 +11,7 @@ from pathlib import Path
 from unit_tests._paths import RHOAI_E2E_ROOT
 from unittest.mock import patch
 
+from steps.check_test_output_gate import check_test_output_json
 from steps.summarize_test_output import build_test_output_payload
 
 class EmitComponentTestOutputTest(unittest.TestCase):
@@ -432,6 +433,50 @@ class EmitComponentTestOutputTest(unittest.TestCase):
             self.assertEqual(payload["successes"], 1)
             self.assertEqual(payload["skipped"], 1)
             self.assertIn("50%", note)
+
+    def test_bvt_cluster_precheck_failure_fails_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "cluster-health.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="cluster" tests="1" failures="1" errors="0" skipped="0">
+  <testcase classname="a" name="cluster_nodes_precheck_failed"><failure message="node-a"/></testcase>
+</testsuite>
+""",
+                encoding="utf-8",
+            )
+            payload, _note = build_test_output_payload(root, note_prefix="BVT")
+            self.assertEqual(payload["result"], "FAILURE")
+            self.assertEqual(payload["successes"], 0)
+            self.assertEqual(payload["failures"], 1)
+            ec, _msg = check_test_output_json(payload, gate_label="BVT", strict=True)
+            self.assertEqual(ec, 1)
+
+    def test_bvt_operator_precheck_failure_fails_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "cluster-health.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="cluster" tests="1" failures="0" errors="0" skipped="0">
+  <testcase classname="a" name="t1"/>
+</testsuite>
+""",
+                encoding="utf-8",
+            )
+            (root / "operator-health.xml").write_text(
+                """<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="operator" tests="1" failures="1" errors="0" skipped="0">
+  <testcase classname="a" name="dsc_ready_precheck_failed"><failure message="DSC not Ready"/></testcase>
+</testsuite>
+""",
+                encoding="utf-8",
+            )
+            payload, _note = build_test_output_payload(root, note_prefix="BVT")
+            self.assertEqual(payload["result"], "WARNING")
+            self.assertEqual(payload["successes"], 1)
+            self.assertEqual(payload["failures"], 1)
+            ec, _msg = check_test_output_json(payload, gate_label="BVT", strict=True)
+            self.assertEqual(ec, 1)
 
     def test_component_aggregate_excludes_bvt_and_allows_tier_skips(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

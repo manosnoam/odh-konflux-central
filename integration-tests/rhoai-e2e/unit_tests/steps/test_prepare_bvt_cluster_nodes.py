@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
+from steps import prepare_bvt_cluster_nodes as mod
 from steps.prepare_bvt_cluster_nodes import wait_for_schedulable_nodes_for_bvt
 
 
@@ -26,6 +29,20 @@ class WaitForSchedulableNodesForBvtTest(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "ip-10-0-1-167"):
                 wait_for_schedulable_nodes_for_bvt(timeout_sec=600, poll_sec=1)
+
+
+class PrepareBvtClusterNodesTest(unittest.TestCase):
+    @patch(
+        "steps.prepare_bvt_cluster_nodes.wait_for_schedulable_nodes_for_bvt",
+        side_effect=RuntimeError("cluster_health precheck timed out waiting for schedulable nodes (120s): node-a"),
+    )
+    def test_writes_cluster_health_junit_when_precheck_fails(self, _wait: object) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            junit = Path(tmp) / "cluster-health.xml"
+            with patch.dict("os.environ", {"ARTIFACTS_DIR": tmp}, clear=False):
+                self.assertEqual(mod.prepare_bvt_cluster_nodes(), 1)
+            self.assertTrue(junit.is_file())
+            self.assertIn("node-a", junit.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

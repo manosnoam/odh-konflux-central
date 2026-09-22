@@ -3,9 +3,26 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 import time
+from pathlib import Path
 
 from install.dsc_install import oc_run
+
+
+def _write_cluster_health_precheck_failure(message: str) -> None:
+    raw = os.environ.get("ARTIFACTS_DIR", "").strip()
+    if not raw:
+        return
+    from runners.component_junit import write_single_failure_junit
+
+    write_single_failure_junit(
+        {"id": "cluster-health", "artifact_prefix": "cluster-health"},
+        artifacts_dir=Path(raw),
+        testcase_name="cluster_nodes_precheck_failed",
+        message=message,
+    )
 
 
 def _unschedulable_node_names() -> list[str]:
@@ -59,14 +76,12 @@ def wait_for_schedulable_nodes_for_bvt(*, timeout_sec: int, poll_sec: int = 10) 
 
 def prepare_bvt_cluster_nodes() -> int:
     """Entry for BVT: wait for schedulable nodes before cluster_health pytest."""
-    import os
-    import sys
-
     from components.maas_billing.timeouts import bvt_cluster_nodes_timeout_sec
 
     try:
         wait_for_schedulable_nodes_for_bvt(timeout_sec=bvt_cluster_nodes_timeout_sec())
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr, flush=True)
+        _write_cluster_health_precheck_failure(str(exc))
         return 1
     return 0

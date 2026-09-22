@@ -115,8 +115,9 @@ def _needs_cluster_sanity_rhoai_skip() -> bool:
 
 
 def _needs_schedulable_nodes_wait() -> bool:
-    """EPHC guests can flip nodes unschedulable mid-smoke; re-check before each pytest."""
-    return is_ephemeral_hosted_cluster_source(os.environ.get("CLUSTER_SOURCE", "").strip())
+    """Re-check schedulable nodes before component pytest (EPHC guests and pooled externals)."""
+    source = os.environ.get("CLUSTER_SOURCE", "").strip()
+    return is_ephemeral_hosted_cluster_source(source) or is_external_cluster_source(source)
 
 
 def _wait_for_schedulable_nodes_before_component_pytest() -> str:

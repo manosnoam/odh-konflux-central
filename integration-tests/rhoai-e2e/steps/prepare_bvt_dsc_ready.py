@@ -4,6 +4,21 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
+
+
+def _write_operator_health_precheck_failure(message: str) -> None:
+    raw = os.environ.get("ARTIFACTS_DIR", "").strip()
+    if not raw:
+        return
+    from runners.component_junit import write_single_failure_junit
+
+    write_single_failure_junit(
+        {"id": "operator-health", "artifact_prefix": "operator-health"},
+        artifacts_dir=Path(raw),
+        testcase_name="dsc_ready_precheck_failed",
+        message=message,
+    )
 
 
 def prepare_bvt_dsc_ready() -> int:
@@ -34,6 +49,7 @@ def prepare_bvt_dsc_ready() -> int:
         wait_dashboard_pods_ready_for_bvt()
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr, flush=True)
+        _write_operator_health_precheck_failure(str(exc))
         return 1
     return 0
 

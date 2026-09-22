@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -80,6 +81,41 @@ def _publish_installed_operator_versions() -> str:
     return resolved
 
 
+def _operator_workload_image_pull_errors() -> str | None:
+    """Fail fast when core operator/apps pods cannot pull images."""
+    if is_test_only_product(os.environ.get("PRODUCT", "")) or not _dsc_crd_available():
+        return None
+    from k8s.oc_util import oc_run
+    from runners.cli.runner_support import _pod_container_waiting_lines
+
+    namespaces = [
+        os.environ.get("OPERATOR_NAMESPACE", "redhat-ods-operator").strip(),
+        os.environ.get("APPLICATIONS_NAMESPACE", "redhat-ods-applications").strip(),
+    ]
+    pull_tokens = ("ImagePullBackOff", "ErrImagePull", "InvalidImageName")
+    for ns in dict.fromkeys(name for name in namespaces if name):
+        proc = oc_run(
+            ["get", "pods", "-n", ns, "-o", "json"],
+            check=False,
+            capture_output=True,
+            timeout=60,
+        )
+        if proc.returncode != 0:
+            continue
+        try:
+            data = json.loads(proc.stdout or "{}")
+        except json.JSONDecodeError:
+            continue
+        for item in data.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            pod_name = str((item.get("metadata") or {}).get("name") or "?")
+            for line in _pod_container_waiting_lines(item):
+                if any(token in line for token in pull_tokens):
+                    return f"{ns}/{pod_name}: {line}"
+    return None
+
+
 def _artifacts_dir() -> Path | None:
     tests_shared = os.environ.get("TESTS_SHARED", "").strip()
     if tests_shared:
@@ -101,6 +137,10 @@ def main() -> int:
         return 0
     if not os.environ.get("KUBECONFIG", "").strip():
         print("ERROR: KUBECONFIG is required", file=sys.stderr)
+        return 1
+    pull_err = _operator_workload_image_pull_errors()
+    if pull_err:
+        print(f"ERROR: operator workload image pull blocked: {pull_err}", file=sys.stderr)
         return 1
     _publish_installed_operator_versions()
     try:
