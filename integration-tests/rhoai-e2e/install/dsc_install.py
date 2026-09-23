@@ -1354,6 +1354,106 @@ def _dsc_condition_status(cond_type: str) -> str:
     return (r.stdout or "").strip()
 
 
+_RHODS_DASHBOARD_DEPLOY = "rhods-dashboard"
+_RHODS_DASHBOARD_NS = "redhat-ods-applications"
+_rhods_dashboard_scale_down_attempted = False
+
+
+def _maybe_scale_rhods_dashboard_for_cpu_pressure() -> None:
+    """Scale HA dashboard to one replica when pods stay unschedulable (small dev clusters)."""
+    global _rhods_dashboard_scale_down_attempted
+    if _rhods_dashboard_scale_down_attempted:
+        return
+    if os.environ.get("RHOAI_E2E_SKIP_DASHBOARD_SCALE_DOWN", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return
+    spec = oc_run(
+        [
+            "get",
+            "deployment",
+            _RHODS_DASHBOARD_DEPLOY,
+            "-n",
+            _RHODS_DASHBOARD_NS,
+            "-o",
+            "jsonpath={.spec.replicas}{' '}{.status.readyReplicas}{' '}{.status.unavailableReplicas}",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if spec.returncode != 0:
+        return
+    parts = (spec.stdout or "").strip().split()
+    if len(parts) < 3:
+        return
+    try:
+        desired = int(parts[0] or "0")
+        ready = int(parts[1] or "0")
+        unavailable = int(parts[2] or "0")
+    except ValueError:
+        return
+    if desired <= 1 or ready > 0 or unavailable < 1:
+        return
+    pending = oc_run(
+        [
+            "get",
+            "pods",
+            "-n",
+            _RHODS_DASHBOARD_NS,
+            "--field-selector=status.phase=Pending",
+            "-o",
+            "json",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if pending.returncode != 0:
+        return
+    try:
+        pod_list = json.loads(pending.stdout or "{}").get("items") or []
+    except json.JSONDecodeError:
+        return
+    dashboard_pending = [
+        p
+        for p in pod_list
+        if _RHODS_DASHBOARD_DEPLOY in (p.get("metadata") or {}).get("name", "")
+    ]
+    if not dashboard_pending:
+        return
+    for pod in dashboard_pending:
+        for cond in (pod.get("status") or {}).get("conditions") or []:
+            if cond.get("type") == "PodScheduled" and cond.get("status") == "False":
+                msg = (cond.get("message") or "").lower()
+                if "insufficient cpu" in msg or "insufficient memory" in msg:
+                    scale = oc_run(
+                        [
+                            "scale",
+                            "deployment",
+                            _RHODS_DASHBOARD_DEPLOY,
+                            "-n",
+                            _RHODS_DASHBOARD_NS,
+                            "--replicas=1",
+                        ],
+                        check=False,
+                        capture_output=False,
+                        timeout=60,
+                    )
+                    if scale.returncode == 0:
+                        _rhods_dashboard_scale_down_attempted = True
+                        print(
+                            "Scaled rhods-dashboard to 1 replica while waiting for DSC "
+                            "(Pending: insufficient cluster CPU/memory)",
+                            flush=True,
+                        )
+                    return
+
+
 def wait_dsc_ready(timeout_s: int = 600) -> bool:
     """Poll until DataScienceCluster/default-dsc has Ready==True (and TrainerReady when selected)."""
     need_trainer = _trainer_selected_for_gate()
@@ -1391,6 +1491,8 @@ def wait_dsc_ready(timeout_s: int = 600) -> bool:
             f"  DSC Ready={ready or 'unknown'}{trainer_part} (iter {iteration})",
             flush=True,
         )
+        if iteration % 4 == 0:
+            _maybe_scale_rhods_dashboard_for_cpu_pressure()
         if iteration % 4 == 0:
             oc_run(
                 [
