@@ -54,6 +54,8 @@ LEAKED_COMPONENT_TEST_NS_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^test-vllm"),
     re.compile(r"^trainer-v2-test-[0-9]+$"),
     re.compile(r"^vllm-"),
+    # MaaS / model-registry smoke workspaces (pytest leaves empty NS on pooled clusters).
+    re.compile(r"^workspace[12]-[a-z0-9]+$"),
 )
 
 # Never bulk-delete operator/platform namespaces even if names look test-like.

@@ -1469,6 +1469,9 @@ def _maybe_scale_rhods_dashboard_for_cpu_pressure() -> None:
                 "(Pending: insufficient cluster CPU/memory)",
                 flush=True,
             )
+        from install.small_cluster_cpu_relief import relieve_cpu_for_dashboard_install
+
+        relieve_cpu_for_dashboard_install()
         return
 
 
@@ -1493,6 +1496,9 @@ def wait_dsc_ready(timeout_s: int = 600) -> bool:
         f"{' + TrainerReady' if need_trainer else ''} (up to {timeout_s}s)...",
         flush=True,
     )
+    from install.small_cluster_cpu_relief import maybe_small_cluster_install_prep
+
+    maybe_small_cluster_install_prep()
     deadline = time.time() + timeout_s
     iteration = 0
     _maybe_scale_rhods_dashboard_for_cpu_pressure()
@@ -1511,6 +1517,10 @@ def wait_dsc_ready(timeout_s: int = 600) -> bool:
             flush=True,
         )
         _maybe_scale_rhods_dashboard_for_cpu_pressure()
+        if iteration % 2 == 0:
+            from install.small_cluster_cpu_relief import relieve_cpu_for_dashboard_install
+
+            relieve_cpu_for_dashboard_install()
         if iteration % 4 == 0:
             oc_run(
                 [
