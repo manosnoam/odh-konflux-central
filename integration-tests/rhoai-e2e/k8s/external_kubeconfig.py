@@ -18,6 +18,7 @@ from suite.constants import (
     DEFAULT_CLUSTER_IDLE_POLL_SEC,
     DEFAULT_CLUSTER_IDLE_WAIT_SEC,
     LABEL_CLUSTER,
+    PENDING_REASONS,
 )
 from suite.errors import AppError
 from suite.pipelinerun_naming import is_rhoai_e2e_pipelinerun_name
@@ -955,6 +956,20 @@ def _pipelinerun_is_active(item: dict) -> bool:
     return True
 
 
+def _pipelinerun_holds_external_cluster(item: dict) -> bool:
+    """True when this run has started Tekton work and may use the shared external cluster."""
+    if not _pipelinerun_is_active(item):
+        return False
+    reason = _pipelinerun_succeeded_reason(item)
+    if reason in PENDING_REASONS:
+        return False
+    status = item.get("status") if isinstance(item.get("status"), dict) else {}
+    refs = status.get("childReferences")
+    if not (isinstance(refs, list) and refs):
+        return False
+    return True
+
+
 def _pipelinerun_normalized_field(item: dict, *, bucket: str, key: str) -> str:
     meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
     fields = meta.get(bucket) if isinstance(meta.get(bucket), dict) else {}
@@ -1089,7 +1104,7 @@ def list_active_pipelineruns_for_external_cluster(
             continue
         if name == exclude:
             continue
-        if not _pipelinerun_is_active(item):
+        if not _pipelinerun_holds_external_cluster(item):
             continue
         if not _pipelinerun_matches_external_cluster(
             item,

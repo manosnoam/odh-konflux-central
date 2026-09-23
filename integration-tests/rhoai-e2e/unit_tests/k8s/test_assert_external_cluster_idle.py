@@ -67,7 +67,10 @@ class AssertExternalClusterIdleTest(unittest.TestCase):
                         "labels": {"rhoai-e2e.cluster": "ods-qe-psi-07"},
                     },
                     "spec": {"params": [{"name": "CLUSTER_SOURCE", "value": "sec-a"}]},
-                    "status": {},
+                    "status": {
+                        "conditions": [{"type": "Succeeded", "status": "Unknown", "reason": "Running"}],
+                        "childReferences": [{"name": "tr-1", "kind": "TaskRun"}],
+                    },
                 },
                 {
                     "metadata": {"name": "rhoai-e2e-b"},
@@ -96,6 +99,51 @@ class AssertExternalClusterIdleTest(unittest.TestCase):
                 )
         self.assertEqual(active, ["e2e-a"])
 
+    def test_list_active_ignores_kueue_pending_without_taskruns(self) -> None:
+        """PipelineRunPending must not block external-cluster-ready on another PLR."""
+        payload = {
+            "items": [
+                {
+                    "metadata": {
+                        "name": "e2e-running",
+                        "labels": {"rhoai-e2e.cluster": "nmanos-konflux1"},
+                    },
+                    "spec": {"params": [{"name": "CLUSTER_SOURCE", "value": "sec-a"}]},
+                    "status": {
+                        "conditions": [{"type": "Succeeded", "status": "Unknown", "reason": "Running"}],
+                        "childReferences": [{"name": "tr-parse", "kind": "TaskRun"}],
+                    },
+                },
+                {
+                    "metadata": {
+                        "name": "e2e-kueue-pending",
+                        "labels": {"rhoai-e2e.cluster": "nmanos-konflux1"},
+                    },
+                    "spec": {"params": [{"name": "CLUSTER_SOURCE", "value": "sec-a"}]},
+                    "status": {
+                        "conditions": [
+                            {"type": "Succeeded", "status": "Unknown", "reason": "PipelineRunPending"},
+                        ],
+                    },
+                },
+            ]
+        }
+        with mock.patch(
+            "k8s.external_kubeconfig._list_rhoai_e2e_pipelinerun_items",
+            return_value=payload["items"],
+        ):
+            with mock.patch(
+                "k8s.external_kubeconfig.resolve_cluster_id_for_external_cluster",
+                return_value="nmanos-konflux1",
+            ):
+                active = list_active_pipelineruns_for_external_cluster(
+                    namespace=DEFAULT_NAMESPACE,
+                    cluster_source="rhoai-e2e-kubeconfig-nmanos-konflux1-nmanos",
+                    cluster_id="nmanos-konflux1",
+                    exclude_name="e2e-running",
+                )
+        self.assertEqual(active, [])
+
     def test_list_active_matches_cluster_lock_key(self) -> None:
         payload = {
             "items": [
@@ -107,7 +155,10 @@ class AssertExternalClusterIdleTest(unittest.TestCase):
                         },
                     },
                     "spec": {"params": [{"name": "CLUSTER_SOURCE", "value": "sec-a"}]},
-                    "status": {},
+                    "status": {
+                        "conditions": [{"type": "Succeeded", "status": "Unknown", "reason": "Running"}],
+                        "childReferences": [{"name": "tr-1", "kind": "TaskRun"}],
+                    },
                 },
             ]
         }
