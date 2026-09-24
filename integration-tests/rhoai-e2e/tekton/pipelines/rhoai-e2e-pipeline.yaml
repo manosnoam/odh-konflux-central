@@ -1536,7 +1536,7 @@ spec:
       description: >-
         Install Red Hat OpenShift AI from the FBC catalog image in the Konflux snapshot.
         Waits until the operator CSV reaches Succeeded.
-      timeout: 90m0s
+      timeout: 105m0s
       runAfter:
         - parse-pipeline-tests
         - stage-ephemeral-kubeconfig

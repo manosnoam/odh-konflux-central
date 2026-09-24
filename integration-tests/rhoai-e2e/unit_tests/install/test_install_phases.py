@@ -31,7 +31,7 @@ class OlmBundleUnpackTimeoutTest(unittest.TestCase):
         from install.install_phases import default_olm_bundle_unpack_timeout_sec
 
         with patch("install.install_phases.cluster_source_is_ephc", return_value=True):
-            self.assertEqual(default_olm_bundle_unpack_timeout_sec(), 3600)
+            self.assertEqual(default_olm_bundle_unpack_timeout_sec(), 80 * 60)
 
     def test_default_timeout_external(self) -> None:
         from install.install_phases import default_olm_bundle_unpack_timeout_sec

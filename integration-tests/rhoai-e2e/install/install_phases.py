@@ -29,27 +29,31 @@ from install.gateway_config import (
     wait_servicemesh_csv_succeeded,
 )
 
-_INSTALL_OPERATOR_SCRIPT_TIMEOUT_SEC = 2640  # Just under Tekton install-rhoai/odh 45m task limit
-_INSTALL_RHOAI_TASK_TIMEOUT_SEC = 45 * 60
+_INSTALL_OPERATOR_SCRIPT_TIMEOUT_SEC = 2640  # Headroom under install-rhoai Tekton task limit
+_INSTALL_RHOAI_TASK_TIMEOUT_SEC = 105 * 60  # rhoai-e2e-pipeline install-rhoai (EPHC 3.6 unpack)
 _INSTALL_PHASE_OVERHEAD_SEC = 120
+_INSTALL_POST_UNPACK_RESERVE_SEC = 25 * 60  # install-operator.sh + gateway after unpack
 _DEFAULT_OLM_BUNDLE_UNPACK_TIMEOUT_SEC = 1800
-_EPHC_OLM_BUNDLE_UNPACK_TIMEOUT_SEC = 3600
+_EPHC_OLM_BUNDLE_UNPACK_TIMEOUT_SEC = 80 * 60  # Heavy 3.6 FBC on cold HyperShift
 
 
 def default_olm_bundle_unpack_timeout_sec() -> int:
-    """Cap bundle-unpack wait so unpack + install-operator.sh fits install-rhoai (45m)."""
-    budget = (
-        _INSTALL_RHOAI_TASK_TIMEOUT_SEC
-        - _INSTALL_OPERATOR_SCRIPT_TIMEOUT_SEC
-        - _INSTALL_PHASE_OVERHEAD_SEC
-    )
+    """Cap bundle-unpack wait so unpack + post-unpack install fits install-rhoai."""
     ceiling = (
         _EPHC_OLM_BUNDLE_UNPACK_TIMEOUT_SEC
         if cluster_source_is_ephc()
         else _DEFAULT_OLM_BUNDLE_UNPACK_TIMEOUT_SEC
     )
-    # install-operator.sh timeout reserves post-unpack work; when that leaves no unpack
-    # budget (common on the 45m Tekton task), use the cluster ceiling — not the 300s floor.
+    if cluster_source_is_ephc():
+        return min(
+            ceiling,
+            max(300, _INSTALL_RHOAI_TASK_TIMEOUT_SEC - _INSTALL_POST_UNPACK_RESERVE_SEC),
+        )
+    budget = (
+        _INSTALL_RHOAI_TASK_TIMEOUT_SEC
+        - _INSTALL_OPERATOR_SCRIPT_TIMEOUT_SEC
+        - _INSTALL_PHASE_OVERHEAD_SEC
+    )
     if budget < 300:
         return ceiling
     return max(300, min(ceiling, budget))
@@ -268,9 +272,15 @@ def phase_operator_install_subscription(ctx: InstallContext) -> str:
         print(f"Subscription manifest: channel={ctx.update_channel} startingCSV={starting_csv}")
     else:
         print(f"Subscription manifest: channel={ctx.update_channel} (no startingCSV from PackageManifest)")
+    iav.patch_manifest_operatorgroup_bundle_unpack(manifest_path)
     print("Applying OLM subscription manifest (bundle unpack may take 30m+ on HyperShift)...", flush=True)
     iav.oc_run(["apply", "-f", str(manifest_path)], check=True, capture_output=True, timeout=120)
-    iav.ensure_operatorgroup_bundle_unpack_annotations(ctx.operator_namespace)
+    job_timeout = iav.default_bundle_unpack_job_timeout()
+    iav.ensure_operatorgroup_bundle_unpack_annotations(
+        ctx.operator_namespace,
+        unpack_timeout=job_timeout,
+        min_retry_interval=iav.default_bundle_unpack_min_retry_interval(),
+    )
     # Keep under the Tekton install-rhoai/odh 45m task limit (catalog + unpack + CSV).
     unpack_timeout = int(
         os.environ.get(

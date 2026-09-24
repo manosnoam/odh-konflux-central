@@ -41,11 +41,65 @@ RHOAI_IDMS_MIRROR = "quay.io/rhoai"
 # OLM OperatorGroup annotations (see operator-framework bundle_unpacker.go).
 _BUNDLE_UNPACK_TIMEOUT_ANN = "operatorframework.io/bundle-unpack-timeout"
 _BUNDLE_UNPACK_RETRY_ANN = "operatorframework.io/bundle-unpack-min-retry-interval"
-# Per-Job ActiveDeadlineSeconds via OperatorGroup annotation. Keep well under the
-# 45m install-rhoai/odh Tekton task so DeadlineExceeded can fire and recoveries run.
+# Per-Job ActiveDeadlineSeconds via OperatorGroup annotation (operator-framework).
 _DEFAULT_BUNDLE_UNPACK_JOB_TIMEOUT = "20m"
+_EPHC_BUNDLE_UNPACK_JOB_TIMEOUT = "45m"
 _MARKETPLACE_NS = "openshift-marketplace"
 RHOAI_IDMS_NAME = "rhoai-idms-mirror"
+
+
+def default_bundle_unpack_job_timeout() -> str:
+    explicit = os.environ.get("OLM_BUNDLE_UNPACK_JOB_TIMEOUT", "").strip()
+    if explicit:
+        return explicit
+    from install.gateway_config import cluster_source_is_ephc
+
+    if cluster_source_is_ephc():
+        return _EPHC_BUNDLE_UNPACK_JOB_TIMEOUT
+    return _DEFAULT_BUNDLE_UNPACK_JOB_TIMEOUT
+
+
+def default_bundle_unpack_min_retry_interval() -> str:
+    explicit = os.environ.get("OLM_BUNDLE_UNPACK_MIN_RETRY_INTERVAL", "").strip()
+    if explicit:
+        return explicit
+    from install.gateway_config import cluster_source_is_ephc
+
+    return "3m" if cluster_source_is_ephc() else "5m"
+
+
+def patch_manifest_operatorgroup_bundle_unpack(manifest_path: Path) -> None:
+    """Embed bundle-unpack OperatorGroup annotations before apply (first OLM job)."""
+    import yaml
+
+    text = manifest_path.read_text(encoding="utf-8")
+    docs = list(yaml.safe_load_all(text))
+    if not docs:
+        return
+    timeout = default_bundle_unpack_job_timeout()
+    min_retry = default_bundle_unpack_min_retry_interval()
+    changed = False
+    for doc in docs:
+        if not isinstance(doc, dict) or str(doc.get("kind") or "") != "OperatorGroup":
+            continue
+        md = doc.setdefault("metadata", {})
+        ann = dict(md.get("annotations") or {})
+        ann[_BUNDLE_UNPACK_TIMEOUT_ANN] = timeout
+        ann[_BUNDLE_UNPACK_RETRY_ANN] = min_retry
+        md["annotations"] = ann
+        changed = True
+    if not changed:
+        return
+    out = []
+    for doc in docs:
+        chunk = yaml.dump(doc, default_flow_style=False, sort_keys=False)
+        out.append(chunk)
+    manifest_path.write_text("---\n".join(out), encoding="utf-8")
+    print(
+        f"✓ OperatorGroup in {manifest_path.name}: "
+        f"{_BUNDLE_UNPACK_TIMEOUT_ANN}={timeout}, {_BUNDLE_UNPACK_RETRY_ANN}={min_retry}",
+        flush=True,
+    )
 
 
 def _catalog_version_fallback() -> str:
@@ -993,18 +1047,15 @@ def ensure_operatorgroup_bundle_unpack_annotations(
     operator_namespace: str,
     *,
     unpack_timeout: str | None = None,
-    min_retry_interval: str = "5m",
+    min_retry_interval: str | None = None,
 ) -> None:
     """Raise OLM unpack Job ActiveDeadlineSeconds via OperatorGroup annotations.
 
     Default OLM unpack Jobs use activeDeadlineSeconds=600. Large FBC bundles on
     HyperShift often exceed 10m and leave BundleUnpackFailed/DeadlineExceeded.
     """
-    timeout = (
-        unpack_timeout
-        or os.environ.get("OLM_BUNDLE_UNPACK_JOB_TIMEOUT", "").strip()
-        or _DEFAULT_BUNDLE_UNPACK_JOB_TIMEOUT
-    )
+    timeout = unpack_timeout or default_bundle_unpack_job_timeout()
+    min_retry_interval = min_retry_interval or default_bundle_unpack_min_retry_interval()
     r = oc_run(
         ["get", "operatorgroup", "-n", operator_namespace, "-o", "json"],
         capture_output=True,

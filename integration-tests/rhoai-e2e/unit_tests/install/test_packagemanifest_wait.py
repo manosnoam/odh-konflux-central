@@ -323,3 +323,32 @@ class IdmsMirrorTest(unittest.TestCase):
             iav.ensure_rhoai_idms_mirror()
         self.assertTrue(any(c[:2] == ["patch", "imagedigestmirrorset"] for c in calls))
 
+
+class BundleUnpackEphcDefaultsTest(unittest.TestCase):
+    def test_ephc_job_timeout_default(self) -> None:
+        with patch("install.gateway_config.cluster_source_is_ephc", return_value=True):
+            self.assertEqual(iav.default_bundle_unpack_job_timeout(), "45m")
+
+    def test_external_job_timeout_default(self) -> None:
+        with patch("install.gateway_config.cluster_source_is_ephc", return_value=False):
+            self.assertEqual(iav.default_bundle_unpack_job_timeout(), "20m")
+
+    def test_patch_manifest_operatorgroup_annotations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = Path(tmp) / "install.yaml"
+            manifest.write_text(
+                "apiVersion: operators.coreos.com/v1\n"
+                "kind: OperatorGroup\n"
+                "metadata:\n"
+                "  name: rhods-operator-group\n"
+                "spec:\n"
+                "  targetNamespaces:\n"
+                "  - redhat-ods-operator\n",
+                encoding="utf-8",
+            )
+            with patch("install.gateway_config.cluster_source_is_ephc", return_value=True):
+                iav.patch_manifest_operatorgroup_bundle_unpack(manifest)
+            text = manifest.read_text(encoding="utf-8")
+            self.assertIn("operatorframework.io/bundle-unpack-timeout: 45m", text)
+            self.assertIn("operatorframework.io/bundle-unpack-min-retry-interval: 3m", text)
+
