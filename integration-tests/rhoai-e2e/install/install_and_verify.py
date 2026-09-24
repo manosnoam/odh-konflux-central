@@ -69,32 +69,55 @@ def default_bundle_unpack_min_retry_interval() -> str:
 
 
 def patch_manifest_operatorgroup_bundle_unpack(manifest_path: Path) -> None:
-    """Embed bundle-unpack OperatorGroup annotations before apply (first OLM job)."""
-    import yaml
+    """Embed bundle-unpack OperatorGroup annotations before apply (first OLM job).
 
+    Tekton install-rhoai image has no PyYAML; patch manifest text in place.
+    """
     text = manifest_path.read_text(encoding="utf-8")
-    docs = list(yaml.safe_load_all(text))
-    if not docs:
+    if not re.search(r"^kind:\s*OperatorGroup\s*$", text, re.MULTILINE):
         return
     timeout = default_bundle_unpack_job_timeout()
     min_retry = default_bundle_unpack_min_retry_interval()
-    changed = False
-    for doc in docs:
-        if not isinstance(doc, dict) or str(doc.get("kind") or "") != "OperatorGroup":
-            continue
-        md = doc.setdefault("metadata", {})
-        ann = dict(md.get("annotations") or {})
-        ann[_BUNDLE_UNPACK_TIMEOUT_ANN] = timeout
-        ann[_BUNDLE_UNPACK_RETRY_ANN] = min_retry
-        md["annotations"] = ann
-        changed = True
-    if not changed:
+    ann_block = (
+        "  annotations:\n"
+        f"    {_BUNDLE_UNPACK_TIMEOUT_ANN}: \"{timeout}\"\n"
+        f"    {_BUNDLE_UNPACK_RETRY_ANN}: \"{min_retry}\"\n"
+    )
+
+    def _patch_doc(block: str) -> str:
+        if not re.search(r"^kind:\s*OperatorGroup\s*$", block, re.MULTILINE):
+            return block
+        if re.search(rf"^\s*{_BUNDLE_UNPACK_TIMEOUT_ANN}:", block, re.MULTILINE):
+            block = re.sub(
+                rf"^(\s*{_BUNDLE_UNPACK_TIMEOUT_ANN}:)\s*.*$",
+                rf'\1 "{timeout}"',
+                block,
+                count=1,
+                flags=re.MULTILINE,
+            )
+            block = re.sub(
+                rf"^(\s*{_BUNDLE_UNPACK_RETRY_ANN}:)\s*.*$",
+                rf'\1 "{min_retry}"',
+                block,
+                count=1,
+                flags=re.MULTILINE,
+            )
+            return block
+        if re.search(r"^metadata:\s*$", block, re.MULTILINE):
+            return re.sub(
+                r"(^metadata:\s*\n)",
+                lambda m: m.group(1) + ann_block,
+                block,
+                count=1,
+                flags=re.MULTILINE,
+            )
+        return block
+
+    parts = re.split(r"(?=^apiVersion:)", text, flags=re.MULTILINE)
+    patched = "".join(_patch_doc(part) for part in parts if part)
+    if patched == text:
         return
-    out = []
-    for doc in docs:
-        chunk = yaml.dump(doc, default_flow_style=False, sort_keys=False)
-        out.append(chunk)
-    manifest_path.write_text("---\n".join(out), encoding="utf-8")
+    manifest_path.write_text(patched, encoding="utf-8")
     print(
         f"✓ OperatorGroup in {manifest_path.name}: "
         f"{_BUNDLE_UNPACK_TIMEOUT_ANN}={timeout}, {_BUNDLE_UNPACK_RETRY_ANN}={min_retry}",

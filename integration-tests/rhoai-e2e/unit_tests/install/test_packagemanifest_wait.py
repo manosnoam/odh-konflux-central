@@ -349,6 +349,6 @@ class BundleUnpackEphcDefaultsTest(unittest.TestCase):
             with patch("install.gateway_config.cluster_source_is_ephc", return_value=True):
                 iav.patch_manifest_operatorgroup_bundle_unpack(manifest)
             text = manifest.read_text(encoding="utf-8")
-            self.assertIn("operatorframework.io/bundle-unpack-timeout: 45m", text)
-            self.assertIn("operatorframework.io/bundle-unpack-min-retry-interval: 3m", text)
+            self.assertIn('operatorframework.io/bundle-unpack-timeout: "45m"', text)
+            self.assertIn('operatorframework.io/bundle-unpack-min-retry-interval: "3m"', text)
 
