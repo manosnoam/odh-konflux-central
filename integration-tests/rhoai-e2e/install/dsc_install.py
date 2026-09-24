@@ -610,6 +610,7 @@ def _webhook_retryable_patch_error(err: str) -> bool:
     return (
         "no endpoints available for service" in err_lower
         or "failed calling webhook" in err_lower
+        or "http response to https" in err_lower
     )
 
 
@@ -646,6 +647,50 @@ def _patch_dsc_merge_with_webhook_retry(
         )
     raise RuntimeError(
         f"Could not patch DataScienceCluster/default-dsc {label} after {timeout_sec}s: "
+        f"{last_err or 'admission webhook unavailable'}"
+    )
+
+
+def _patch_dsci_merge_with_webhook_retry(
+    patch_doc: str,
+    *,
+    label: str,
+    timeout_sec: int = 300,
+) -> None:
+    """Merge-patch default-dsci, retrying when the operator admission webhook is unavailable."""
+    deadline = time.time() + timeout_sec
+    last_err = ""
+    while time.time() < deadline:
+        r = oc_run(
+            ["patch", "dscinitialization", "default-dsci", "--type=merge", "-p", patch_doc],
+            check=False,
+            capture_output=True,
+            timeout=60,
+        )
+        if r.returncode == 0:
+            print(f"✓ Patched DSCInitialization/default-dsci {label}", flush=True)
+            return
+        last_err = (r.stderr or r.stdout or "").strip()
+        if "unknown field" in (last_err or "").lower():
+            print(
+                f"WARN: DSCI {label} not on this cluster version; skipping ({last_err})",
+                file=sys.stderr,
+                flush=True,
+            )
+            return
+        if _webhook_retryable_patch_error(last_err):
+            print(
+                f"Waiting for admission webhook before patch default-dsci {label}...",
+                flush=True,
+            )
+            time.sleep(10)
+            continue
+        raise RuntimeError(
+            f"Could not patch DSCInitialization/default-dsci {label}: "
+            f"{last_err or 'unknown error'}"
+        )
+    raise RuntimeError(
+        f"Could not patch DSCInitialization/default-dsci {label} after {timeout_sec}s: "
         f"{last_err or 'admission webhook unavailable'}"
     )
 
@@ -1117,39 +1162,21 @@ def ensure_dashboard_gateway_prereqs(*, for_gateway_stack: bool = False) -> None
     """Ensure DSCI serviceMesh and DSC dashboard are Managed for dashboard gateway routes."""
     if not _dashboard_gateway_prereqs_needed(for_gateway_stack=for_gateway_stack):
         return
+    wait_operator_admission_webhook(
+        timeout_sec=int(os.environ.get("VERIFY_OPERATOR_WEBHOOK_WAIT_SEC", "300"))
+    )
     if _cr_exists("dscinitialization", "default-dsci"):
         patch_doc = json.dumps({"spec": {"serviceMesh": {"managementState": "Managed"}}})
-        r = oc_run(
-            ["patch", "dscinitialization", "default-dsci", "--type=merge", "-p", patch_doc],
-            check=False,
-            capture_output=True,
-            timeout=60,
+        _patch_dsci_merge_with_webhook_retry(
+            patch_doc,
+            label="serviceMesh=Managed for dashboard gateway",
         )
-        if r.returncode == 0:
-            print("✓ DSCInitialization/default-dsci serviceMesh=Managed for dashboard gateway", flush=True)
-        else:
-            err = (r.stderr or r.stdout or "").strip()
-            if "unknown field" in err.lower():
-                print(
-                    f"WARN: DSCI serviceMesh not on this cluster version; skipping ({err})",
-                    file=sys.stderr,
-                    flush=True,
-                )
-            else:
-                fail(f"Could not patch DSCI serviceMesh=Managed for dashboard gateway: {err or 'unknown error'}")
     if _cr_exists("datasciencecluster", "default-dsc"):
         patch_doc = json.dumps({"spec": {"components": {"dashboard": {"managementState": "Managed"}}}})
-        r = oc_run(
-            ["patch", "datasciencecluster", "default-dsc", "--type=merge", "-p", patch_doc],
-            check=False,
-            capture_output=True,
-            timeout=60,
+        _patch_dsc_merge_with_webhook_retry(
+            patch_doc,
+            label="dashboard=Managed for verify-operator",
         )
-        if r.returncode == 0:
-            print("✓ DataScienceCluster/default-dsc dashboard=Managed for verify-operator", flush=True)
-        else:
-            err = (r.stderr or r.stdout or "").strip()
-            fail(f"Could not patch DSC dashboard=Managed for verify-operator: {err or 'unknown error'}")
 
 
 def _ensure_smoke_servicemesh() -> None:

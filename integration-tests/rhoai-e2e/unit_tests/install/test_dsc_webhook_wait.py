@@ -56,3 +56,31 @@ class DscWebhookWaitTest(unittest.TestCase):
             )
         self.assertEqual(oc_mock.call_count, 2)
 
+    def test_patch_dsc_merge_retries_on_http_https_webhook_mismatch(self) -> None:
+        responses = [
+            type(
+                "R",
+                (),
+                {
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": (
+                        "Internal error occurred: failed calling webhook "
+                        '"datasciencecluster-v2-validator.opendatahub.io": '
+                        "http: server gave HTTP response to HTTPS client"
+                    ),
+                },
+            )(),
+            type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})(),
+        ]
+        with (
+            mock.patch.object(dsc_install, "oc_run", side_effect=responses) as oc_mock,
+            mock.patch.object(dsc_install.time, "sleep"),
+        ):
+            dsc_install._patch_dsc_merge_with_webhook_retry(
+                '{"spec":{"components":{"dashboard":{"managementState":"Managed"}}}}',
+                label="dashboard=Managed",
+                timeout_sec=60,
+            )
+        self.assertEqual(oc_mock.call_count, 2)
+
