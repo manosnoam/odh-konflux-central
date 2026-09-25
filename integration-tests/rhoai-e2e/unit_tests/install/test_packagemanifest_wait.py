@@ -280,6 +280,19 @@ class PackagemanifestWaitTest(unittest.TestCase):
                             )
                             recover.assert_called_once()
 
+    def test_subscription_status_last_updated_parses_json(self) -> None:
+        doc = {"status": {"lastUpdated": "2026-09-25T05:30:45Z"}}
+        with patch.object(
+            iav,
+            "oc_run",
+            return_value=type("R", (), {"returncode": 0, "stdout": json.dumps(doc)})(),
+        ):
+            self.assertEqual(
+                iav._subscription_status_last_updated("rhods-operator", "redhat-ods-operator"),
+                "2026-09-25T05:30:45Z",
+            )
+
+
 class IdmsMirrorTest(unittest.TestCase):
     def test_idms_has_rhoai_mirror(self) -> None:
         self.assertTrue(

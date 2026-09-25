@@ -899,6 +899,30 @@ def _max_bundle_unpack_recoveries() -> int:
         return 3
 
 
+def _bundle_unpack_stall_sec() -> int:
+    try:
+        return int(os.environ.get("OLM_BUNDLE_UNPACK_STALL_SEC", "900"))
+    except ValueError:
+        return 900
+
+
+def _subscription_status_last_updated(operator_name: str, operator_namespace: str) -> str | None:
+    r = oc_run(
+        ["get", "subscription", operator_name, "-n", operator_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if r.returncode != 0:
+        return None
+    try:
+        last = json.loads(r.stdout or "{}").get("status", {}).get("lastUpdated")
+    except json.JSONDecodeError:
+        return None
+    text = str(last or "").strip()
+    return text or None
+
+
 def wait_for_succeeded_csv_version(
     namespace: str,
     olminstall_operator: str,
@@ -1449,7 +1473,27 @@ def wait_subscription_bundle_unpacked(
         f"(FBC catalogs can have 100+ related images on HyperShift)..."
     )
     iteration = 0
+    stall_sec = _bundle_unpack_stall_sec()
+    last_updated_seen: str | None = None
+    stall_since: float | None = None
     while time.time() < deadline_s:
+        if subscription_bundle_unpack_in_progress(operator_name, operator_namespace):
+            updated = _subscription_status_last_updated(operator_name, operator_namespace)
+            if updated and updated == last_updated_seen:
+                if stall_since is None:
+                    stall_since = time.time()
+                elif time.time() - stall_since >= stall_sec:
+                    if _try_recover(
+                        f"bundle unpacking stalled: subscription status lastUpdated "
+                        f"unchanged for {stall_sec}s (DeadlineExceeded)"
+                    ):
+                        last_updated_seen = None
+                        stall_since = None
+                        time.sleep(15)
+                        continue
+            else:
+                last_updated_seen = updated
+                stall_since = None
         if not subscription_bundle_unpack_in_progress(operator_name, operator_namespace):
             unpack_failure = subscription_bundle_unpack_failed(operator_name, operator_namespace)
             if unpack_failure:
