@@ -415,16 +415,8 @@ def main() -> int:
                 allow_deferred_authorino=authorino_deferred_to_component_prep(),
             )
             _ensure_maas_bvt_prerequisites()
-            from install.dsc_install import components_need_models_as_service
-
-            ids = {c.strip() for c in components_csv.split(",") if c.strip()}
-            prep_in_dep = os.environ.get(
-                "RUN_COMPONENT_CLUSTER_PREP_IN_DEP_OPERATORS", ""
-            ).strip().lower() in ("1", "true", "yes")
-            if components_need_models_as_service(ids) and not prep_in_dep:
-                from components.maas_billing.prep import try_prepare_maas_smoke
-
-                try_prepare_maas_smoke()
+            # MaaS DSC/gateway prep (modelsAsAService) runs after install-rhoai in
+            # install_phases / component prep — not here (webhook + maas-api chicken-egg).
             mark_dep_operators_done()
         except RuntimeError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)

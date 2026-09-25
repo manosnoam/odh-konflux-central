@@ -415,6 +415,73 @@ def ensure_rhoai_registry_access() -> None:
     ensure_rhoai_idms_mirror()
 
 
+def _operator_csv_package_name(csv_name: str) -> str:
+    return csv_name.split(".", 1)[0]
+
+
+def _delete_operator_scoped_csvs(operator_namespace: str, operator_name: str) -> None:
+    """Remove only the main operator CSV copies; keep dependency CSVs in the same namespace."""
+    listed = oc_run(
+        ["get", "clusterserviceversion", "-n", operator_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if listed.returncode != 0:
+        return
+    try:
+        doc = json.loads(listed.stdout or "{}")
+    except json.JSONDecodeError:
+        return
+    targets: list[str] = []
+    for item in doc.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str((item.get("metadata") or {}).get("name") or "").strip()
+        if not name:
+            continue
+        if _operator_csv_package_name(name) == operator_name:
+            targets.append(name)
+    for name in sorted(set(targets)):
+        oc_run(
+            ["delete", "clusterserviceversion", name, "-n", operator_namespace, "--ignore-not-found"],
+            capture_output=True,
+            check=False,
+            timeout=120,
+        )
+
+
+def _delete_operator_scoped_installplans(operator_namespace: str, operator_name: str) -> None:
+    listed = oc_run(
+        ["get", "installplan", "-n", operator_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if listed.returncode != 0:
+        return
+    try:
+        doc = json.loads(listed.stdout or "{}")
+    except json.JSONDecodeError:
+        return
+    for item in doc.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        meta = item.get("metadata") or {}
+        spec = item.get("spec") or {}
+        ip_name = str(meta.get("name") or "").strip()
+        csv_names = [str(n) for n in (spec.get("clusterServiceVersionNames") or []) if str(n).strip()]
+        if not ip_name or not csv_names:
+            continue
+        if all(_operator_csv_package_name(n) == operator_name for n in csv_names):
+            oc_run(
+                ["delete", "installplan", ip_name, "-n", operator_namespace, "--ignore-not-found"],
+                capture_output=True,
+                check=False,
+                timeout=120,
+            )
+
+
 def reset_stale_operator_install(
     operator_namespace: str,
     operator_name: str,
@@ -428,11 +495,11 @@ def reset_stale_operator_install(
     for args in (
         ["delete", "subscription", operator_name, "-n", operator_namespace],
         ["delete", "operatorgroup", "--all", "-n", operator_namespace],
-        ["delete", "installplan", "--all", "-n", operator_namespace],
-        ["delete", "clusterserviceversion", "--all", "-n", operator_namespace],
         ["delete", "catalogsource", catalog_name, "-n", "openshift-marketplace"],
     ):
         oc_run([*args, "--ignore-not-found"], capture_output=True, check=False, timeout=120)
+    _delete_operator_scoped_installplans(operator_namespace, operator_name)
+    _delete_operator_scoped_csvs(operator_namespace, operator_name)
     delete_failed_olm_bundle_unpack_jobs()
     deadline = time.time() + 120
     while time.time() < deadline:

@@ -828,16 +828,14 @@ def ensure_dsc_models_as_service(
             }
         )
         label = "kserve.modelsAsService"
-    r = oc_run(
-        ["patch", "datasciencecluster", "default-dsc", "--type=merge", "-p", patch_doc],
-        check=False,
-        capture_output=True,
-        timeout=60,
+    wait_operator_admission_webhook(
+        timeout_sec=int(os.environ.get("VERIFY_OPERATOR_WEBHOOK_WAIT_SEC", "300"))
     )
-    if r.returncode != 0:
-        err = (r.stderr or r.stdout or "").strip()
-        raise RuntimeError(f"Could not patch {label} on default-dsc: {err or 'unknown error'}")
-    print(f"✓ Patched DataScienceCluster/default-dsc {label}=Managed")
+    _patch_dsc_merge_with_webhook_retry(
+        patch_doc,
+        label=f"{label}=Managed",
+        timeout_sec=int(os.environ.get("DSC_PATCH_WEBHOOK_RETRY_SEC", "300")),
+    )
     if uses_aigateway_models_as_a_service():
         ensure_aigateway_models_as_a_service_managed(
             wait_timeout_sec=_aigateway_maas_wait_sec(wait_timeout_sec),
