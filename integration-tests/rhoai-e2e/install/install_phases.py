@@ -292,6 +292,7 @@ def phase_operator_install_subscription(ctx: InstallContext) -> str:
         ctx.operator_name,
         ctx.operator_namespace,
         time.time() + unpack_timeout,
+        subscription_manifest=manifest_path,
     ):
         iav.oc_run(
             ["describe", "sub", ctx.operator_name, "-n", ctx.operator_namespace],

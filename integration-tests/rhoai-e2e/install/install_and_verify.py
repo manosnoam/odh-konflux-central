@@ -906,6 +906,74 @@ def _bundle_unpack_stall_sec() -> int:
         return 900
 
 
+def _bundle_unpack_no_job_kick_sec() -> int:
+    try:
+        return int(os.environ.get("OLM_BUNDLE_UNPACK_NO_JOB_KICK_SEC", "600"))
+    except ValueError:
+        return 600
+
+
+def count_olm_bundle_unpack_jobs(
+    *,
+    marketplace_namespace: str = _MARKETPLACE_NS,
+    include_active: bool = True,
+) -> int:
+    """Count marketplace Jobs that look like OLM bundle-unpack work."""
+    r = oc_run(
+        ["get", "jobs", "-n", marketplace_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    if r.returncode != 0:
+        return 0
+    try:
+        items = json.loads(r.stdout or "{}").get("items") or []
+    except json.JSONDecodeError:
+        return 0
+    count = 0
+    for job in items:
+        if not isinstance(job, dict):
+            continue
+        if not include_active and not _job_is_failed(job):
+            continue
+        if _job_looks_like_bundle_unpack(job):
+            count += 1
+    return count
+
+
+def log_marketplace_bundle_unpack_state(
+    *,
+    marketplace_namespace: str = _MARKETPLACE_NS,
+) -> None:
+    """Log unpack Jobs and olm.bundle pods for triage when unpack is stuck."""
+    print(
+        f"Marketplace bundle-unpack state ({marketplace_namespace}):",
+        flush=True,
+    )
+    oc_run(
+        ["get", "jobs", "-n", marketplace_namespace, "-o", "wide"],
+        capture_output=False,
+        check=False,
+        timeout=120,
+    )
+    oc_run(
+        [
+            "get",
+            "pods",
+            "-n",
+            marketplace_namespace,
+            "-l",
+            "olm.bundle",
+            "-o",
+            "wide",
+        ],
+        capture_output=False,
+        check=False,
+        timeout=120,
+    )
+
+
 def _subscription_status_last_updated(operator_name: str, operator_namespace: str) -> str | None:
     r = oc_run(
         ["get", "subscription", operator_name, "-n", operator_namespace, "-o", "json"],
@@ -1342,7 +1410,7 @@ def delete_failed_olm_bundle_unpack_jobs(
 def recover_bundle_unpack_deadline_exceeded(
     operator_name: str,
     operator_namespace: str,
-) -> None:
+) -> int:
     """Clear stale unpack Jobs (failed or stuck-active) and ensure OG unpack timeout."""
     try:
         from install.cluster_registry import ensure_openshift_release_dev_pull_auth
@@ -1358,6 +1426,33 @@ def recover_bundle_unpack_deadline_exceeded(
             f"in {_MARKETPLACE_NS}",
             flush=True,
         )
+        log_marketplace_bundle_unpack_state()
+    return deleted
+
+
+def kick_subscription_bundle_unpack(
+    operator_name: str,
+    operator_namespace: str,
+    manifest_path: Path,
+) -> bool:
+    """Re-create the Subscription when OLM reports unpacking but never schedules Jobs."""
+    print(
+        f"Kick OLM bundle unpack for {operator_name}: delete subscription and re-apply "
+        f"{manifest_path}",
+        flush=True,
+    )
+    log_marketplace_bundle_unpack_state()
+    oc_run(
+        ["delete", "subscription", operator_name, "-n", operator_namespace, "--ignore-not-found"],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    _delete_operator_scoped_installplans(operator_namespace, operator_name)
+    time.sleep(5)
+    oc_run(["apply", "-f", str(manifest_path)], check=True, capture_output=True, timeout=120)
+    ensure_operatorgroup_bundle_unpack_annotations(operator_namespace)
+    return True
 
 
 def _subscription_bundle_unpack_condition(
@@ -1421,6 +1516,8 @@ def wait_subscription_bundle_unpacked(
     operator_name: str,
     operator_namespace: str,
     deadline_s: float,
+    *,
+    subscription_manifest: Path | None = None,
 ) -> bool:
     """Wait for OLM to finish unpacking FBC bundle related images before InstallPlan."""
     r = oc_run(
@@ -1435,9 +1532,14 @@ def wait_subscription_bundle_unpacked(
     ensure_operatorgroup_bundle_unpack_annotations(operator_namespace)
     max_recoveries = _max_bundle_unpack_recoveries()
     recoveries = 0
+    no_job_kick_sec = _bundle_unpack_no_job_kick_sec()
+    no_jobs_since: float | None = None
+    stall_sec = _bundle_unpack_stall_sec()
+    last_updated_seen: str | None = None
+    stall_since: float | None = None
 
     def _try_recover(failure: str) -> bool:
-        nonlocal recoveries
+        nonlocal recoveries, last_updated_seen, stall_since, no_jobs_since
         if not _bundle_unpack_failure_recoverable(failure):
             return False
         if recoveries >= max_recoveries:
@@ -1448,8 +1550,21 @@ def wait_subscription_bundle_unpacked(
             f"recovering ({recoveries}/{max_recoveries})...",
             flush=True,
         )
-        recover_bundle_unpack_deadline_exceeded(operator_name, operator_namespace)
-        return True
+        deleted = recover_bundle_unpack_deadline_exceeded(operator_name, operator_namespace)
+        if deleted > 0:
+            last_updated_seen = None
+            stall_since = None
+            no_jobs_since = None
+            return True
+        if subscription_manifest is not None:
+            kick_subscription_bundle_unpack(
+                operator_name, operator_namespace, subscription_manifest
+            )
+            last_updated_seen = None
+            stall_since = None
+            no_jobs_since = None
+            return True
+        return False
 
     unpack_failure = subscription_bundle_unpack_failed(operator_name, operator_namespace)
     if unpack_failure:
@@ -1473,11 +1588,34 @@ def wait_subscription_bundle_unpacked(
         f"(FBC catalogs can have 100+ related images on HyperShift)..."
     )
     iteration = 0
-    stall_sec = _bundle_unpack_stall_sec()
-    last_updated_seen: str | None = None
-    stall_since: float | None = None
     while time.time() < deadline_s:
         if subscription_bundle_unpack_in_progress(operator_name, operator_namespace):
+            job_count = count_olm_bundle_unpack_jobs(include_active=True)
+            if job_count == 0:
+                if no_jobs_since is None:
+                    no_jobs_since = time.time()
+                elif (
+                    subscription_manifest is not None
+                    and time.time() - no_jobs_since >= no_job_kick_sec
+                    and recoveries < max_recoveries
+                ):
+                    recoveries += 1
+                    print(
+                        f"OLM bundle unpack in progress for {operator_name} but no unpack "
+                        f"Jobs for {no_job_kick_sec}s — kick "
+                        f"({recoveries}/{max_recoveries})...",
+                        flush=True,
+                    )
+                    kick_subscription_bundle_unpack(
+                        operator_name, operator_namespace, subscription_manifest
+                    )
+                    last_updated_seen = None
+                    stall_since = None
+                    no_jobs_since = None
+                    time.sleep(15)
+                    continue
+            else:
+                no_jobs_since = None
             updated = _subscription_status_last_updated(operator_name, operator_namespace)
             if updated and updated == last_updated_seen:
                 if stall_since is None:
@@ -1516,7 +1654,10 @@ def wait_subscription_bundle_unpacked(
                 check=False,
                 timeout=60,
             )
+            if subscription_bundle_unpack_in_progress(operator_name, operator_namespace):
+                log_marketplace_bundle_unpack_state()
         time.sleep(10)
+    log_marketplace_bundle_unpack_state()
     return False
 
 

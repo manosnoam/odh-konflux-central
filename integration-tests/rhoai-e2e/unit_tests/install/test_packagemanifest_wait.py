@@ -272,7 +272,11 @@ class PackagemanifestWaitTest(unittest.TestCase):
             with patch.object(iav, "oc_run", return_value=type("R", (), {"returncode": 0, "stdout": "{}"})()):
                 with patch.object(iav, "subscription_bundle_unpack_failed", side_effect=_failed):
                     with patch.object(iav, "subscription_bundle_unpack_in_progress", return_value=False):
-                        with patch.object(iav, "recover_bundle_unpack_deadline_exceeded") as recover:
+                        with patch.object(
+                            iav,
+                            "recover_bundle_unpack_deadline_exceeded",
+                            return_value=1,
+                        ) as recover:
                             self.assertTrue(
                                 iav.wait_subscription_bundle_unpacked(
                                     "rhods-operator", "redhat-ods-operator", time.time() + 30
@@ -291,6 +295,57 @@ class PackagemanifestWaitTest(unittest.TestCase):
                 iav._subscription_status_last_updated("rhods-operator", "redhat-ods-operator"),
                 "2026-09-25T05:30:45Z",
             )
+
+    def test_recover_returns_deleted_job_count(self) -> None:
+        with patch.object(iav, "delete_failed_olm_bundle_unpack_jobs", return_value=2):
+            with patch.object(iav, "ensure_operatorgroup_bundle_unpack_annotations"):
+                with patch.object(
+                    iav,
+                    "oc_run",
+                    return_value=type("R", (), {"returncode": 0, "stdout": ""})(),
+                ):
+                    self.assertEqual(
+                        iav.recover_bundle_unpack_deadline_exceeded(
+                            "rhods-operator", "redhat-ods-operator"
+                        ),
+                        2,
+                    )
+
+    def test_try_recover_kicks_when_no_jobs_deleted(self) -> None:
+        manifest = Path("/tmp/install-rhods-operator.yaml")
+        states = {"n": 0}
+
+        def _failed(_: str, __: str) -> str | None:
+            states["n"] += 1
+            return (
+                "bundle unpacking failed. Reason: DeadlineExceeded"
+                if states["n"] == 1
+                else None
+            )
+
+        with patch.object(iav, "ensure_operatorgroup_bundle_unpack_annotations"):
+            with patch.object(
+                iav,
+                "oc_run",
+                return_value=type("R", (), {"returncode": 0, "stdout": "{}"})(),
+            ):
+                with patch.object(iav, "subscription_bundle_unpack_failed", side_effect=_failed):
+                    with patch.object(
+                        iav, "subscription_bundle_unpack_in_progress", return_value=False
+                    ):
+                        with patch.object(
+                            iav, "recover_bundle_unpack_deadline_exceeded", return_value=0
+                        ):
+                            with patch.object(iav, "kick_subscription_bundle_unpack") as kick:
+                                self.assertTrue(
+                                    iav.wait_subscription_bundle_unpacked(
+                                        "rhods-operator",
+                                        "redhat-ods-operator",
+                                        time.time() + 30,
+                                        subscription_manifest=manifest,
+                                    )
+                                )
+                                kick.assert_called_once()
 
 
 class IdmsMirrorTest(unittest.TestCase):
