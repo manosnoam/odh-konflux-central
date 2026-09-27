@@ -508,7 +508,7 @@ class InstallMinimalDepsTest(unittest.TestCase):
 
                     require_maas_dependency_operators(allow_deferred_authorino=True)
 
-    def test_maas_smoke_calls_bvt_prerequisites_after_authorino(self) -> None:
+    def test_maas_smoke_skips_bvt_prerequisites_in_install_dep(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             kubeconfig = root / "kubeconfig"
@@ -548,7 +548,7 @@ class InstallMinimalDepsTest(unittest.TestCase):
                                                 ),
                                             ):
                                                 self.assertEqual(main(), 0)
-                                                bvt_prereq.assert_called_once()
+                                                bvt_prereq.assert_not_called()
 
     def test_rhoai_install_reconciles_openshift_gateway_istio_before_setup(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

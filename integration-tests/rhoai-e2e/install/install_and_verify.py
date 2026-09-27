@@ -889,7 +889,13 @@ def _named_csv_succeeded_version(namespace: str, csv_name: str) -> str | None:
 
 
 def _bundle_unpack_failure_recoverable(failure: str) -> bool:
-    return "DeadlineExceeded" in failure or "deadline" in failure.lower()
+    lowered = failure.lower()
+    return (
+        "DeadlineExceeded" in failure
+        or "deadline" in lowered
+        or "stalled" in lowered
+        or "unchanged" in lowered
+    )
 
 
 def _max_bundle_unpack_recoveries() -> int:
@@ -1449,6 +1455,8 @@ def kick_subscription_bundle_unpack(
         timeout=120,
     )
     _delete_operator_scoped_installplans(operator_namespace, operator_name)
+    _delete_operator_scoped_csvs(operator_namespace, operator_name)
+    delete_failed_olm_bundle_unpack_jobs(include_active=True)
     time.sleep(5)
     oc_run(["apply", "-f", str(manifest_path)], check=True, capture_output=True, timeout=120)
     ensure_operatorgroup_bundle_unpack_annotations(operator_namespace)
@@ -1552,6 +1560,10 @@ def wait_subscription_bundle_unpacked(
         )
         deleted = recover_bundle_unpack_deadline_exceeded(operator_name, operator_namespace)
         if deleted > 0:
+            if subscription_manifest is not None:
+                kick_subscription_bundle_unpack(
+                    operator_name, operator_namespace, subscription_manifest
+                )
             last_updated_seen = None
             stall_since = None
             no_jobs_since = None

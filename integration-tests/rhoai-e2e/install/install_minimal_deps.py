@@ -414,7 +414,6 @@ def main() -> int:
             require_maas_dependency_operators(
                 allow_deferred_authorino=authorino_deferred_to_component_prep(),
             )
-            _ensure_maas_bvt_prerequisites()
             # MaaS DSC/gateway prep (modelsAsAService) runs after install-rhoai in
             # install_phases / component prep — not here (webhook + maas-api chicken-egg).
             mark_dep_operators_done()
