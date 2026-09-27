@@ -905,6 +905,13 @@ def _max_bundle_unpack_recoveries() -> int:
         return 3
 
 
+def _max_bundle_unpack_no_job_kicks() -> int:
+    try:
+        return int(os.environ.get("OLM_BUNDLE_UNPACK_NO_JOB_KICKS", "3"))
+    except ValueError:
+        return 3
+
+
 def _bundle_unpack_stall_sec() -> int:
     try:
         return int(os.environ.get("OLM_BUNDLE_UNPACK_STALL_SEC", "900"))
@@ -1538,8 +1545,10 @@ def wait_subscription_bundle_unpacked(
         print(f"⚠ Subscription {operator_name} not found in {operator_namespace}")
         return False
     ensure_operatorgroup_bundle_unpack_annotations(operator_namespace)
-    max_recoveries = _max_bundle_unpack_recoveries()
-    recoveries = 0
+    max_failure_recoveries = _max_bundle_unpack_recoveries()
+    max_no_job_kicks = _max_bundle_unpack_no_job_kicks()
+    failure_recoveries = 0
+    no_job_kicks = 0
     no_job_kick_sec = _bundle_unpack_no_job_kick_sec()
     no_jobs_since: float | None = None
     stall_sec = _bundle_unpack_stall_sec()
@@ -1547,15 +1556,15 @@ def wait_subscription_bundle_unpacked(
     stall_since: float | None = None
 
     def _try_recover(failure: str) -> bool:
-        nonlocal recoveries, last_updated_seen, stall_since, no_jobs_since
+        nonlocal failure_recoveries, last_updated_seen, stall_since, no_jobs_since
         if not _bundle_unpack_failure_recoverable(failure):
             return False
-        if recoveries >= max_recoveries:
+        if failure_recoveries >= max_failure_recoveries:
             return False
-        recoveries += 1
+        failure_recoveries += 1
         print(
             f"OLM bundle unpack DeadlineExceeded for {operator_name} — "
-            f"recovering ({recoveries}/{max_recoveries})...",
+            f"recovering ({failure_recoveries}/{max_failure_recoveries})...",
             flush=True,
         )
         deleted = recover_bundle_unpack_deadline_exceeded(operator_name, operator_namespace)
@@ -1609,13 +1618,13 @@ def wait_subscription_bundle_unpacked(
                 elif (
                     subscription_manifest is not None
                     and time.time() - no_jobs_since >= no_job_kick_sec
-                    and recoveries < max_recoveries
+                    and no_job_kicks < max_no_job_kicks
                 ):
-                    recoveries += 1
+                    no_job_kicks += 1
                     print(
                         f"OLM bundle unpack in progress for {operator_name} but no unpack "
                         f"Jobs for {no_job_kick_sec}s — kick "
-                        f"({recoveries}/{max_recoveries})...",
+                        f"({no_job_kicks}/{max_no_job_kicks})...",
                         flush=True,
                     )
                     kick_subscription_bundle_unpack(
