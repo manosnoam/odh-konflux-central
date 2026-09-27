@@ -80,8 +80,15 @@ def main() -> int:
     step_budget = min(_TEKTON_STEP_TERMINATION_BUDGET_BYTES - 128, _TEKTON_TASK_RESULTS_BUDGET_BYTES)
     fitted = fit_tekton_task_results(results, priority=_PARSE_RESULT_PRIORITY, budget=step_budget)
     if not (fitted.get("COMPONENTS_CSV") or "").strip():
-        print("ERROR: COMPONENTS_CSV missing after Tekton result fit", file=sys.stderr)
-        return 1
+        run_smoke = (fitted.get("RUN_SMOKE") or results.get("RUN_SMOKE") or "").strip().lower()
+        run_components = (
+            fitted.get("RUN_COMPONENT_TESTS") or results.get("RUN_COMPONENT_TESTS") or ""
+        ).strip().lower()
+        if run_smoke in ("false", "0", "no", "") and run_components in ("false", "0", "no", ""):
+            fitted["COMPONENTS_CSV"] = "-"
+        else:
+            print("ERROR: COMPONENTS_CSV missing after Tekton result fit", file=sys.stderr)
+            return 1
 
     sync_tekton_task_result_files(fitted)
     step_size = tekton_step_termination_payload_size(fitted)

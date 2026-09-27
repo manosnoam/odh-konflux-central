@@ -92,6 +92,38 @@ class EmitParseArtifactsTest(unittest.TestCase):
                 _TEKTON_TASK_RESULTS_BUDGET_BYTES,
             )
 
+    def test_emit_allows_empty_components_csv_for_bvt_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            run_config = tmp_path / "run-config"
+            results_dir = tmp_path / "results"
+            run_config.mkdir()
+            results_dir.mkdir()
+            (run_config / "COMPONENTS_CSV").write_text("", encoding="utf-8")
+            (run_config / "SETUP_DEPENDENCIES_ARGS").write_text("", encoding="utf-8")
+            (run_config / "SMOKE_AWS_SECRET").write_text("", encoding="utf-8")
+            seed = {
+                "RUN_SMOKE": "false",
+                "RUN_BVT": "true",
+                "RUN_COMPONENT_TESTS": "false",
+                "RUN_MINIMAL_DEPS": "true",
+            }
+            for name, value in seed.items():
+                (results_dir / name).write_text(value, encoding="utf-8")
+            env = {
+                "RUN_CONFIG_DIR": str(run_config),
+                "TEKTON_RESULTS_DIR": str(results_dir),
+                "COMPONENTS_CSV_PATH": str(results_dir / "COMPONENTS_CSV"),
+                "SETUP_DEPENDENCIES_ARGS_PATH": str(results_dir / "SETUP_DEPENDENCIES_ARGS"),
+                "SMOKE_AWS_SECRET_PATH": str(results_dir / "SMOKE_AWS_SECRET"),
+            }
+            with patch.dict(os.environ, env, clear=True):
+                self.assertEqual(main(), 0)
+            self.assertEqual(
+                (results_dir / "COMPONENTS_CSV").read_text(encoding="utf-8"),
+                "-",
+            )
+
 
 if __name__ == "__main__":
     raise SystemExit(unittest.main())
