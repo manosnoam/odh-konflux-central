@@ -912,6 +912,13 @@ def _max_bundle_unpack_no_job_kicks() -> int:
         return 3
 
 
+def _max_bundle_unpack_stall_recoveries() -> int:
+    try:
+        return int(os.environ.get("OLM_BUNDLE_UNPACK_STALL_RECOVERIES", "3"))
+    except ValueError:
+        return 3
+
+
 def _bundle_unpack_stall_sec() -> int:
     try:
         return int(os.environ.get("OLM_BUNDLE_UNPACK_STALL_SEC", "900"))
@@ -1546,8 +1553,10 @@ def wait_subscription_bundle_unpacked(
         return False
     ensure_operatorgroup_bundle_unpack_annotations(operator_namespace)
     max_failure_recoveries = _max_bundle_unpack_recoveries()
+    max_stall_recoveries = _max_bundle_unpack_stall_recoveries()
     max_no_job_kicks = _max_bundle_unpack_no_job_kicks()
     failure_recoveries = 0
+    stall_recoveries = 0
     no_job_kicks = 0
     no_job_kick_sec = _bundle_unpack_no_job_kick_sec()
     no_jobs_since: float | None = None
@@ -1555,20 +1564,15 @@ def wait_subscription_bundle_unpacked(
     last_updated_seen: str | None = None
     stall_since: float | None = None
 
-    def _try_recover(failure: str) -> bool:
-        nonlocal failure_recoveries, last_updated_seen, stall_since, no_jobs_since
+    def _recover_after_unpack_failure(failure: str, label: str, used: int, limit: int) -> bool:
+        nonlocal last_updated_seen, stall_since, no_jobs_since
         if not _bundle_unpack_failure_recoverable(failure):
             return False
-        if failure_recoveries >= max_failure_recoveries:
+        if used >= limit:
             return False
-        failure_recoveries += 1
-        print(
-            f"OLM bundle unpack DeadlineExceeded for {operator_name} — "
-            f"recovering ({failure_recoveries}/{max_failure_recoveries})...",
-            flush=True,
-        )
+        print(f"OLM bundle unpack {label} for {operator_name} — recovering ({used + 1}/{limit})...", flush=True)
         deleted = recover_bundle_unpack_deadline_exceeded(operator_name, operator_namespace)
-        if deleted > 0:
+        if deleted > 0 or subscription_manifest is not None:
             if subscription_manifest is not None:
                 kick_subscription_bundle_unpack(
                     operator_name, operator_namespace, subscription_manifest
@@ -1577,15 +1581,29 @@ def wait_subscription_bundle_unpacked(
             stall_since = None
             no_jobs_since = None
             return True
-        if subscription_manifest is not None:
-            kick_subscription_bundle_unpack(
-                operator_name, operator_namespace, subscription_manifest
-            )
-            last_updated_seen = None
-            stall_since = None
-            no_jobs_since = None
-            return True
         return False
+
+    def _try_recover(failure: str) -> bool:
+        nonlocal failure_recoveries
+        if failure_recoveries >= max_failure_recoveries:
+            return False
+        if not _recover_after_unpack_failure(
+            failure, "DeadlineExceeded", failure_recoveries, max_failure_recoveries
+        ):
+            return False
+        failure_recoveries += 1
+        return True
+
+    def _try_stall_recover(failure: str) -> bool:
+        nonlocal stall_recoveries
+        if stall_recoveries >= max_stall_recoveries:
+            return False
+        if not _recover_after_unpack_failure(
+            failure, "stalled lastUpdated", stall_recoveries, max_stall_recoveries
+        ):
+            return False
+        stall_recoveries += 1
+        return True
 
     unpack_failure = subscription_bundle_unpack_failed(operator_name, operator_namespace)
     if unpack_failure:
@@ -1642,9 +1660,9 @@ def wait_subscription_bundle_unpacked(
                 if stall_since is None:
                     stall_since = time.time()
                 elif time.time() - stall_since >= stall_sec:
-                    if _try_recover(
+                    if _try_stall_recover(
                         f"bundle unpacking stalled: subscription status lastUpdated "
-                        f"unchanged for {stall_sec}s (DeadlineExceeded)"
+                        f"unchanged for {stall_sec}s"
                     ):
                         last_updated_seen = None
                         stall_since = None
