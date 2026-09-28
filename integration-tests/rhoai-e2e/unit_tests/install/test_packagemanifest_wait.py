@@ -360,19 +360,29 @@ class PackagemanifestWaitTest(unittest.TestCase):
             )
 
     def test_recover_returns_deleted_job_count(self) -> None:
-        with patch.object(iav, "delete_failed_olm_bundle_unpack_jobs", return_value=2):
-            with patch.object(iav, "ensure_operatorgroup_bundle_unpack_annotations"):
-                with patch.object(
-                    iav,
-                    "oc_run",
-                    return_value=type("R", (), {"returncode": 0, "stdout": ""})(),
-                ):
-                    self.assertEqual(
-                        iav.recover_bundle_unpack_deadline_exceeded(
-                            "rhods-operator", "redhat-ods-operator"
-                        ),
-                        2,
-                    )
+        with patch.object(iav, "delete_pods_for_bundle_unpack_job"):
+            with patch.object(iav, "_list_non_terminal_bundle_unpack_job_names", return_value=[]):
+                with patch.object(iav, "delete_failed_olm_bundle_unpack_jobs", return_value=2):
+                    with patch.object(iav, "ensure_operatorgroup_bundle_unpack_annotations"):
+                        with patch.object(
+                            iav,
+                            "oc_run",
+                            return_value=type("R", (), {"returncode": 0, "stdout": ""})(),
+                        ):
+                            self.assertEqual(
+                                iav.recover_bundle_unpack_deadline_exceeded(
+                                    "rhods-operator", "redhat-ods-operator"
+                                ),
+                                2,
+                            )
+
+    def test_bundle_unpack_job_pod_churn_detected(self) -> None:
+        with patch.object(iav, "count_completed_pods_for_bundle_unpack_job", return_value=10):
+            self.assertTrue(iav.bundle_unpack_job_pod_churn_detected("abc123"))
+
+    def test_bundle_unpack_job_pod_churn_below_threshold(self) -> None:
+        with patch.object(iav, "count_completed_pods_for_bundle_unpack_job", return_value=3):
+            self.assertFalse(iav.bundle_unpack_job_pod_churn_detected("abc123"))
 
     def test_try_recover_kicks_when_no_jobs_deleted(self) -> None:
         manifest = Path("/tmp/install-rhods-operator.yaml")

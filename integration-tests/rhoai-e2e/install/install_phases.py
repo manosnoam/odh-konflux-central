@@ -274,6 +274,13 @@ def phase_operator_install_subscription(ctx: InstallContext) -> str:
     else:
         print(f"Subscription manifest: channel={ctx.update_channel} (no startingCSV from PackageManifest)")
     iav.patch_manifest_operatorgroup_bundle_unpack(manifest_path)
+    if cluster_source_is_ephc():
+        cleared = iav.delete_terminal_olm_bundle_unpack_jobs()
+        if cleared:
+            print(
+                f"Cleared {cleared} completed marketplace bundle-unpack job(s) before rhods subscription",
+                flush=True,
+            )
     print("Applying OLM subscription manifest (bundle unpack may take 30m+ on HyperShift)...", flush=True)
     iav.oc_run(["apply", "-f", str(manifest_path)], check=True, capture_output=True, timeout=120)
     job_timeout = iav.default_bundle_unpack_job_timeout()

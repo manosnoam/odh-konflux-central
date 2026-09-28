@@ -45,6 +45,7 @@ _BUNDLE_UNPACK_RETRY_ANN = "operatorframework.io/bundle-unpack-min-retry-interva
 _DEFAULT_BUNDLE_UNPACK_JOB_TIMEOUT = "20m"
 _EPHC_BUNDLE_UNPACK_JOB_TIMEOUT = "45m"
 _MARKETPLACE_NS = "openshift-marketplace"
+_OLM_NS = "openshift-operator-lifecycle-manager"
 RHOAI_IDMS_NAME = "rhoai-idms-mirror"
 
 
@@ -894,6 +895,7 @@ def _bundle_unpack_failure_recoverable(failure: str) -> bool:
         "DeadlineExceeded" in failure
         or "deadline" in lowered
         or "stalled" in lowered
+        or "churn" in lowered
         or "unchanged" in lowered
     )
 
@@ -931,6 +933,161 @@ def _bundle_unpack_no_job_kick_sec() -> int:
         return int(os.environ.get("OLM_BUNDLE_UNPACK_NO_JOB_KICK_SEC", "600"))
     except ValueError:
         return 600
+
+
+def _bundle_unpack_churn_pod_threshold() -> int:
+    try:
+        return int(os.environ.get("OLM_BUNDLE_UNPACK_CHURN_POD_THRESHOLD", "8"))
+    except ValueError:
+        return 8
+
+
+def _list_non_terminal_bundle_unpack_job_names(
+    *,
+    marketplace_namespace: str = _MARKETPLACE_NS,
+) -> list[str]:
+    r = oc_run(
+        ["get", "jobs", "-n", marketplace_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    if r.returncode != 0:
+        return []
+    try:
+        items = json.loads(r.stdout or "{}").get("items") or []
+    except json.JSONDecodeError:
+        return []
+    names: list[str] = []
+    for job in items:
+        if not isinstance(job, dict):
+            continue
+        if not _job_looks_like_bundle_unpack(job):
+            continue
+        if _job_is_bundle_unpack_terminal_success(job):
+            continue
+        name = str((job.get("metadata") or {}).get("name") or "").strip()
+        if name:
+            names.append(name)
+    return sorted(set(names))
+
+
+def count_completed_pods_for_bundle_unpack_job(
+    job_name: str,
+    *,
+    marketplace_namespace: str = _MARKETPLACE_NS,
+) -> int:
+    r = oc_run(
+        [
+            "get",
+            "pods",
+            "-n",
+            marketplace_namespace,
+            "-l",
+            f"job-name={job_name}",
+            "-o",
+            "json",
+        ],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    if r.returncode != 0:
+        return 0
+    try:
+        items = json.loads(r.stdout or "{}").get("items") or []
+    except json.JSONDecodeError:
+        return 0
+    completed = 0
+    for pod in items:
+        if not isinstance(pod, dict):
+            continue
+        phase = str((pod.get("status") or {}).get("phase") or "").lower()
+        if phase == "succeeded":
+            completed += 1
+    return completed
+
+
+def bundle_unpack_job_pod_churn_detected(
+    job_name: str,
+    *,
+    marketplace_namespace: str = _MARKETPLACE_NS,
+) -> bool:
+    """True when OLM keeps spawning Completed pods but the unpack Job never succeeds (EPHC wedge)."""
+    threshold = _bundle_unpack_churn_pod_threshold()
+    if threshold <= 0:
+        return False
+    return count_completed_pods_for_bundle_unpack_job(
+        job_name, marketplace_namespace=marketplace_namespace
+    ) >= threshold
+
+
+def delete_pods_for_bundle_unpack_job(
+    job_name: str,
+    *,
+    marketplace_namespace: str = _MARKETPLACE_NS,
+) -> int:
+    r = oc_run(
+        [
+            "get",
+            "pods",
+            "-n",
+            marketplace_namespace,
+            "-l",
+            f"job-name={job_name}",
+            "-o",
+            "json",
+        ],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    if r.returncode != 0:
+        return 0
+    try:
+        items = json.loads(r.stdout or "{}").get("items") or []
+    except json.JSONDecodeError:
+        return 0
+    deleted = 0
+    for pod in items:
+        if not isinstance(pod, dict):
+            continue
+        name = str((pod.get("metadata") or {}).get("name") or "").strip()
+        if not name:
+            continue
+        oc_run(
+            ["delete", "pod", name, "-n", marketplace_namespace, "--ignore-not-found", "--wait=false"],
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        deleted += 1
+    if deleted:
+        print(
+            f"Deleted {deleted} orphan pod(s) for unpack Job/{job_name} in {marketplace_namespace}",
+            flush=True,
+        )
+    return deleted
+
+
+def recycle_catalog_operator_pod(*, olm_namespace: str = _OLM_NS) -> None:
+    """Restart OLM catalog-operator (subscription BundleUnpacking can freeze while Jobs churn)."""
+    print(f"Recycling catalog-operator pod in {olm_namespace}...", flush=True)
+    for label in ("app=catalog-operator", "app.kubernetes.io/name=catalog-operator"):
+        oc_run(
+            [
+                "delete",
+                "pod",
+                "-n",
+                olm_namespace,
+                "-l",
+                label,
+                "--ignore-not-found=true",
+            ],
+            capture_output=True,
+            check=False,
+            timeout=120,
+        )
 
 
 def count_olm_bundle_unpack_jobs(
@@ -1614,6 +1771,7 @@ def recover_bundle_unpack_deadline_exceeded(
     *,
     purge_terminal_success: bool = False,
     recycle_catalog: bool = False,
+    escalate_olm_controller: bool = False,
 ) -> int:
     """Clear stale unpack Jobs (failed or stuck-active) and ensure OG unpack timeout."""
     try:
@@ -1623,6 +1781,8 @@ def recover_bundle_unpack_deadline_exceeded(
     except Exception as exc:
         print(f"WARN: openshift-release-dev pull-secret heal failed ({exc})", flush=True)
     ensure_operatorgroup_bundle_unpack_annotations(operator_namespace)
+    for job_name in _list_non_terminal_bundle_unpack_job_names():
+        delete_pods_for_bundle_unpack_job(job_name)
     deleted = delete_failed_olm_bundle_unpack_jobs(include_active=True)
     if purge_terminal_success:
         deleted += delete_terminal_olm_bundle_unpack_jobs()
@@ -1636,6 +1796,8 @@ def recover_bundle_unpack_deadline_exceeded(
                 "(subscription spec.source missing)",
                 flush=True,
             )
+    if escalate_olm_controller:
+        recycle_catalog_operator_pod()
     if deleted == 0:
         print(
             f"WARN: BundleUnpack recover for {operator_name} but no unpack Jobs found "
@@ -1792,19 +1954,27 @@ def wait_subscription_bundle_unpacked(
     last_updated_seen: str | None = None
     stall_since: float | None = None
 
-    def _recover_after_unpack_failure(failure: str, label: str, used: int, limit: int) -> bool:
+    def _recover_after_unpack_failure(
+        failure: str,
+        label: str,
+        used: int,
+        limit: int,
+        *,
+        escalate_olm: bool = False,
+    ) -> bool:
         nonlocal last_updated_seen, stall_since, no_jobs_since
         if not _bundle_unpack_failure_recoverable(failure):
             return False
         if used >= limit:
             return False
         print(f"OLM bundle unpack {label} for {operator_name} — recovering ({used + 1}/{limit})...", flush=True)
-        purge_terminal = "stalled" in label.lower()
+        purge_terminal = "stalled" in label.lower() or "churn" in label.lower()
         deleted = recover_bundle_unpack_deadline_exceeded(
             operator_name,
             operator_namespace,
             purge_terminal_success=purge_terminal,
             recycle_catalog=purge_terminal,
+            escalate_olm_controller=escalate_olm or (purge_terminal and used >= 1),
         )
         if deleted > 0 or subscription_manifest is not None:
             if subscription_manifest is not None:
@@ -1869,6 +2039,23 @@ def wait_subscription_bundle_unpacked(
     iteration = 0
     while time.time() < deadline_s:
         if subscription_bundle_unpack_in_progress(operator_name, operator_namespace):
+            churn_recovered = False
+            for job_name in _list_non_terminal_bundle_unpack_job_names():
+                if not bundle_unpack_job_pod_churn_detected(job_name):
+                    continue
+                completed = count_completed_pods_for_bundle_unpack_job(job_name)
+                if _try_stall_recover(
+                    f"bundle unpack job pod churn on {job_name} "
+                    f"({completed}+ Completed pods, Job still active)"
+                ):
+                    last_updated_seen = None
+                    stall_since = None
+                    no_jobs_since = None
+                    time.sleep(15)
+                    churn_recovered = True
+                    break
+            if churn_recovered:
+                continue
             job_count = count_olm_bundle_unpack_jobs(include_active=True)
             if job_count == 0:
                 if no_jobs_since is None:
