@@ -232,8 +232,10 @@ class LoadHcpInstallAwsCredentialsTest(unittest.TestCase):
             with mock.patch(
                 "k8s.vault_runtime.vault_login_and_read_kv_data",
                 return_value={
-                    "aws_access_key_id": "AKIA_OPENSHIFT",
-                    "aws_secret_access_key": "openshift-secret",
+                    "installData": {
+                        "aws_access_key_id": "AKIA_OPENSHIFT",
+                        "aws_secret_access_key": "openshift-secret",
+                    }
                 },
             ):
                 creds = load_hcp_install_aws_credentials(auth_dir=auth, environ={})

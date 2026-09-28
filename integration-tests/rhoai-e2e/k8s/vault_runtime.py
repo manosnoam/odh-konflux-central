@@ -21,13 +21,29 @@ SECRET_SOURCE_VAULT = "vault"
 SECRET_SOURCE_TENANT = "tenant"
 SHIFT_LEFT_KV_PATH = "apps/data/rhods-ci/shift-left"
 OPENSHIFT_KV_PATH = "apps/data/rhods-ci/openshift"
+HCP_INSTALL_AWS_KV_PATHS: tuple[str, ...] = (
+    OPENSHIFT_KV_PATH,
+    "apps/data/rhods-ci/aws",
+)
 APPROLE_LOGIN_PATH = "v1/auth/approle/login"
 
 _AWS_KEYS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 _AWS_KEY_ALIASES: dict[str, tuple[str, ...]] = {
-    "AWS_ACCESS_KEY_ID": ("aws_access_key_id", "awsAccessKeyId", "AWS_ACCESS_KEY"),
-    "AWS_SECRET_ACCESS_KEY": ("aws_secret_access_key", "awsSecretAccessKey", "AWS_SECRET_KEY"),
-    "AWS_SESSION_TOKEN": ("aws_session_token", "awsSessionToken"),
+    "AWS_ACCESS_KEY_ID": (
+        "aws_access_key_id",
+        "awsAccessKeyId",
+        "AWS_ACCESS_KEY",
+        "HCP_AWS_ACCESS_KEY_ID",
+        "hcp_aws_access_key_id",
+    ),
+    "AWS_SECRET_ACCESS_KEY": (
+        "aws_secret_access_key",
+        "awsSecretAccessKey",
+        "AWS_SECRET_KEY",
+        "HCP_AWS_SECRET_ACCESS_KEY",
+        "hcp_aws_secret_access_key",
+    ),
+    "AWS_SESSION_TOKEN": ("aws_session_token", "awsSessionToken", "HCP_AWS_SESSION_TOKEN"),
 }
 
 # Cloned Konflux Secret names → Vault KV blob keys on apps/rhods-ci/shift-left.
@@ -196,6 +212,22 @@ def _vault_login_token(
     return token, opener, ctx
 
 
+def _flatten_vault_kv_leaf_strings(data: Mapping[str, object], *, prefix: str = "") -> dict[str, str]:
+    """Collect string leaves from nested Vault KV maps (rhods-ci/openshift uses nested blobs)."""
+    out: dict[str, str] = {}
+    for key, val in data.items():
+        if not isinstance(key, str):
+            continue
+        name = f"{prefix}.{key}" if prefix else key
+        if isinstance(val, str):
+            out[name] = val
+            if name != key:
+                out[key] = val
+        elif isinstance(val, dict):
+            out.update(_flatten_vault_kv_leaf_strings(val, prefix=name))
+    return out
+
+
 def vault_login_and_read_kv_data(
     *,
     vault_addr: str,
@@ -266,6 +298,15 @@ def _aws_credentials_from_mapping(values: Mapping[str, str]) -> dict[str, str]:
         text = (val or "").strip()
         if "AWS_ACCESS_KEY" in text or "aws_access_key" in text:
             flat.update(parse_env_file_blob(text))
+        elif text.startswith("{") and "aws" in text.lower():
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                for nested_key, nested_val in parsed.items():
+                    if isinstance(nested_key, str) and isinstance(nested_val, str):
+                        flat[nested_key] = nested_val
     out: dict[str, str] = {}
     for canonical, aliases in _AWS_KEY_ALIASES.items():
         val = (flat.get(canonical) or "").strip()
@@ -301,26 +342,40 @@ def load_hcp_install_aws_credentials(
     role_id = _read_auth_file(auth_dir, "role_id")
     secret_id = _read_auth_file(auth_dir, "secret_id")
     ca_path = auth_dir / "ca.crt"
-    try:
-        openshift = vault_login_and_read_kv_data(
-            vault_addr=addr,
-            role_id=role_id,
-            secret_id=secret_id,
-            ca_path=ca_path,
-            kv_path=OPENSHIFT_KV_PATH,
-            urlopen=urlopen,
-        )
-        creds = _aws_credentials_from_mapping(openshift)
-        if creds.get("AWS_ACCESS_KEY_ID") and creds.get("AWS_SECRET_ACCESS_KEY"):
-            return creds
+    kv_paths = _env_kv_paths("ROSA_HCP_INSTALL_VAULT_KV_PATH", HCP_INSTALL_AWS_KV_PATHS)
+    last_keys: list[str] = []
+    for kv_path in kv_paths:
+        try:
+            raw = vault_login_and_read_kv_data(
+                vault_addr=addr,
+                role_id=role_id,
+                secret_id=secret_id,
+                ca_path=ca_path,
+                kv_path=kv_path,
+                urlopen=urlopen,
+            )
+            openshift = _flatten_vault_kv_leaf_strings(raw)
+            last_keys = sorted(openshift.keys())
+            creds = _aws_credentials_from_mapping(openshift)
+            if creds.get("AWS_ACCESS_KEY_ID") and creds.get("AWS_SECRET_ACCESS_KEY"):
+                return creds
+        except AppError as exc:
+            print(f"WARN: could not load Vault AWS credentials from {kv_path}: {exc}", flush=True)
+    if last_keys:
         print(
-            "WARN: Vault openshift KV loaded but no AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY found "
-            f"(path {OPENSHIFT_KV_PATH})",
+            "WARN: Vault install-data KV loaded but no AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY found "
+            f"(tried {list(kv_paths)!r}; keys={last_keys[:24]})",
             flush=True,
         )
-    except AppError as exc:
-        print(f"WARN: could not load openshift Vault AWS credentials: {exc}", flush=True)
     return existing
+
+
+def _env_kv_paths(name: str, defaults: tuple[str, ...]) -> tuple[str, ...]:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return defaults
+    paths = tuple(p.strip() for p in raw.split(",") if p.strip())
+    return paths or defaults
 
 
 def _read_auth_file(auth_dir: Path, name: str) -> str:
