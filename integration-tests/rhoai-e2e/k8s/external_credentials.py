@@ -107,6 +107,18 @@ def load_kubeconfig_from_tenant_secret(*, namespace: str, secret_name: str) -> s
         return ""
 
 
+def _writable_companion_bootstrap_path(bootstrap_path: Path) -> Path:
+    """Tekton mounts ``/credentials/bootstrap`` read-only; stage companion kubeconfig under ``/credentials``."""
+    parent = bootstrap_path.parent
+    try:
+        if parent.is_dir() and os.access(parent, os.W_OK):
+            return bootstrap_path
+    except OSError:
+        pass
+    root = bootstrap_path.parent.parent if parent.name == "bootstrap" else parent
+    return root / ".companion-bootstrap" / bootstrap_path.name
+
+
 def _ensure_bootstrap_from_companion_kubeconfig_secret(
     *,
     namespace: str,
@@ -121,10 +133,11 @@ def _ensure_bootstrap_from_companion_kubeconfig_secret(
     text = load_kubeconfig_from_tenant_secret(namespace=namespace, secret_name=secret)
     if not text.strip():
         return bootstrap_path
-    bootstrap_path.parent.mkdir(parents=True, exist_ok=True)
-    bootstrap_path.write_text(text, encoding="utf-8")
-    bootstrap_path.chmod(0o600)
-    return bootstrap_path
+    target = _writable_companion_bootstrap_path(bootstrap_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    target.chmod(0o600)
+    return target
 
 
 def try_refresh_from_companion_kubeconfig_secret(
