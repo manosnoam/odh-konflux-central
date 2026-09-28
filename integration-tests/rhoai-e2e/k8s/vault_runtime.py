@@ -258,10 +258,14 @@ def vault_login_and_read_shift_left(
 
 def _aws_credentials_from_mapping(values: Mapping[str, str]) -> dict[str, str]:
     flat = dict(values)
-    for blob_key in ("envFileCommon", "envFile-for-rhelaiteam", "envFile"):
+    for blob_key in ("envFileCommon", "envFile-for-rhelaiteam", "envFile", "envFileOpenShift"):
         blob = (flat.get(blob_key) or "").strip()
         if blob:
             flat.update(parse_env_file_blob(blob))
+    for val in flat.values():
+        text = (val or "").strip()
+        if "AWS_ACCESS_KEY" in text or "aws_access_key" in text:
+            flat.update(parse_env_file_blob(text))
     out: dict[str, str] = {}
     for canonical, aliases in _AWS_KEY_ALIASES.items():
         val = (flat.get(canonical) or "").strip()
@@ -287,6 +291,11 @@ def load_hcp_install_aws_credentials(
     if existing.get("AWS_ACCESS_KEY_ID") and existing.get("AWS_SECRET_ACCESS_KEY"):
         return existing
     if not auth_dir.is_dir():
+        print(
+            f"WARN: Vault AppRole mount missing at {auth_dir} "
+            f"(mount tenant Secret {VAULT_APPROLE_SECRET!r} at /vault-approle)",
+            flush=True,
+        )
         return existing
     addr = _read_auth_file(auth_dir, "VAULT_ADDR")
     role_id = _read_auth_file(auth_dir, "role_id")
@@ -304,6 +313,11 @@ def load_hcp_install_aws_credentials(
         creds = _aws_credentials_from_mapping(openshift)
         if creds.get("AWS_ACCESS_KEY_ID") and creds.get("AWS_SECRET_ACCESS_KEY"):
             return creds
+        print(
+            "WARN: Vault openshift KV loaded but no AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY found "
+            f"(path {OPENSHIFT_KV_PATH})",
+            flush=True,
+        )
     except AppError as exc:
         print(f"WARN: could not load openshift Vault AWS credentials: {exc}", flush=True)
     return existing

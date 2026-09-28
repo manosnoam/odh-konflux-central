@@ -806,6 +806,13 @@ def _value_from_tenant_secret(
         text = (value or "").strip()
         return _normalize_cluster_id(text) if normalize and text else text
 
+    name = (secret_name or "").strip()
+    if not name:
+        return _finish("")
+    from suite.its_trigger_params import is_s3_install_cluster_source
+
+    if is_s3_install_cluster_source(name):
+        return _finish("")
     value = _tenant_secret_annotation(
         namespace=namespace,
         secret_name=secret_name,

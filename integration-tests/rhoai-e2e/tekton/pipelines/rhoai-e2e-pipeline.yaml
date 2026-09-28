@@ -1181,7 +1181,6 @@ spec:
           - name: vault-approle
             secret:
               secretName: vault-approle
-              optional: true
         stepTemplate:
           env:
             - name: OLMINSTALL_OC_VERBOSE
