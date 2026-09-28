@@ -139,7 +139,12 @@ class PackagemanifestWaitTest(unittest.TestCase):
             self.assertTrue(iav.subscription_bundle_unpack_in_progress("rhods-operator", "redhat-ods-operator"))
 
     def test_wait_subscription_bundle_unpacked_when_not_unpacking(self) -> None:
-        sub = {"status": {"conditions": [{"type": "CatalogSourcesUnhealthy", "status": "False"}]}}
+        sub = {
+            "status": {
+                "currentCSV": "rhods-operator.3.5.0-ea.2",
+                "conditions": [{"type": "CatalogSourcesUnhealthy", "status": "False"}],
+            }
+        }
         with patch.object(iav, "ensure_operatorgroup_bundle_unpack_annotations"):
             with patch.object(
                 iav,
@@ -149,6 +154,19 @@ class PackagemanifestWaitTest(unittest.TestCase):
                 self.assertTrue(
                     iav.wait_subscription_bundle_unpacked("rhods-operator", "redhat-ods-operator", 100.0)
                 )
+
+    def test_subscription_bundle_unpack_pending_when_starting_csv_unresolved(self) -> None:
+        sub = {
+            "spec": {"startingCSV": "rhods-operator.3.6.0-ea.1"},
+            "status": {"conditions": [{"type": "CatalogSourcesUnhealthy", "status": "False"}]},
+        }
+        with patch.object(
+            iav,
+            "oc_run",
+            return_value=type("R", (), {"returncode": 0, "stdout": json.dumps(sub)})(),
+        ):
+            self.assertTrue(iav.subscription_bundle_unpack_pending("rhods-operator", "redhat-ods-operator"))
+            self.assertFalse(iav.subscription_bundle_unpack_in_progress("rhods-operator", "redhat-ods-operator"))
 
     def test_job_looks_like_bundle_unpack(self) -> None:
         job = {

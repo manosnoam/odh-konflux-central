@@ -1703,6 +1703,38 @@ def subscription_bundle_unpack_in_progress(operator_name: str, operator_namespac
     return cond is not None and str(cond.get("status", "")).lower() == "true"
 
 
+def _subscription_csv_resolution(operator_name: str, operator_namespace: str) -> tuple[str, str, str]:
+    """Return (starting_csv, current_csv, installed_csv) from the subscription."""
+    r = oc_run(
+        ["get", "subscription", operator_name, "-n", operator_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if r.returncode != 0:
+        return "", "", ""
+    try:
+        doc = json.loads(r.stdout or "{}")
+    except json.JSONDecodeError:
+        return "", "", ""
+    spec = doc.get("spec") or {}
+    status = doc.get("status") or {}
+    starting = str(spec.get("startingCSV") or "").strip()
+    current = str(status.get("currentCSV") or "").strip()
+    installed = str(status.get("installedCSV") or "").strip()
+    return starting, current, installed
+
+
+def subscription_bundle_unpack_pending(operator_name: str, operator_namespace: str) -> bool:
+    """True when OLM has not resolved the subscription CSV yet (do not skip unpack wait)."""
+    if subscription_bundle_unpack_in_progress(operator_name, operator_namespace):
+        return True
+    starting, current, installed = _subscription_csv_resolution(operator_name, operator_namespace)
+    if starting and not current and not installed:
+        return True
+    return False
+
+
 def subscription_bundle_unpack_failed(operator_name: str, operator_namespace: str) -> str | None:
     """Return failure reason when OLM reports a terminal bundle unpack failure."""
     failed = _subscription_bundle_unpack_condition(
@@ -1819,7 +1851,13 @@ def wait_subscription_bundle_unpacked(
             )
             return False
     if not subscription_bundle_unpack_in_progress(operator_name, operator_namespace):
-        if unpack_failure is None and not subscription_bundle_unpack_failed(
+        if subscription_bundle_unpack_pending(operator_name, operator_namespace):
+            print(
+                f"Subscription {operator_name} has startingCSV but no current/installed CSV yet "
+                f"— waiting for OLM bundle unpack to start",
+                flush=True,
+            )
+        elif unpack_failure is None and not subscription_bundle_unpack_failed(
             operator_name, operator_namespace
         ):
             print("✓ OLM bundle unpack not in progress")
