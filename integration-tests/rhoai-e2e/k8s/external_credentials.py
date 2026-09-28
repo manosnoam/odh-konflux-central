@@ -49,6 +49,109 @@ def external_credentials_secret_name(
     return f"{_CREDENTIALS_SECRET_PREFIX}{suffix}{_CREDENTIALS_SECRET_SUFFIX}"
 
 
+def companion_kubeconfig_secret_for_install_cluster(cluster_name: str) -> str:
+    """Tenant Secret ``rhoai-e2e-kubeconfig-{cluster}`` (optional bootstrap for S3 install-data runs)."""
+    name = (cluster_name or "").strip()
+    if not name:
+        return ""
+    return f"{_KUBECONFIG_SECRET_PREFIX}{name}"
+
+
+def _s3_install_htpasswd_secret_candidates(
+    cluster_name: str,
+    *,
+    override: str = "",
+) -> tuple[str, ...]:
+    explicit = (override or "").strip()
+    ordered: list[str] = []
+    if explicit:
+        ordered.append(explicit)
+    cluster = (cluster_name or "").strip()
+    if cluster:
+        ordered.append(f"{_CREDENTIALS_SECRET_PREFIX}{cluster}{_CREDENTIALS_SECRET_SUFFIX}")
+    seen: set[str] = set()
+    out: list[str] = []
+    for name in ordered:
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+    return tuple(out)
+
+
+def load_kubeconfig_from_tenant_secret(*, namespace: str, secret_name: str) -> str:
+    """Return kubeconfig YAML from a tenant Secret key ``kubeconfig``, or empty when absent."""
+    ns = (namespace or "").strip()
+    name = (secret_name or "").strip()
+    if not ns or not name:
+        return ""
+    proc = run_cmd(
+        [
+            "oc",
+            "get",
+            "secret",
+            name,
+            "-n",
+            ns,
+            "-o",
+            "jsonpath={.data.kubeconfig}",
+        ],
+        capture=True,
+        check=False,
+        env=_konflux_tenant_oc_env(),
+    )
+    if proc.returncode != 0 or not (proc.stdout or "").strip():
+        return ""
+    try:
+        return base64.b64decode(str(proc.stdout).strip()).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return ""
+
+
+def _ensure_bootstrap_from_companion_kubeconfig_secret(
+    *,
+    namespace: str,
+    cluster_name: str,
+    bootstrap_path: Path,
+) -> Path:
+    if bootstrap_path.is_file():
+        return bootstrap_path
+    secret = companion_kubeconfig_secret_for_install_cluster(cluster_name)
+    if not secret:
+        return bootstrap_path
+    text = load_kubeconfig_from_tenant_secret(namespace=namespace, secret_name=secret)
+    if not text.strip():
+        return bootstrap_path
+    bootstrap_path.parent.mkdir(parents=True, exist_ok=True)
+    bootstrap_path.write_text(text, encoding="utf-8")
+    bootstrap_path.chmod(0o600)
+    return bootstrap_path
+
+
+def try_refresh_from_companion_kubeconfig_secret(
+    *,
+    namespace: str,
+    cluster_name: str,
+    work_path: Path,
+) -> tuple[bool, str]:
+    """Use an existing ``rhoai-e2e-kubeconfig-{cluster}`` Secret when the token is still valid."""
+    from k8s.external_kubeconfig import verify_external_cluster_login
+
+    secret = companion_kubeconfig_secret_for_install_cluster(cluster_name)
+    if not secret:
+        return False, ""
+    text = load_kubeconfig_from_tenant_secret(namespace=namespace, secret_name=secret)
+    if not text.strip():
+        return False, ""
+    work_path.parent.mkdir(parents=True, exist_ok=True)
+    work_path.write_text(text, encoding="utf-8")
+    work_path.chmod(0o600)
+    try:
+        verify_external_cluster_login(work_path)
+    except AppError:
+        return False, ""
+    return True, f"companion tenant kubeconfig Secret {secret!r}"
+
+
 def resolve_external_cluster_credentials(
     *,
     namespace: str,
@@ -60,11 +163,25 @@ def resolve_external_cluster_credentials(
     from suite.its_trigger_params import is_s3_install_cluster_source, s3_install_cluster_name
 
     if is_s3_install_cluster_source(cluster_source):
+        cluster = s3_install_cluster_name(cluster_source)
+        bootstrap = _ensure_bootstrap_from_companion_kubeconfig_secret(
+            namespace=namespace,
+            cluster_name=cluster,
+            bootstrap_path=bootstrap_path,
+        )
+        for creds_secret in _s3_install_htpasswd_secret_candidates(
+            cluster,
+            override=credentials_secret_override,
+        ):
+            creds = load_external_cluster_credentials(namespace=namespace, secret_name=creds_secret)
+            if creds:
+                return creds, f"tenant Secret {creds_secret!r}"
+
         from k8s.rosa_hcp_install_credentials import load_rosa_admin_credentials_from_install_zip
 
         rosa = load_rosa_admin_credentials_from_install_zip(
-            bootstrap_path=bootstrap_path if bootstrap_path.is_file() else None,
-            cluster_name=s3_install_cluster_name(cluster_source),
+            bootstrap_path=bootstrap if bootstrap.is_file() else None,
+            cluster_name=cluster,
         )
         if rosa:
             return rosa, "ROSA HCP install-data S3 (rosa-admin)"
@@ -252,6 +369,17 @@ def refresh_working_kubeconfig_from_credentials(
 ) -> tuple[bool, str]:
     """Login with tenant or ROSA HCP S3 credentials; return (used, source label)."""
     from steps.tekton_util import ensure_kubeconfig_bearer_token, materialize_htpasswd_kubeconfig_login
+    from suite.its_trigger_params import is_s3_install_cluster_source, s3_install_cluster_name
+
+    if is_s3_install_cluster_source(cluster_source):
+        cluster = s3_install_cluster_name(cluster_source)
+        used, source = try_refresh_from_companion_kubeconfig_secret(
+            namespace=namespace,
+            cluster_name=cluster,
+            work_path=work_path,
+        )
+        if used:
+            return True, source
 
     creds, source = resolve_external_cluster_credentials(
         namespace=namespace,

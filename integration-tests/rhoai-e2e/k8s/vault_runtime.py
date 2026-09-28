@@ -262,11 +262,7 @@ def vault_login_and_read_kv_data(
     data = (kv_doc.get("data") or {}).get("data")
     if not isinstance(data, dict):
         raise AppError(f"Vault KV payload missing data.data for {kv_path}", 1)
-    out: dict[str, str] = {}
-    for key, val in data.items():
-        if isinstance(key, str) and isinstance(val, str):
-            out[key] = val
-    return out
+    return _flatten_vault_kv_leaf_strings(data)
 
 
 def vault_login_and_read_shift_left(

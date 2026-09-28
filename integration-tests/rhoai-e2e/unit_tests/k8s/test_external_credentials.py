@@ -10,6 +10,7 @@ from unittest import mock
 import pytest
 
 from k8s.external_credentials import (
+    companion_kubeconfig_secret_for_install_cluster,
     external_credentials_secret_name,
     load_external_cluster_credentials,
     refresh_working_kubeconfig_from_credentials,
@@ -100,6 +101,63 @@ def test_seed_working_kubeconfig_copies_bootstrap(tmp_path: Path) -> None:
     work = tmp_path / "work" / "kubeconfig"
     seed_working_kubeconfig(work_path=work, bootstrap_path=bootstrap, api_server="https://api.test:6443")
     assert work.read_text(encoding="utf-8") == bootstrap.read_text(encoding="utf-8")
+
+
+def test_refresh_s3_install_uses_companion_kubeconfig_secret(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work = tmp_path / "kubeconfig"
+    kube_yaml = "\n".join(
+        [
+            "apiVersion: v1",
+            "kind: Config",
+            "clusters:",
+            "  - name: c",
+            "    cluster:",
+            "      server: https://api.nmanos-ocp422.example:6443",
+            "contexts:",
+            "  - name: ctx",
+            "    context:",
+            "      cluster: c",
+            "      user: u",
+            "current-context: ctx",
+            "users:",
+            "  - name: u",
+            "    user:",
+            "      token: valid",
+        ]
+    ) + "\n"
+    with (
+        mock.patch(
+            "k8s.external_credentials.load_kubeconfig_from_tenant_secret",
+            return_value=kube_yaml,
+        ),
+        mock.patch(
+            "k8s.external_kubeconfig.verify_external_cluster_login",
+            return_value="cluster-admin",
+        ),
+        mock.patch(
+            "k8s.external_credentials.resolve_external_cluster_credentials",
+        ) as resolve,
+    ):
+        used, source = refresh_working_kubeconfig_from_credentials(
+            namespace=DEFAULT_NAMESPACE,
+            cluster_source="rhoai-e2e-s3-nmanos-ocp422",
+            bootstrap_path=tmp_path / "missing" / "kubeconfig",
+            work_path=work,
+        )
+    assert used is True
+    assert "companion tenant kubeconfig Secret" in source
+    assert work.read_text(encoding="utf-8") == kube_yaml
+    resolve.assert_not_called()
+
+
+def test_companion_kubeconfig_secret_for_install_cluster() -> None:
+    assert (
+        companion_kubeconfig_secret_for_install_cluster("nmanos-ocp422")
+        == "rhoai-e2e-kubeconfig-nmanos-ocp422"
+    )
 
 
 def test_refresh_working_kubeconfig_from_credentials_no_secret(tmp_path: Path) -> None:
