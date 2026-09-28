@@ -100,6 +100,7 @@ def _trigger_options_incompatible_with_query(
         (getattr(args, "test_timeout_explicit", False), "--test-timeout"),
         (bool(args.external_kubeconfig), "--external-kubeconfig"),
         (bool(args.external_kubeconfig_secret), "--external-kubeconfig-secret"),
+        (bool((getattr(args, "install_data_cluster", "") or "").strip()), "--install-data-cluster"),
         (getattr(args, "cleanup_opt_out", False), "--cleanup false"),
         (getattr(args, "install_dependencies", False), "--install-dependencies"),
         (bool((args.tests_rhoai_version or "").strip()), "--tests-rhoai-version"),
@@ -243,9 +244,12 @@ def parse_cli_args(parser: CliArgumentParser, argv: list[str]) -> argparse.Names
     if getattr(args, "install_dependencies", False) and not (selected_tests & {"smoke", "tier1"}):
         raise AppError("--install-dependencies requires --tests smoke and/or tier1.", 2)
     if getattr(args, "install_dependencies", False):
-        if not args.external_kubeconfig and not args.external_kubeconfig_secret:
+        if not args.external_kubeconfig and not args.external_kubeconfig_secret and not (
+            getattr(args, "install_data_cluster", "") or ""
+        ).strip():
             raise AppError(
-                "--install-dependencies requires --external-kubeconfig or --external-kubeconfig-secret.",
+                "--install-dependencies requires --external-kubeconfig, "
+                "--external-kubeconfig-secret, or --install-data-cluster.",
                 2,
             )
 
@@ -261,9 +265,27 @@ def parse_cli_args(parser: CliArgumentParser, argv: list[str]) -> argparse.Names
     args.external_kubeconfig = (args.external_kubeconfig or "").strip()
     args.external_kubeconfig_context = (getattr(args, "external_kubeconfig_context", "") or "").strip()
     args.external_kubeconfig_secret = (args.external_kubeconfig_secret or "").strip()
-    if args.external_kubeconfig and args.external_kubeconfig_secret:
+    args.install_data_cluster = (getattr(args, "install_data_cluster", "") or "").strip().lower()
+    if args.install_data_cluster:
+        from suite.its_trigger_params import s3_install_cluster_source
+
+        try:
+            s3_install_cluster_source(args.install_data_cluster)
+        except ValueError as exc:
+            raise AppError(str(exc), 2) from exc
+    external_modes = sum(
+        1
+        for flag in (
+            args.external_kubeconfig,
+            args.external_kubeconfig_secret,
+            args.install_data_cluster,
+        )
+        if flag
+    )
+    if external_modes > 1:
         raise AppError(
-            "--external-kubeconfig and --external-kubeconfig-secret are mutually exclusive.",
+            "--external-kubeconfig, --external-kubeconfig-secret, and --install-data-cluster "
+            "are mutually exclusive.",
             2,
         )
     if args.external_kubeconfig_context and not args.external_kubeconfig:
@@ -399,18 +421,20 @@ def parse_cli_args(parser: CliArgumentParser, argv: list[str]) -> argparse.Names
         raise AppError("--dry-run requires --delete-pending-pipelines.", 2)
 
     if cleanup_maintenance_on:
-        if not args.external_kubeconfig and not args.external_kubeconfig_secret:
+        if not args.external_kubeconfig and not args.external_kubeconfig_secret and not args.install_data_cluster:
             raise AppError(
-                "--cleanup requires --external-kubeconfig or --external-kubeconfig-secret.",
+                "--cleanup requires --external-kubeconfig, --external-kubeconfig-secret, "
+                "or --install-data-cluster.",
                 2,
             )
 
     if not query_modes:
         its_path = getattr(args, "its_manifest_path", None)
         apply_trigger_param_resolution(args, its_manifest_path=its_path)
-        if getattr(args, "cleanup_opt_out", False) and not args.external_kubeconfig_path and not args.external_kubeconfig_secret:
+        if getattr(args, "cleanup_opt_out", False) and not args.external_kubeconfig_path and not args.external_kubeconfig_secret and not args.install_data_cluster:
             raise AppError(
-                "--cleanup false requires --external-kubeconfig or --external-kubeconfig-secret.",
+                "--cleanup false requires --external-kubeconfig, --external-kubeconfig-secret, "
+                "or --install-data-cluster.",
                 2,
             )
 

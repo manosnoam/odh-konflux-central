@@ -9,10 +9,13 @@ from suite.constants import is_test_only_product
 
 # EPHC: Ephemeral Hosted Cluster in OpenShift CI (Prow).
 CLUSTER_SOURCE_EPHC = "EPHC"
+# External cluster via ROSA HCP openshift-cli-installer S3 only (no tenant kubeconfig Secret).
+S3_INSTALL_CLUSTER_SECRET_PREFIX = "rhoai-e2e-s3-"
 DEFAULT_SUFFIX = " (default)"
 NOT_APPLICABLE = "n/a"
 
 _SECRET_NAME_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+_S3_INSTALL_CLUSTER_NAME_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 _KNOWN_POOLED_EXTERNAL_SUFFIX_RE = re.compile(r"^(?:rh-nightly-pm|ods-qe-psi-\d+)$")
 _RHOAI_APP_VERSION_RE = re.compile(r"^rhoai-v(\d+)-(\d+)")
 _RHOAI_APP_CATALOG_LINE_RE = re.compile(
@@ -42,14 +45,45 @@ def is_ephemeral_hosted_cluster_source(value: str) -> bool:
     return (value or "").strip() == CLUSTER_SOURCE_EPHC
 
 
+def is_s3_install_cluster_source(value: str) -> bool:
+    """True when CLUSTER_SOURCE is ``rhoai-e2e-s3-{cluster}`` (install-data zip on S3, no kubeconfig Secret)."""
+    text = (value or "").strip()
+    return text.startswith(S3_INSTALL_CLUSTER_SECRET_PREFIX) and bool(
+        s3_install_cluster_name(text)
+    )
+
+
+def s3_install_cluster_name(cluster_source: str) -> str:
+    """Return openshift-cli-installer zip basename from ``rhoai-e2e-s3-{name}``."""
+    text = (cluster_source or "").strip()
+    if not text.startswith(S3_INSTALL_CLUSTER_SECRET_PREFIX):
+        return ""
+    name = text[len(S3_INSTALL_CLUSTER_SECRET_PREFIX) :].strip("-")
+    if not name or not _S3_INSTALL_CLUSTER_NAME_RE.fullmatch(name):
+        return ""
+    return name
+
+
+def s3_install_cluster_source(cluster_name: str) -> str:
+    """Build ``CLUSTER_SOURCE`` for S3-only external clusters (valid K8s name, Secret not required)."""
+    name = (cluster_name or "").strip().lower()
+    if not name or not _S3_INSTALL_CLUSTER_NAME_RE.fullmatch(name):
+        raise ValueError(
+            f"install-data cluster name must match DNS-1123 subdomain labels; got {cluster_name!r}"
+        )
+    return f"{S3_INSTALL_CLUSTER_SECRET_PREFIX}{name}"
+
+
 def is_external_cluster_source(value: str) -> bool:
-    """True when CLUSTER_SOURCE is a tenant Secret name (not EPHC or unset)."""
+    """True when CLUSTER_SOURCE is external (tenant Secret or S3 install-data ref, not EPHC)."""
     text = (value or "").strip()
     return bool(text) and text != CLUSTER_SOURCE_EPHC
 
 
 def _external_kubeconfig_secret_suffix(value: str) -> str:
     secret = (value or "").strip()
+    if is_s3_install_cluster_source(secret):
+        return s3_install_cluster_name(secret)
     for prefix in ("rhoai-e2e-kubeconfig-", "kubeconfig-"):
         if secret.startswith(prefix):
             return secret[len(prefix) :].strip("-")
@@ -89,13 +123,23 @@ def is_pooled_external_cluster_source(value: str) -> bool:
 
 
 def external_kubeconfig_secret_name(value: str) -> str:
-    """Return tenant Secret name for external clusters; empty for EPHC or unset."""
+    """Return tenant kubeconfig Secret name for external clusters; empty for S3 install-data or EPHC."""
     text = (value or "").strip()
-    return text if is_external_cluster_source(text) else ""
+    if not is_external_cluster_source(text) or is_s3_install_cluster_source(text):
+        return ""
+    return text
 
 
-def resolve_cluster_source_for_trigger(*, product: str, external_secret: str) -> str:
+def resolve_cluster_source_for_trigger(
+    *,
+    product: str,
+    external_secret: str,
+    install_data_cluster: str = "",
+) -> str:
     """Value for ITS/pipeline CLUSTER_SOURCE from rhoai_e2e.py trigger inputs."""
+    cluster = (install_data_cluster or "").strip()
+    if cluster:
+        return s3_install_cluster_source(cluster)
     secret = (external_secret or "").strip()
     if secret:
         return secret
@@ -109,9 +153,12 @@ def validate_cluster_source(value: str) -> None:
     text = (value or "").strip()
     if not text or is_ephemeral_hosted_cluster_source(text):
         return
+    if is_s3_install_cluster_source(text):
+        return
     if not _SECRET_NAME_RE.fullmatch(text):
         raise ValueError(
-            f"CLUSTER_SOURCE must be {CLUSTER_SOURCE_EPHC!r} or a valid Kubernetes Secret name; got {text!r}"
+            f"CLUSTER_SOURCE must be {CLUSTER_SOURCE_EPHC!r}, "
+            f"{S3_INSTALL_CLUSTER_SECRET_PREFIX}<cluster>, or a valid Kubernetes Secret name; got {text!r}"
         )
 
 

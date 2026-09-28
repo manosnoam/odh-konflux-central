@@ -16,7 +16,11 @@ from k8s.external_credentials import (
 )
 from k8s.external_kubeconfig import sync_external_kubeconfig_secret_cluster_metadata, verify_external_cluster_login
 from suite.errors import AppError
-from suite.its_trigger_params import is_external_cluster_source
+from suite.its_trigger_params import (
+    external_kubeconfig_secret_name,
+    is_external_cluster_source,
+    is_s3_install_cluster_source,
+)
 
 
 def _env_path(name: str, default: str) -> Path:
@@ -69,8 +73,16 @@ def refresh_external_kubeconfig() -> int:
     if refreshed:
         if refresh_source:
             print(f"Refreshed external kubeconfig via {refresh_source}")
-        else:
+        elif creds_secret:
             print(f"Refreshed external kubeconfig via htpasswd Secret {creds_secret!r}")
+    elif is_s3_install_cluster_source(cluster_source):
+        print(
+            "ERROR: ROSA HCP install-data S3 login failed "
+            f"(CLUSTER_SOURCE={cluster_source!r}; check Vault openshift AWS keys and "
+            "s3://hcp-clusters-mdata/openshift-cli-installer/<cluster>.zip)",
+            file=sys.stderr,
+        )
+        return 1
     elif bootstrap_path.is_file():
         print(
             f"No credentials Secret {creds_secret!r}; using bootstrap kubeconfig from {cluster_source!r}"
@@ -92,7 +104,7 @@ def refresh_external_kubeconfig() -> int:
         return 1
     print(f"External cluster login OK after refresh: {who}")
 
-    if refreshed:
+    if refreshed and external_kubeconfig_secret_name(cluster_source):
         try:
             update_external_kubeconfig_secret(
                 namespace=namespace,

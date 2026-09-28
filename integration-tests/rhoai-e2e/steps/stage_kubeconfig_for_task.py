@@ -18,7 +18,7 @@ ensure_rhoai_e2e_path()
 
 from steps.external_kubeconfig_mount import copy_external_kubeconfig_mount  # noqa: E402
 from steps.prepare_diagnostics_kubeconfig import _fetch_external_kubeconfig, _namespace  # noqa: E402
-from suite.its_trigger_params import external_kubeconfig_secret_name  # noqa: E402
+from suite.its_trigger_params import external_kubeconfig_secret_name, is_s3_install_cluster_source  # noqa: E402
 
 _CREDENTIALS = Path("/credentials")
 _KUBECONFIG = _CREDENTIALS / "kubeconfig"
@@ -30,14 +30,38 @@ def _write_secure(path: Path, data: bytes) -> None:
         handle.write(data)
 
 
+def _stage_from_tests_shared(dest: Path) -> int:
+    tests_shared = (os.environ.get("TESTS_SHARED", "") or "").strip()
+    if not tests_shared:
+        print("ERROR: TESTS_SHARED required to stage external kubeconfig from tests-shared", file=sys.stderr)
+        return 1
+    src = Path(tests_shared) / "credentials" / "kubeconfig"
+    if not src.is_file():
+        print(
+            f"ERROR: external kubeconfig missing at {src} (expected external-cluster-ready to stage it)",
+            file=sys.stderr,
+        )
+        return 1
+    _write_secure(dest, src.read_bytes())
+    print(f"External kubeconfig staged at {dest} (from tests-shared)")
+    return 0
+
+
 def main() -> int:
-    external = external_kubeconfig_secret_name(os.environ.get("CLUSTER_SOURCE", ""))
+    cluster_source = (os.environ.get("CLUSTER_SOURCE", "") or "").strip()
+    external = external_kubeconfig_secret_name(cluster_source)
     ephc_rel = (os.environ.get("EPHC_KUBECONFIG_REL") or "").strip()
     _CREDENTIALS.mkdir(parents=True, exist_ok=True)
+
+    if is_s3_install_cluster_source(cluster_source):
+        return _stage_from_tests_shared(_KUBECONFIG)
 
     if external:
         if copy_external_kubeconfig_mount(_KUBECONFIG):
             return 0
+        if (os.environ.get("TESTS_SHARED", "") or "").strip():
+            if _stage_from_tests_shared(_KUBECONFIG) == 0:
+                return 0
         ns = _namespace()
         if not ns:
             print("ERROR: namespace required to read external kubeconfig secret", file=sys.stderr)

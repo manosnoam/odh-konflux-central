@@ -149,6 +149,14 @@ class TestPipelinerunNaming(unittest.TestCase):
             ),
             "nmanos-konflux1",
         )
+        self.assertEqual(
+            cluster_segment_for_name(
+                cluster_source="rhoai-e2e-s3-nmanos-ocp422",
+                cluster_label="",
+                target_type="external",
+            ),
+            "nmanos-ocp422",
+        )
 
     def test_missing_version_and_cluster(self) -> None:
         prefix = build_rhoai_e2e_generate_prefix(

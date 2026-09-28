@@ -281,7 +281,7 @@ def load_hcp_install_aws_credentials(
     environ: Mapping[str, str] | None = None,
     urlopen: UrlOpen | None = None,
 ) -> dict[str, str]:
-    """AWS keys for openshift-cli-installer S3 (apps/rhods-ci/openshift, then shift-left)."""
+    """AWS keys for openshift-cli-installer S3 (Vault apps/rhods-ci/openshift only)."""
     env: Mapping[str, str] = os.environ if environ is None else environ
     existing = _aws_credentials_from_mapping(env)
     if existing.get("AWS_ACCESS_KEY_ID") and existing.get("AWS_SECRET_ACCESS_KEY"):
@@ -306,19 +306,6 @@ def load_hcp_install_aws_credentials(
             return creds
     except AppError as exc:
         print(f"WARN: could not load openshift Vault AWS credentials: {exc}", flush=True)
-    try:
-        shift_left = vault_login_and_read_shift_left(
-            vault_addr=addr,
-            role_id=role_id,
-            secret_id=secret_id,
-            ca_path=ca_path,
-            urlopen=urlopen,
-        )
-        creds = _aws_credentials_from_mapping(merge_model_serving_env(shift_left))
-        if creds.get("AWS_ACCESS_KEY_ID") and creds.get("AWS_SECRET_ACCESS_KEY"):
-            return creds
-    except AppError as exc:
-        print(f"WARN: could not load shift-left Vault AWS credentials: {exc}", flush=True)
     return existing
 
 

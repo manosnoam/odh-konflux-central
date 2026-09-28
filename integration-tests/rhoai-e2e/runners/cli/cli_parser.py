@@ -251,6 +251,17 @@ def _add_external_group(parser: CliArgumentParser) -> None:
         ),
     )
     external.add_argument(
+        "--install-data-cluster",
+        metavar="NAME",
+        default=os.environ.get("OLMINSTALL_INSTALL_DATA_CLUSTER", ""),
+        help=(
+            "External cluster via ROSA HCP install-data S3 only "
+            "(s3://hcp-clusters-mdata/openshift-cli-installer/NAME.zip + Vault openshift AWS). "
+            "Sets CLUSTER_SOURCE to rhoai-e2e-s3-NAME; no kubeconfig Secret upload. "
+            "Env: OLMINSTALL_INSTALL_DATA_CLUSTER."
+        ),
+    )
+    external.add_argument(
         "--external-kubeconfig-secret",
         metavar="NAME",
         default=os.environ.get("OLMINSTALL_EXTERNAL_KUBECONFIG_SECRET", ""),

@@ -57,6 +57,19 @@ def resolve_external_cluster_credentials(
     credentials_secret_override: str = "",
 ) -> tuple[ExternalClusterCredentials | None, str]:
     """Tenant htpasswd Secret first, then ROSA HCP install-data S3 (rosa-admin)."""
+    from suite.its_trigger_params import is_s3_install_cluster_source, s3_install_cluster_name
+
+    if is_s3_install_cluster_source(cluster_source):
+        from k8s.rosa_hcp_install_credentials import load_rosa_admin_credentials_from_install_zip
+
+        rosa = load_rosa_admin_credentials_from_install_zip(
+            bootstrap_path=bootstrap_path if bootstrap_path.is_file() else None,
+            cluster_name=s3_install_cluster_name(cluster_source),
+        )
+        if rosa:
+            return rosa, "ROSA HCP install-data S3 (rosa-admin)"
+        return None, ""
+
     creds_secret = external_credentials_secret_name(
         cluster_source,
         override=credentials_secret_override,

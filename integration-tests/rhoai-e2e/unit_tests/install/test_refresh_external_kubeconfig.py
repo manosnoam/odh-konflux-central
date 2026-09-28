@@ -117,6 +117,20 @@ def test_refresh_external_kubeconfig_write_back_failure(
         assert mod.refresh_external_kubeconfig() == 1
 
 
+def test_refresh_external_kubeconfig_s3_fails_without_credentials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work = tmp_path / "kubeconfig"
+    monkeypatch.setenv("CLUSTER_SOURCE", "rhoai-e2e-s3-nmanos-ocp422")
+    monkeypatch.setenv("NAMESPACE", DEFAULT_NAMESPACE)
+    monkeypatch.setenv("KUBECONFIG_BOOTSTRAP", str(tmp_path / "missing" / "kubeconfig"))
+    monkeypatch.setenv("KUBECONFIG", str(work))
+
+    with mock.patch.object(mod, "refresh_working_kubeconfig_from_credentials", return_value=(False, "")):
+        assert mod.refresh_external_kubeconfig() == 1
+
+
 def test_refresh_external_kubeconfig_login_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

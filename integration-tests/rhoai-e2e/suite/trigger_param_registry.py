@@ -84,6 +84,7 @@ class TriggerContext:
     smoke_aws_override: bool = False
     konflux_repo: str = ""
     konflux_branch: str = ""
+    install_data_cluster: str = ""
 
 
 InferRule = tuple[str, Callable[[TriggerContext], bool], Callable[[TriggerContext], str | None]]
@@ -112,6 +113,7 @@ def _cluster_source(ctx: TriggerContext) -> str | None:
     resolved = resolve_cluster_source_for_trigger(
         product=ctx.product,
         external_secret=(ctx.external_secret or "").strip(),
+        install_data_cluster=(ctx.install_data_cluster or "").strip(),
     )
     return resolved or None
 
@@ -621,10 +623,12 @@ def build_trigger_context_from_args(
     committed_its_params: Mapping[str, str] = {},
 ) -> TriggerContext:
     secret = (external_secret or getattr(args, "external_kubeconfig_secret", "") or "").strip()
+    install_data = (getattr(args, "install_data_cluster", "") or "").strip()
     has_external = bool(
         getattr(args, "external_kubeconfig_path", None)
         or secret
         or getattr(args, "external_kubeconfig", "")
+        or install_data
     )
     return TriggerContext(
         product=getattr(args, "product", "") or "",
@@ -633,6 +637,7 @@ def build_trigger_context_from_args(
         install_dependencies=bool(getattr(args, "install_dependencies", False)),
         external_kubeconfig=has_external,
         external_secret=secret,
+        install_data_cluster=install_data,
         update_channel_override=(getattr(args, "channel", "") or "").strip(),
         ocp_version=(getattr(args, "ocp_version", "") or "").strip(),
         ocp_channel=(getattr(args, "ocp_channel", "") or "").strip(),

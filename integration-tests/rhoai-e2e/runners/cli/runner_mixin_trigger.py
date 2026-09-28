@@ -203,7 +203,8 @@ class RunnerTriggerMixin:
         """Upsert trigger params on staged ITS via ``trigger_param_registry``."""
         secret = (self.external_kubeconfig_secret or "").strip()
         if not secret and self._external_kubeconfig_its_override():
-            secret = self._resolve_external_kubeconfig_secret()
+            if not (getattr(self.args, "install_data_cluster", "") or "").strip():
+                secret = self._resolve_external_kubeconfig_secret()
         committed = read_committed_its_params(self.its_file)
         its_params: dict[str, str] = {}
         for name in trigger_param_names():
@@ -790,10 +791,12 @@ class RunnerTriggerMixin:
     def _cluster_source_for_its(self) -> str:
         secret = (self.external_kubeconfig_secret or "").strip()
         if not secret and self._external_kubeconfig_its_override():
-            secret = self._resolve_external_kubeconfig_secret()
+            if not (getattr(self.args, "install_data_cluster", "") or "").strip():
+                secret = self._resolve_external_kubeconfig_secret()
         return resolve_cluster_source_for_trigger(
             product=self.args.product,
             external_secret=secret,
+            install_data_cluster=(getattr(self.args, "install_data_cluster", "") or "").strip(),
         )
 
 

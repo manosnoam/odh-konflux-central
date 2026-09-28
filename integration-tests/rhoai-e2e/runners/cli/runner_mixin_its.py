@@ -14,7 +14,12 @@ from suite.its_registry import (
     integration_test_scenario_application,
     its_manifest_param,
 )
-from suite.its_trigger_params import CLUSTER_SOURCE_EPHC, is_external_cluster_source, ocp_install_prefix
+from suite.its_trigger_params import (
+    CLUSTER_SOURCE_EPHC,
+    is_external_cluster_source,
+    is_s3_install_cluster_source,
+    ocp_install_prefix,
+)
 from suite.pipelinerun_naming import build_rhoai_e2e_generate_prefix
 
 
@@ -74,7 +79,8 @@ class RunnerItsAdminMixin:
             self.resolved_rhoai_fbc_name = fbc_name
         cluster_source = its_manifest_param(manifest, "CLUSTER_SOURCE")
         if is_external_cluster_source(cluster_source) and not self._external_kubeconfig_its_override():
-            self.external_kubeconfig_secret = cluster_source
+            if not is_s3_install_cluster_source(cluster_source):
+                self.external_kubeconfig_secret = cluster_source
         if not (getattr(self.args, "ocp_version", "") or "").strip():
             ocp_version = its_manifest_param(manifest, "OCP_VERSION")
             prefix = ocp_install_prefix(ocp_version)

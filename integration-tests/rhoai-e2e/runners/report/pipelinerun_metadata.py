@@ -140,10 +140,18 @@ def _read_label(prj: dict[str, Any], key: str) -> str:
 
 
 def cluster_label_from_cluster_source(cluster_source: str) -> str:
-    """Derive a short cluster label from a tenant kubeconfig Secret name."""
+    """Derive a short cluster label from CLUSTER_SOURCE (Secret name or S3 install-data ref)."""
+    from suite.its_trigger_params import (
+        CLUSTER_SOURCE_EPHC,
+        is_s3_install_cluster_source,
+        s3_install_cluster_name,
+    )
+
     secret = (cluster_source or "").strip()
     if not secret or secret == CLUSTER_SOURCE_EPHC:
         return ""
+    if is_s3_install_cluster_source(secret):
+        return s3_install_cluster_name(secret)
     for prefix in ("rhoai-e2e-kubeconfig-", "kubeconfig-"):
         if secret.startswith(prefix):
             return secret[len(prefix) :].strip("-") or secret

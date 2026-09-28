@@ -7,11 +7,13 @@ import unittest
 from unittest import mock
 
 from suite.its_trigger_params import (CLUSTER_SOURCE_EPHC,
+                                      S3_INSTALL_CLUSTER_SECRET_PREFIX,
                                       external_kubeconfig_secret_name,
                                       is_ephemeral_hosted_cluster_source,
                                       is_external_cluster_source,
                                       is_known_shared_external_cluster_secret,
                                       is_pooled_external_cluster_source,
+                                      is_s3_install_cluster_source,
                                       ocp_install_prefix,
                                       ocp_version_from_rhoai_fbc_name,
                                       resolve_cluster_source_for_trigger,
@@ -21,6 +23,7 @@ from suite.its_trigger_params import (CLUSTER_SOURCE_EPHC,
                                       resolve_version_display_params,
                                       rhoai_version_from_app,
                                       rhoai_version_label_from_app,
+                                      s3_install_cluster_source,
                                       validate_cluster_source,
                                       with_default_suffix)
 
@@ -32,6 +35,10 @@ class ItsTriggerParamsTests(unittest.TestCase):
             external_kubeconfig_secret_name("rhoai-e2e-kubeconfig-test"),
             "rhoai-e2e-kubeconfig-test",
         )
+        s3_source = s3_install_cluster_source("nmanos-ocp422")
+        self.assertTrue(is_s3_install_cluster_source(s3_source))
+        self.assertEqual(external_kubeconfig_secret_name(s3_source), "")
+        validate_cluster_source(s3_source)
 
     def test_ephc_not_external(self) -> None:
         self.assertFalse(is_external_cluster_source(CLUSTER_SOURCE_EPHC))
@@ -90,6 +97,14 @@ class ItsTriggerParamsTests(unittest.TestCase):
                 external_secret="rhoai-e2e-kubeconfig-foo",
             ),
             "rhoai-e2e-kubeconfig-foo",
+        )
+        self.assertEqual(
+            resolve_cluster_source_for_trigger(
+                product="rhoai",
+                external_secret="",
+                install_data_cluster="nmanos-ocp422",
+            ),
+            f"{S3_INSTALL_CLUSTER_SECRET_PREFIX}nmanos-ocp422",
         )
 
     def test_validate_rejects_invalid_secret_name(self) -> None:

@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 from suite.constants import product_installs_operator
-from suite.its_trigger_params import CLUSTER_SOURCE_EPHC, is_external_cluster_source
+from suite.its_trigger_params import (
+    CLUSTER_SOURCE_EPHC,
+    is_external_cluster_source,
+    is_s3_install_cluster_source,
+    s3_install_cluster_name,
+)
 
 _E2E_PLR_PREFIX = "e2e"
 _RHOAI_E2E_RESOURCE_PREFIX = "rhoai-e2e"
@@ -164,6 +169,8 @@ def cluster_segment_for_name(
         return label
     source = (cluster_source or "").strip()
     if is_external_cluster_source(source):
+        if is_s3_install_cluster_source(source):
+            return _sanitize_segment(s3_install_cluster_name(source), max_len=20)
         # Tenant Secret names (e.g. rhoai-e2e-kubeconfig-*) are not cluster ids.
         if re.match(r"^rhoai-e2e-kubeconfig", source, re.IGNORECASE):
             return ""

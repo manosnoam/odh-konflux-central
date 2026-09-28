@@ -187,6 +187,9 @@ class RhoaiE2ERunner(
 
 
     def _trigger_external_cluster_target(self) -> tuple[Path | None, str]:
+        install_cluster = (getattr(self.args, "install_data_cluster", "") or "").strip()
+        if install_cluster:
+            return None, ""
         ext_path = getattr(self.args, "external_kubeconfig_path", None)
         if ext_path is not None:
             return validate_kubeconfig_path(str(ext_path)), ""
@@ -197,6 +200,9 @@ class RhoaiE2ERunner(
         return None, secret
 
     def _trigger_cluster_label(self) -> str:
+        install_cluster = (getattr(self.args, "install_data_cluster", "") or "").strip()
+        if install_cluster:
+            return install_cluster
         path, secret = self._trigger_external_cluster_target()
         if path is not None:
             return cluster_label_from_kubeconfig(path)
@@ -350,7 +356,13 @@ class RhoaiE2ERunner(
 
 
     def _cluster_label_for_external_secret(self, secret_name: str) -> str:
-        """Best-effort context/cluster name from an external kubeconfig Secret (watch summary)."""
+        """Best-effort context/cluster name from external CLUSTER_SOURCE (Secret or S3 ref)."""
+        from suite.its_trigger_params import is_s3_install_cluster_source
+
+        if is_s3_install_cluster_source(secret_name):
+            from k8s.external_kubeconfig import cluster_label_from_secret_name
+
+            return cluster_label_from_secret_name(secret_name)
         return cluster_label_from_tenant_secret(
             namespace=self.args.namespace,
             secret_name=secret_name,
@@ -700,6 +712,7 @@ class RhoaiE2ERunner(
         return bool(
             (getattr(self.args, "external_kubeconfig_path", None) is not None)
             or (getattr(self.args, "external_kubeconfig_secret", "") or "").strip()
+            or (getattr(self.args, "install_data_cluster", "") or "").strip()
         )
 
 

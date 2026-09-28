@@ -1164,6 +1164,7 @@ spec:
           - name: kubeconfig-bootstrap
             secret:
               secretName: $(params.CLUSTER_SOURCE)
+              optional: true
               items:
                 - key: kubeconfig
                   path: kubeconfig
@@ -1346,11 +1347,7 @@ spec:
               Set to "true" only when git clone requires bypassing TLS certificate verification.
         volumes:
           - name: credentials
-            secret:
-              secretName: $(params.CLUSTER_SOURCE)
-              items:
-                - key: kubeconfig
-                  path: kubeconfig
+            emptyDir: {}
         stepTemplate:
           env:
             - name: OLMINSTALL_OC_VERBOSE
@@ -1383,6 +1380,25 @@ spec:
 
               tls = os.environ.get("TLS_WORKAROUND", "").strip().lower() in ("1", "true", "yes")
               git_clone(os.environ["REPO_URL"], os.environ["REPO_REV"], os.environ["DEST_DIR"], tls_workaround=tls)
+
+          - name: stage-external-kubeconfig
+            image: quay.io/konflux-ci/konflux-test:stable@sha256:09328e5f47da168ffe951ec9c4242cd6761e61e0a235df1bba3f5158e757446d
+            volumeMounts:
+              - name: credentials
+                mountPath: /credentials
+            env:
+              - name: TESTS_SHARED
+                value: $(workspaces.tests-shared.path)
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+              src="${TESTS_SHARED}/credentials/kubeconfig"
+              if [[ ! -f "${src}" ]]; then
+                echo "ERROR: external kubeconfig missing at ${src} (expected external-cluster-ready)" >&2
+                exit 1
+              fi
+              cp "${src}" /credentials/kubeconfig
+              chmod 600 /credentials/kubeconfig
 
           - name: run-cleanup
             image: quay.io/rhoai/rhoai-task-toolset:its@sha256:18b1af9b64d766478792849e49eed156464f678ef53b567a641a28444cacbfc9

@@ -857,9 +857,13 @@ def _normalize_cluster_id(value: str) -> str:
 
 def cluster_label_from_secret_name(secret_name: str) -> str:
     """Derive cluster id from a tenant kubeconfig Secret name (best-effort)."""
+    from suite.its_trigger_params import is_s3_install_cluster_source, s3_install_cluster_name
+
     secret = (secret_name or "").strip()
     if not secret:
         return ""
+    if is_s3_install_cluster_source(secret):
+        return s3_install_cluster_name(secret)
     for prefix in ("rhoai-e2e-kubeconfig-", "kubeconfig-"):
         if secret.startswith(prefix):
             return secret[len(prefix) :].strip("-") or secret

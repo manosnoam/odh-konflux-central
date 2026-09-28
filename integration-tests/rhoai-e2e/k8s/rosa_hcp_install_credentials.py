@@ -16,6 +16,11 @@ DEFAULT_S3_BUCKET = "hcp-clusters-mdata"
 DEFAULT_S3_PREFIX = "openshift-cli-installer/"
 ROSA_ADMIN_USER = "rosa-admin"
 ZIP_PASSWORD_ENTRY = "auth/rosa-admin-password"
+ZIP_KUBECONFIG_CANDIDATES: tuple[str, ...] = (
+    "auth/kubeconfig",
+    "auth/kubeconfig-admin",
+    "auth/kubeconfig-admin-internal",
+)
 
 
 def _env(name: str, default: str = "") -> str:
@@ -51,6 +56,45 @@ def _extract_zip_member(zip_bytes: bytes, member_path: str) -> str:
         return raw.decode("utf-8").strip()
     except (KeyError, UnicodeDecodeError, zipfile.BadZipFile):
         return ""
+
+
+def api_server_from_install_zip(zip_bytes: bytes) -> str:
+    """Read API URL from openshift-cli-installer zip (auth/kubeconfig)."""
+    if not zip_bytes:
+        return ""
+    import tempfile
+
+    from steps.tekton_util import _kubeconfig_api_server
+
+    for member in ZIP_KUBECONFIG_CANDIDATES:
+        text = _extract_zip_member(zip_bytes, member)
+        if not text:
+            continue
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".kubeconfig", delete=False) as tmp:
+            tmp.write(text)
+            tmp.flush()
+            path = Path(tmp.name)
+        try:
+            server = _kubeconfig_api_server(path)
+            if server:
+                return server
+        finally:
+            path.unlink(missing_ok=True)
+    return ""
+
+
+def download_install_zip_bytes(*, cluster_name: str, auth_dir: Path = VAULT_AUTH_MOUNT) -> bytes:
+    """Fetch openshift-cli-installer/{cluster}.zip using Vault openshift AWS credentials."""
+    name = (cluster_name or "").strip()
+    if not name:
+        return b""
+    aws_env = load_hcp_install_aws_credentials(auth_dir=auth_dir)
+    if not aws_env.get("AWS_ACCESS_KEY_ID") or not aws_env.get("AWS_SECRET_ACCESS_KEY"):
+        print("WARN: AWS credentials unavailable for ROSA HCP install-data S3", flush=True)
+        return b""
+    bucket = _env("ROSA_HCP_INSTALL_S3_BUCKET", DEFAULT_S3_BUCKET)
+    key = _install_zip_s3_key(name)
+    return _s3_download_bytes(bucket, key, aws_env)
 
 
 def _pip_tools_target() -> Path:
@@ -109,37 +153,49 @@ def _s3_download_bytes(bucket: str, key: str, aws_env: dict[str, str]) -> bytes:
 
 def load_rosa_admin_credentials_from_install_zip(
     *,
-    bootstrap_path: Path,
+    bootstrap_path: Path | None = None,
+    cluster_name: str = "",
     auth_dir: Path = VAULT_AUTH_MOUNT,
 ) -> ExternalClusterCredentials | None:
     """Return rosa-admin credentials from openshift-cli-installer S3 zip when available."""
-    cluster_name = resolve_install_cluster_name(bootstrap_path)
-    api_server = _kubeconfig_api_server(bootstrap_path) if bootstrap_path.is_file() else ""
-    if not cluster_name or not api_server:
+    name = (cluster_name or "").strip()
+    if not name and bootstrap_path is not None and bootstrap_path.is_file():
+        name = resolve_install_cluster_name(bootstrap_path)
+    if not name:
         return None
 
-    aws_env = load_hcp_install_aws_credentials(auth_dir=auth_dir)
-    if not aws_env.get("AWS_ACCESS_KEY_ID") or not aws_env.get("AWS_SECRET_ACCESS_KEY"):
-        print("WARN: AWS credentials unavailable for ROSA HCP install-data S3 fallback", flush=True)
-        return None
+    api_server = ""
+    if bootstrap_path is not None and bootstrap_path.is_file():
+        api_server = _kubeconfig_api_server(bootstrap_path)
 
-    bucket = _env("ROSA_HCP_INSTALL_S3_BUCKET", DEFAULT_S3_BUCKET)
-    key = _install_zip_s3_key(cluster_name)
-    zip_bytes = _s3_download_bytes(bucket, key, aws_env)
+    zip_bytes = download_install_zip_bytes(cluster_name=name, auth_dir=auth_dir)
     if not zip_bytes:
+        return None
+
+    if not api_server:
+        api_server = api_server_from_install_zip(zip_bytes)
+    if not api_server:
+        print(
+            f"WARN: could not resolve API server from install zip for cluster {name!r}",
+            flush=True,
+        )
         return None
 
     password = _extract_zip_member(zip_bytes, ZIP_PASSWORD_ENTRY)
     if not password:
+        bucket = _env("ROSA_HCP_INSTALL_S3_BUCKET", DEFAULT_S3_BUCKET)
+        key = _install_zip_s3_key(name)
         print(
             f"WARN: {ZIP_PASSWORD_ENTRY!r} missing in {_s3_object_uri(bucket, key)}",
             flush=True,
         )
         return None
 
+    bucket = _env("ROSA_HCP_INSTALL_S3_BUCKET", DEFAULT_S3_BUCKET)
+    key = _install_zip_s3_key(name)
     print(
         f"Loaded rosa-admin password from {_s3_object_uri(bucket, key)} "
-        f"(cluster={cluster_name})",
+        f"(cluster={name})",
         flush=True,
     )
     return ExternalClusterCredentials(

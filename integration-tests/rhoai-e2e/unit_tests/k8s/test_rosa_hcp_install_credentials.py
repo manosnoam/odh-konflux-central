@@ -110,6 +110,56 @@ def test_s3_download_bytes_returns_empty_without_raising_when_boto3_unavailable(
         )
 
 
+def test_load_rosa_admin_credentials_from_install_zip_by_cluster_name() -> None:
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w") as archive:
+        archive.writestr("auth/rosa-admin-password", "rosa-secret\n")
+        archive.writestr(
+            "auth/kubeconfig",
+            "\n".join(
+                [
+                    "apiVersion: v1",
+                    "kind: Config",
+                    "clusters:",
+                    "  - name: c",
+                    "    cluster:",
+                    "      server: https://api.nmanos-test.8xbm.s3.devshift.org:443",
+                    "contexts:",
+                    "  - name: ctx",
+                    "    context:",
+                    "      cluster: c",
+                    "      user: u",
+                    "current-context: ctx",
+                    "users:",
+                    "  - name: u",
+                    "    user: {}",
+                ]
+            )
+            + "\n",
+        )
+
+    with (
+        mock.patch(
+            "k8s.rosa_hcp_install_credentials.load_hcp_install_aws_credentials",
+            return_value={
+                "AWS_ACCESS_KEY_ID": "AKIA_TEST",
+                "AWS_SECRET_ACCESS_KEY": "secret",
+            },
+        ),
+        mock.patch(
+            "k8s.rosa_hcp_install_credentials.download_install_zip_bytes",
+            return_value=zip_buf.getvalue(),
+        ),
+    ):
+        creds = load_rosa_admin_credentials_from_install_zip(cluster_name="nmanos-test")
+
+    assert creds == ExternalClusterCredentials(
+        username="rosa-admin",
+        password="rosa-secret",
+        api_server="https://api.nmanos-test.8xbm.s3.devshift.org:443",
+    )
+
+
 def test_load_rosa_admin_credentials_from_install_zip(tmp_path: Path) -> None:
     bootstrap = tmp_path / "kubeconfig"
     _bootstrap_kubeconfig(
