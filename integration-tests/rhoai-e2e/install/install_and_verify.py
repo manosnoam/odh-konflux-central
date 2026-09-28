@@ -969,6 +969,42 @@ def count_olm_bundle_unpack_jobs(
     return count
 
 
+def _subscription_catalog_source(operator_name: str, operator_namespace: str) -> str | None:
+    r = oc_run(
+        ["get", "subscription", operator_name, "-n", operator_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if r.returncode != 0:
+        return None
+    try:
+        source = json.loads(r.stdout or "{}").get("spec", {}).get("source")
+    except json.JSONDecodeError:
+        return None
+    text = str(source or "").strip()
+    return text or None
+
+
+def recycle_catalog_source_pod(catalog_name: str, *, marketplace_namespace: str = _MARKETPLACE_NS) -> None:
+    """Restart the CatalogSource pod (common EPHC wedge after stuck bundle unpack)."""
+    print(f"Recycling CatalogSource/{catalog_name} pod in {marketplace_namespace}...", flush=True)
+    oc_run(
+        [
+            "delete",
+            "pod",
+            "-n",
+            marketplace_namespace,
+            "-l",
+            f"olm.catalogSource={catalog_name}",
+            "--ignore-not-found=true",
+        ],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+
+
 def log_marketplace_bundle_unpack_state(
     *,
     marketplace_namespace: str = _MARKETPLACE_NS,
@@ -999,6 +1035,57 @@ def log_marketplace_bundle_unpack_state(
         check=False,
         timeout=120,
     )
+    r = oc_run(
+        ["get", "jobs", "-n", marketplace_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    if r.returncode != 0:
+        return
+    try:
+        items = json.loads(r.stdout or "{}").get("items") or []
+    except json.JSONDecodeError:
+        return
+    for job in items:
+        if not isinstance(job, dict):
+            continue
+        if not _job_looks_like_bundle_unpack(job):
+            continue
+        if _job_is_bundle_unpack_terminal_success(job):
+            continue
+        name = str((job.get("metadata") or {}).get("name") or "").strip()
+        if not name:
+            continue
+        print(f"Unpack Job/{name} pods:", flush=True)
+        oc_run(
+            [
+                "get",
+                "pods",
+                "-n",
+                marketplace_namespace,
+                "-l",
+                f"job-name={name}",
+                "-o",
+                "wide",
+            ],
+            capture_output=False,
+            check=False,
+            timeout=120,
+        )
+        oc_run(
+            [
+                "describe",
+                "pods",
+                "-n",
+                marketplace_namespace,
+                "-l",
+                f"job-name={name}",
+            ],
+            capture_output=False,
+            check=False,
+            timeout=120,
+        )
 
 
 def _subscription_status_last_updated(operator_name: str, operator_namespace: str) -> str | None:
@@ -1526,6 +1613,7 @@ def recover_bundle_unpack_deadline_exceeded(
     operator_namespace: str,
     *,
     purge_terminal_success: bool = False,
+    recycle_catalog: bool = False,
 ) -> int:
     """Clear stale unpack Jobs (failed or stuck-active) and ensure OG unpack timeout."""
     try:
@@ -1538,6 +1626,16 @@ def recover_bundle_unpack_deadline_exceeded(
     deleted = delete_failed_olm_bundle_unpack_jobs(include_active=True)
     if purge_terminal_success:
         deleted += delete_terminal_olm_bundle_unpack_jobs()
+    if recycle_catalog:
+        catalog = _subscription_catalog_source(operator_name, operator_namespace)
+        if catalog:
+            recycle_catalog_source_pod(catalog)
+        else:
+            print(
+                f"WARN: cannot recycle CatalogSource pod for {operator_name} "
+                "(subscription spec.source missing)",
+                flush=True,
+            )
     if deleted == 0:
         print(
             f"WARN: BundleUnpack recover for {operator_name} but no unpack Jobs found "
@@ -1674,6 +1772,7 @@ def wait_subscription_bundle_unpacked(
             operator_name,
             operator_namespace,
             purge_terminal_success=purge_terminal,
+            recycle_catalog=purge_terminal,
         )
         if deleted > 0 or subscription_manifest is not None:
             if subscription_manifest is not None:
@@ -1756,6 +1855,16 @@ def wait_subscription_bundle_unpacked(
                     no_jobs_since = None
                     time.sleep(15)
                     continue
+                if no_job_kicks >= max_no_job_kicks:
+                    print(
+                        f"❌ OLM bundle unpack for {operator_name} in progress but no unpack "
+                        f"Jobs after {no_job_kicks}/{max_no_job_kicks} kicks "
+                        f"({no_job_kick_sec}s each).",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    log_marketplace_bundle_unpack_state()
+                    return False
             else:
                 no_jobs_since = None
             updated = _subscription_status_last_updated(operator_name, operator_namespace)
@@ -1771,6 +1880,17 @@ def wait_subscription_bundle_unpacked(
                         stall_since = None
                         time.sleep(15)
                         continue
+                    if stall_recoveries >= max_stall_recoveries:
+                        print(
+                            f"❌ OLM bundle unpack for {operator_name} still frozen after "
+                            f"{stall_recoveries}/{max_stall_recoveries} stall recoveries "
+                            f"(lastUpdated unchanged {stall_sec}s+). "
+                            "HyperShift marketplace unpack is wedged; see unpack Job pods above.",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        log_marketplace_bundle_unpack_state()
+                        return False
             else:
                 last_updated_seen = updated
                 stall_since = None
