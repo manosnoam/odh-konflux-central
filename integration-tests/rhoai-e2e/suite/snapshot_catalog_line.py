@@ -278,12 +278,23 @@ def _parse_catalog_stream(value: str) -> tuple[int, int, str, str] | None:
     return int(match.group(1)), int(match.group(2)), kind, number
 
 
+def _requested_minor_shorthand(value: str) -> bool:
+    """True for ``3.6`` / ``3.6 (default)`` style pins without patch or prerelease suffix."""
+    raw = (value or "").strip()
+    if not raw:
+        return False
+    if raw.endswith(DEFAULT_SUFFIX):
+        raw = raw[: -len(DEFAULT_SUFFIX)].strip()
+    return bool(re.fullmatch(r"\d+\.\d+", raw))
+
+
 def catalog_streams_match(requested: str, observed: str) -> bool:
     """True when *observed* FBC/CSV is the requested RHOAI stream.
 
     ``3.5-ea.2`` matches ``3.5.0-ea.2`` / ``rhods-operator.3.5.0-ea.2``.
     ``3.5-ea.2`` does not match ``3.6.0-ea.1``.
     ``3.5`` matches GA ``3.5.x`` and does not match EA/RC lines.
+    ``3.6`` matches beta-head EA on the same minor (e.g. ``3.6.0-ea.1``).
     """
     want = _parse_catalog_stream(requested)
     got = _parse_catalog_stream(observed)
@@ -293,7 +304,11 @@ def catalog_streams_match(requested: str, observed: str) -> bool:
         return False
     if want[2]:
         return got[2] == want[2]
-    return not got[2]
+    if got[2]:
+        if _requested_minor_shorthand(requested) and not (want[0] == 3 and want[1] == 5):
+            return True
+        return False
+    return True
 
 
 def snapshot_matches_requested_catalog_stream(

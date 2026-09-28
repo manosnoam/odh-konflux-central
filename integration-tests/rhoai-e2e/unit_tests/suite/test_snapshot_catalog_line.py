@@ -175,6 +175,11 @@ class CatalogStreamMatchTest(unittest.TestCase):
         self.assertTrue(catalog_streams_match("3.5-ea.2", "3.5-ea.1"))
         self.assertFalse(catalog_streams_match("3.5", "3.5-ea.2"))
 
+    def test_36_shorthand_matches_beta_head_ea(self) -> None:
+        self.assertTrue(catalog_streams_match("3.6", "rhods-operator.3.6.0-ea.1"))
+        self.assertTrue(catalog_streams_match("3.6", "3.6.0-ea.2"))
+        self.assertFalse(catalog_streams_match("3.6", "rhods-operator.3.5.0-ea.2"))
+
     def test_fragment_app_requires_catalog_line(self) -> None:
         self.assertFalse(
             snapshot_matches_requested_catalog_stream(
