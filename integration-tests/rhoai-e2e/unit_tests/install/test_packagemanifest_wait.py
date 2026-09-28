@@ -246,6 +246,42 @@ class PackagemanifestWaitTest(unittest.TestCase):
         self.assertEqual(len(delete_jobs), 1)
         self.assertEqual(delete_jobs[0][2], "unpack-running")
 
+    def test_count_olm_bundle_unpack_jobs_ignores_terminal_success(self) -> None:
+        jobs = {
+            "items": [
+                {
+                    "metadata": {"name": "unpack-done"},
+                    "status": {"succeeded": 1, "active": 0},
+                    "spec": {
+                        "completions": 1,
+                        "template": {
+                            "spec": {
+                                "containers": [{"name": "extract"}, {"name": "pull"}],
+                            }
+                        },
+                    },
+                },
+                {
+                    "metadata": {"name": "unpack-running"},
+                    "status": {"active": 1},
+                    "spec": {
+                        "template": {
+                            "spec": {
+                                "containers": [{"name": "extract"}, {"name": "pull"}],
+                            }
+                        },
+                    },
+                },
+            ]
+        }
+
+        with patch.object(
+            iav,
+            "oc_run",
+            return_value=type("R", (), {"returncode": 0, "stdout": json.dumps(jobs)})(),
+        ):
+            self.assertEqual(iav.count_olm_bundle_unpack_jobs(include_active=True), 1)
+
     def test_wait_recovers_deadline_exceeded(self) -> None:
         failed = {
             "status": {

@@ -938,7 +938,11 @@ def count_olm_bundle_unpack_jobs(
     marketplace_namespace: str = _MARKETPLACE_NS,
     include_active: bool = True,
 ) -> int:
-    """Count marketplace Jobs that look like OLM bundle-unpack work."""
+    """Count marketplace Jobs that look like in-flight OLM bundle-unpack work.
+
+    Completed successful unpack Jobs are ignored so EPHC/HyperShift clusters with
+    many historical unpack Jobs still get no-job kicks when OLM is wedged.
+    """
     r = oc_run(
         ["get", "jobs", "-n", marketplace_namespace, "-o", "json"],
         capture_output=True,
@@ -955,9 +959,12 @@ def count_olm_bundle_unpack_jobs(
     for job in items:
         if not isinstance(job, dict):
             continue
-        if not include_active and not _job_is_failed(job):
+        if not _job_looks_like_bundle_unpack(job):
             continue
-        if _job_looks_like_bundle_unpack(job):
+        if include_active:
+            if not _job_is_bundle_unpack_terminal_success(job):
+                count += 1
+        elif _job_is_failed(job):
             count += 1
     return count
 
@@ -1325,6 +1332,18 @@ def ensure_operatorgroup_bundle_unpack_annotations(
             )
 
 
+def _job_is_bundle_unpack_terminal_success(job: dict[str, Any]) -> bool:
+    """True when an unpack Job finished successfully (not failed, not running)."""
+    if _job_is_failed(job):
+        return False
+    status = job.get("status") or {}
+    if int(status.get("active") or 0) > 0:
+        return False
+    completions = int((job.get("spec") or {}).get("completions") or 1)
+    succeeded = int(status.get("succeeded") or 0)
+    return succeeded >= completions
+
+
 def _job_is_failed(job: dict[str, Any]) -> bool:
     status = job.get("status") or {}
     if int(status.get("failed") or 0) > 0:
@@ -1427,9 +1446,69 @@ def delete_failed_olm_bundle_unpack_jobs(
     return deleted
 
 
+def delete_terminal_olm_bundle_unpack_jobs(
+    *,
+    marketplace_namespace: str = _MARKETPLACE_NS,
+) -> int:
+    """Delete successfully completed unpack Jobs so OLM can reschedule on frozen EPHC."""
+    r = oc_run(
+        ["get", "jobs", "-n", marketplace_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    if r.returncode != 0:
+        return 0
+    try:
+        items = json.loads(r.stdout or "{}").get("items") or []
+    except json.JSONDecodeError:
+        return 0
+    deleted = 0
+    for job in items:
+        if not isinstance(job, dict):
+            continue
+        if not _job_looks_like_bundle_unpack(job):
+            continue
+        if not _job_is_bundle_unpack_terminal_success(job):
+            continue
+        name = str((job.get("metadata") or {}).get("name") or "").strip()
+        if not name:
+            continue
+        print(
+            f"Deleting completed OLM bundle-unpack Job/{name} in {marketplace_namespace}...",
+            flush=True,
+        )
+        oc_run(
+            ["delete", "job", name, "-n", marketplace_namespace, "--ignore-not-found", "--wait=false"],
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        oc_run(
+            [
+                "delete",
+                "configmap",
+                name,
+                "-n",
+                marketplace_namespace,
+                "--ignore-not-found",
+                "--wait=false",
+            ],
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        deleted += 1
+    if deleted:
+        print(f"✓ Removed {deleted} completed OLM bundle-unpack Job(s)", flush=True)
+    return deleted
+
+
 def recover_bundle_unpack_deadline_exceeded(
     operator_name: str,
     operator_namespace: str,
+    *,
+    purge_terminal_success: bool = False,
 ) -> int:
     """Clear stale unpack Jobs (failed or stuck-active) and ensure OG unpack timeout."""
     try:
@@ -1440,6 +1519,8 @@ def recover_bundle_unpack_deadline_exceeded(
         print(f"WARN: openshift-release-dev pull-secret heal failed ({exc})", flush=True)
     ensure_operatorgroup_bundle_unpack_annotations(operator_namespace)
     deleted = delete_failed_olm_bundle_unpack_jobs(include_active=True)
+    if purge_terminal_success:
+        deleted += delete_terminal_olm_bundle_unpack_jobs()
     if deleted == 0:
         print(
             f"WARN: BundleUnpack recover for {operator_name} but no unpack Jobs found "
@@ -1571,7 +1652,12 @@ def wait_subscription_bundle_unpacked(
         if used >= limit:
             return False
         print(f"OLM bundle unpack {label} for {operator_name} — recovering ({used + 1}/{limit})...", flush=True)
-        deleted = recover_bundle_unpack_deadline_exceeded(operator_name, operator_namespace)
+        purge_terminal = "stalled" in label.lower()
+        deleted = recover_bundle_unpack_deadline_exceeded(
+            operator_name,
+            operator_namespace,
+            purge_terminal_success=purge_terminal,
+        )
         if deleted > 0 or subscription_manifest is not None:
             if subscription_manifest is not None:
                 kick_subscription_bundle_unpack(
