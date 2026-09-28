@@ -352,12 +352,14 @@ class RunnerTriggerMixin:
         allow_fragment_app_fallback: bool = True,
     ) -> None:
         best_ts = ""
+        want_line = (rhoai_version_label or "").strip()
         for app in apps:
             ts, img, snap_meta = self.latest_named_component_image_on_application(
                 self._konflux_tenant_namespace(),
                 app,
                 fbc_component_name,
                 RHOAI_FBCF_IMAGE_REF_PATTERN,
+                required_catalog_line=want_line,
             )
             if img and ts > best_ts:
                 best_ts = ts
@@ -376,6 +378,7 @@ class RunnerTriggerMixin:
             fbc_component_name,
             fbc_component_name,
             RHOAI_FBCF_IMAGE_REF_PATTERN,
+            required_catalog_line=want_line,
         )
         if img and ts > fragment_ts:
             fragment_ts = ts
@@ -395,6 +398,7 @@ class RunnerTriggerMixin:
                 self._konflux_tenant_namespace(),
                 app,
                 RHOAI_FBCF_IMAGE_REF_PATTERN,
+                required_catalog_line=want_line,
             )
             if img and ts > fallback_ts:
                 fallback_ts = ts
@@ -444,6 +448,33 @@ class RunnerTriggerMixin:
             return
         print(f"WARN {reason} — using pinned fallback from snapshot YAML: {pinned}")
         self.image = pinned
+
+    def _assert_resolved_fbc_matches_requested_version(self) -> None:
+        requested = (self.args.version or "").strip()
+        if not requested or not (self.image or "").strip():
+            return
+        from suite.snapshot_catalog_line import (
+            catalog_line_from_snapshot_and_image,
+            snapshot_matches_requested_catalog_stream,
+        )
+
+        meta = self._fbc_source_snapshot_meta
+        observed = catalog_line_from_snapshot_and_image(
+            meta if isinstance(meta, dict) else None,
+            self.image,
+        )
+        if snapshot_matches_requested_catalog_stream(
+            required=requested,
+            observed=observed,
+            app_name=self.resolved_app or "",
+        ):
+            return
+        raise AppError(
+            f"Resolved FBC {self.image} (app {self.resolved_app or 'unknown'}, "
+            f"catalog line {observed or 'unknown'}) does not match --rhoai-version {requested}. "
+            "The latest rhoai-fbc-fragment-ocp-* snapshot is often a different RHOAI stream. "
+            "Pass --image with a matching catalog digest."
+        )
 
     def _ordered_rhoai_version_stream_apps(self) -> list[str]:
         """``rhoai-v*`` applications in priority order (3.5 EA streams first)."""
@@ -678,6 +709,7 @@ class RunnerTriggerMixin:
 
         if self.args.product == "rhoai" and (self.image or "").strip():
             self._ensure_fbc_snapshot_meta_for_image()
+            self._assert_resolved_fbc_matches_requested_version()
 
     def ensure_its_applied(self, odh_overrides: bool) -> None:
         self._render_its_for_trigger(odh_overrides)

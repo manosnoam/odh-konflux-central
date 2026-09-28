@@ -282,6 +282,15 @@ class PackagemanifestWaitTest(unittest.TestCase):
         ):
             self.assertEqual(iav.count_olm_bundle_unpack_jobs(include_active=True), 1)
 
+    def test_require_csv_rejects_other_rhoai_stream(self) -> None:
+        with patch.dict("os.environ", {"RHOAI_VERSION": "3.5-ea.2"}, clear=False):
+            with self.assertRaises(SystemExit):
+                iav.require_packagemanifest_csv_matches_requested("rhods-operator.3.6.0-ea.1")
+
+    def test_require_csv_accepts_matching_ea_stream(self) -> None:
+        with patch.dict("os.environ", {"RHOAI_VERSION": "3.5-ea.2"}, clear=False):
+            iav.require_packagemanifest_csv_matches_requested("rhods-operator.3.5.0-ea.2")
+
     def test_wait_recovers_deadline_exceeded(self) -> None:
         failed = {
             "status": {

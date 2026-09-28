@@ -54,6 +54,21 @@ def _parse_snapshot_json(stdout: str) -> dict[str, Any] | None:
     return obj if isinstance(obj, dict) else None
 
 
+def _snapshot_matches_requested_stream(
+    required: str, meta: dict[str, Any] | None, image: str, app_name: str
+) -> bool:
+    from suite.snapshot_catalog_line import (
+        catalog_line_from_snapshot_and_image,
+        snapshot_matches_requested_catalog_stream,
+    )
+
+    return snapshot_matches_requested_catalog_stream(
+        required=required,
+        observed=catalog_line_from_snapshot_and_image(meta, image),
+        app_name=app_name,
+    )
+
+
 class RunnerListMixin(RunnerOcpMixin):
     def get_pipelineruns(self, namespace: str, selector: str | None = None) -> list[dict[str, Any]]:
         cmd = ["oc", "get", "pipelineruns", "-n", namespace, "-o", "json"]
@@ -461,7 +476,7 @@ class RunnerListMixin(RunnerOcpMixin):
 
 
     def latest_matching_image(
-        self, namespace: str, app_name: str, pattern: str
+        self, namespace: str, app_name: str, pattern: str, *, required_catalog_line: str = ""
     ) -> tuple[str, str, dict[str, Any] | None]:
         """Return (creationTimestamp, containerImage, snapshot metadata) for the newest matching Snapshot."""
         proc = run_cmd(
@@ -529,7 +544,13 @@ class RunnerListMixin(RunnerOcpMixin):
                             snap_meta = snap_obj.get("metadata") if isinstance(snap_obj, dict) else None
                         except json.JSONDecodeError:
                             snap_meta = None
-                    return ts, img, snap_meta
+                    if _snapshot_matches_requested_stream(
+                        required_catalog_line,
+                        snap_meta if isinstance(snap_meta, dict) else None,
+                        img,
+                        app_name,
+                    ):
+                        return ts, img, snap_meta
         if len(rows) <= max_walk:
             return "", "", None
         print(
@@ -557,10 +578,13 @@ class RunnerListMixin(RunnerOcpMixin):
             for comp in item.get("spec", {}).get("components", []):
                 img = comp.get("containerImage", "")
                 if re.search(pattern, img):
-                    if ts > best_ts:
+                    meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else None
+                    if ts > best_ts and _snapshot_matches_requested_stream(
+                        required_catalog_line, meta, img, app_name
+                    ):
                         best_ts = ts
                         best_img = img
-                        best_meta = item.get("metadata")
+                        best_meta = meta
         return best_ts, best_img, best_meta
 
     def find_snapshot_by_image_digest(
@@ -618,6 +642,8 @@ class RunnerListMixin(RunnerOcpMixin):
         app_name: str,
         component_name: str,
         image_pattern: str,
+        *,
+        required_catalog_line: str = "",
     ) -> tuple[str, str, dict[str, Any] | None]:
         """Newest ``containerImage`` for ``component_name`` in snapshots of ``app_name``."""
         want_name = (component_name or "").strip()
@@ -658,11 +684,19 @@ class RunnerListMixin(RunnerOcpMixin):
                         if (comp.get("name") or "").strip() != want_name:
                             continue
                         img = (comp.get("containerImage") or "").strip()
-                        if img and re.search(image_pattern, img) and ts > best_ts:
+                        meta = item.get("metadata")
+                        meta_d = meta if isinstance(meta, dict) else None
+                        if (
+                            img
+                            and re.search(image_pattern, img)
+                            and ts > best_ts
+                            and _snapshot_matches_requested_stream(
+                                required_catalog_line, meta_d, img, app_name
+                            )
+                        ):
                             best_ts = ts
                             best_img = img
-                            meta = item.get("metadata")
-                            best_meta = meta if isinstance(meta, dict) else None
+                            best_meta = meta_d
                 if best_img:
                     return best_ts, best_img, best_meta
         proc_names = run_cmd(
@@ -712,7 +746,10 @@ class RunnerListMixin(RunnerOcpMixin):
                 img = (comp.get("containerImage") or "").strip()
                 if img and re.search(image_pattern, img):
                     meta = snap_obj.get("metadata") if isinstance(snap_obj.get("metadata"), dict) else None
-                    return ts, img, meta
+                    if _snapshot_matches_requested_stream(
+                        required_catalog_line, meta, img, app_name
+                    ):
+                        return ts, img, meta
         if len(rows) <= max_walk:
             return "", "", None
         proc_big = run_cmd(
@@ -750,11 +787,19 @@ class RunnerListMixin(RunnerOcpMixin):
                 if (comp.get("name") or "").strip() != want_name:
                     continue
                 img = (comp.get("containerImage") or "").strip()
-                if img and re.search(image_pattern, img) and ts > best_ts:
+                meta = item.get("metadata")
+                meta_d = meta if isinstance(meta, dict) else None
+                if (
+                    img
+                    and re.search(image_pattern, img)
+                    and ts > best_ts
+                    and _snapshot_matches_requested_stream(
+                        required_catalog_line, meta_d, img, app_name
+                    )
+                ):
                     best_ts = ts
                     best_img = img
-                    meta = item.get("metadata")
-                    best_meta = meta if isinstance(meta, dict) else None
+                    best_meta = meta_d
         return best_ts, best_img, best_meta
 
     def latest_named_component_image_on_application(
@@ -763,11 +808,15 @@ class RunnerListMixin(RunnerOcpMixin):
         app_name: str,
         component_name: str,
         image_pattern: str,
+        *,
+        required_catalog_line: str = "",
     ) -> tuple[str, str, dict[str, Any] | None]:
         """Newest ``containerImage`` for ``component_name`` on one Konflux Application only.
 
         Used by ``--run-its`` to match ITS auto-trigger semantics without scanning ``rhoai-v*``
-        streams or downloading every Snapshot for the app.
+        streams or downloading every Snapshot for the app. When ``required_catalog_line`` is
+        set, walk recent snapshots so a mixed FBC fragment app does not return a newer
+        catalog from a different RHOAI stream.
         """
         want_app = (app_name or "").strip()
         want_comp = (component_name or "").strip()
@@ -796,7 +845,9 @@ class RunnerListMixin(RunnerOcpMixin):
         rows = _snapshot_rows_from_custom_columns(stdout)
         if not rows:
             return "", "", None
-        for ts, snap_name in rows[-1:]:
+        max_walk = 80 if (required_catalog_line or "").strip() else 1
+        scan = rows[-max_walk:] if len(rows) > max_walk else rows
+        for ts, snap_name in reversed(scan):
             meta_proc = run_cmd(
                 ["oc", "get", "snapshot", snap_name, "-n", namespace, "-o", "json"],
                 capture=True,
@@ -816,7 +867,11 @@ class RunnerListMixin(RunnerOcpMixin):
                 img = (comp.get("containerImage") or "").strip()
                 if img and re.search(image_pattern, img):
                     meta = snap_obj.get("metadata")
-                    return ts, img, meta if isinstance(meta, dict) else None
+                    meta_d = meta if isinstance(meta, dict) else None
+                    if _snapshot_matches_requested_stream(
+                        required_catalog_line, meta_d, img, want_app
+                    ):
+                        return ts, img, meta_d
         return "", "", None
 
 

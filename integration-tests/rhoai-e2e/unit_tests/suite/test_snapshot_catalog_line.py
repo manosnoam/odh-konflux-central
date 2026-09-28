@@ -7,13 +7,16 @@ import unittest
 
 from suite.snapshot_catalog_line import (
     catalog_line_from_image_tag,
+    catalog_line_from_operator_csv,
     catalog_line_from_prname,
     catalog_line_from_snapshot_json,
     catalog_line_from_snapshot_metadata,
     catalog_line_meets_min_version,
+    catalog_streams_match,
     catalog_version_for_install,
     resolve_catalog_version_for_naming,
     rhoai_catalog_version_from_fbc_source,
+    snapshot_matches_requested_catalog_stream,
 )
 
 _LABELS_225 = {
@@ -158,6 +161,41 @@ class SnapshotCatalogLineTest(unittest.TestCase):
                 rhoai_version_param="rhoai-v3-5-ea-2 (default)",
             ),
             "3.5-ea.2",
+        )
+
+
+class CatalogStreamMatchTest(unittest.TestCase):
+    def test_ea_stream_matches_csv_and_patch(self) -> None:
+        self.assertTrue(catalog_streams_match("3.5-ea.2", "rhods-operator.3.5.0-ea.2"))
+        self.assertTrue(catalog_streams_match("3.5-ea.2", "3.5.0-ea.2"))
+        self.assertEqual(catalog_line_from_operator_csv("rhods-operator.3.6.0-ea.1"), "3.6.0-ea.1")
+
+    def test_ea_stream_rejects_other_minor_and_ga(self) -> None:
+        self.assertFalse(catalog_streams_match("3.5-ea.2", "rhods-operator.3.6.0-ea.1"))
+        self.assertTrue(catalog_streams_match("3.5-ea.2", "3.5-ea.1"))
+        self.assertFalse(catalog_streams_match("3.5", "3.5-ea.2"))
+
+    def test_fragment_app_requires_catalog_line(self) -> None:
+        self.assertFalse(
+            snapshot_matches_requested_catalog_stream(
+                required="3.5-ea.2",
+                observed="",
+                app_name="rhoai-fbc-fragment-ocp-421",
+            )
+        )
+        self.assertTrue(
+            snapshot_matches_requested_catalog_stream(
+                required="3.5-ea.2",
+                observed="",
+                app_name="rhoai-v3-5-ea-2",
+            )
+        )
+        self.assertTrue(
+            snapshot_matches_requested_catalog_stream(
+                required="3.5-ea.2",
+                observed="3.5-ea.2",
+                app_name="rhoai-fbc-fragment-ocp-421",
+            )
         )
 
 

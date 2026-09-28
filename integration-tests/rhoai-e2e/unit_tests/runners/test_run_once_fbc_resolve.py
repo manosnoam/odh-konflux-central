@@ -159,6 +159,7 @@ class ResolveRhoaiFbcLatestForComponentTest(unittest.TestCase):
             app: str,
             component_name: str,
             image_pattern: str,
+            **_kwargs: object,
         ) -> tuple[str, str, dict | None]:
             del namespace, component_name, image_pattern
             images = {
@@ -187,6 +188,7 @@ class ResolveRhoaiFbcLatestForComponentTest(unittest.TestCase):
             app: str,
             component_name: str,
             image_pattern: str,
+            **_kwargs: object,
         ) -> tuple[str, str, dict | None]:
             del namespace, component_name, image_pattern
             images = {
@@ -210,6 +212,7 @@ class ResolveRhoaiFbcLatestForComponentTest(unittest.TestCase):
             app: str,
             component_name: str,
             image_pattern: str,
+            **_kwargs: object,
         ) -> tuple[str, str, dict | None]:
             del namespace, component_name, image_pattern
             if app == "rhoai-fbc-fragment-ocp-420":
@@ -281,6 +284,7 @@ class ResolveRhoaiFbcVersionStreamTest(unittest.TestCase):
             app: str,
             component_name: str,
             image_pattern: str,
+            **_kwargs: object,
         ) -> tuple[str, str, dict | None]:
             del namespace, image_pattern
             if app == "rhoai-v3-5" and component_name == "rhoai-fbc-fragment-v3-5":
@@ -318,6 +322,7 @@ class ResolveRhoaiFbcVersionStreamTest(unittest.TestCase):
             app: str,
             component_name: str,
             image_pattern: str,
+            **_kwargs: object,
         ) -> tuple[str, str, dict | None]:
             del namespace, image_pattern
             if app == "rhoai-v3-5" and component_name == "rhoai-fbc-fragment-v3-5":
@@ -368,6 +373,7 @@ class ResolveRhoaiFbcVersionStreamTest(unittest.TestCase):
             app: str,
             component_name: str,
             image_pattern: str,
+            **_kwargs: object,
         ) -> tuple[str, str, dict | None]:
             del namespace, image_pattern
             if app == "rhoai-v3-5" and component_name == "rhoai-fbc-fragment-v3-5":
@@ -436,6 +442,33 @@ class FbcDigestSnapshotMetaTest(unittest.TestCase):
         runner = self._runner()
         runner._fbc_source_snapshot_meta = self._META
         self.assertEqual(runner._catalog_version_for_naming(False), "3.5-ea.2")
+
+
+class AssertResolvedFbcMatchesRequestedVersionTest(unittest.TestCase):
+    def test_rejects_fragment_app_3_6_catalog_for_3_5_ea_2(self) -> None:
+        from suite.errors import AppError
+
+        parser = make_parser()
+        args = parse_cli_args(
+            parser,
+            ["--product", "rhoai", "--rhoai-version", "3.5-ea.2", "--ocp-version", "4.21"],
+        )
+        runner = RhoaiE2ERunner(args)
+        runner.image = (
+            "quay.io/rhoai/rhoai-fbc-fragment@sha256:"
+            "f2bf234e729b2cf4b20022f5af154d3d6087d0a1355c1ad163e14bafe5d42bb4"
+        )
+        runner.resolved_app = "rhoai-fbc-fragment-ocp-421"
+        runner._fbc_source_snapshot_meta = {
+            "annotations": {
+                "pac.test.appstudio.openshift.io/sha-title": (
+                    "Patching the stage catalog with rhoai-3.6-ea.2"
+                )
+            }
+        }
+        with self.assertRaises(AppError) as ctx:
+            runner._assert_resolved_fbc_matches_requested_version()
+        self.assertIn("does not match --rhoai-version 3.5-ea.2", str(ctx.exception))
 
 
 class RunItsPostTriggerWatchTest(unittest.TestCase):

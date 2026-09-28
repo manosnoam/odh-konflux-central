@@ -98,3 +98,73 @@ class LatestNamedComponentImageOnApplicationTest(unittest.TestCase):
         self.assertEqual(ts, "")
         self.assertEqual(img, "")
         self.assertIsNone(meta)
+
+    def test_skips_newer_wrong_stream_on_fragment_app(self) -> None:
+        runner = self._runner()
+        list_out = (
+            "NAME  TS\n"
+            "snap-35  2026-09-15T00:00:00Z\n"
+            "snap-36  2026-09-27T00:00:00Z\n"
+        )
+        snap_36 = json.dumps(
+            {
+                "metadata": {
+                    "name": "snap-36",
+                    "annotations": {
+                        "pac.test.appstudio.openshift.io/sha-title": (
+                            "Patching the stage catalog with rhoai-3.6-ea.2"
+                        )
+                    },
+                },
+                "spec": {
+                    "components": [
+                        {"name": "rhoai-fbc-fragment-ocp-421", "containerImage": _FBC_IMAGE}
+                    ]
+                },
+            }
+        )
+        img_35 = (
+            "quay.io/rhoai/rhoai-fbc-fragment@sha256:"
+            "6f8c6350ec16320668c7977c12219b2170432fff4d3626ca82dfc4ed909b7405"
+        )
+        snap_35 = json.dumps(
+            {
+                "metadata": {
+                    "name": "snap-35",
+                    "annotations": {
+                        "pac.test.appstudio.openshift.io/sha-title": (
+                            "Patching the stage catalog with rhoai-3.5-ea.2"
+                        )
+                    },
+                },
+                "spec": {
+                    "components": [
+                        {"name": "rhoai-fbc-fragment-ocp-421", "containerImage": img_35}
+                    ]
+                },
+            }
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            proc = MagicMock()
+            proc.returncode = 0
+            if cmd[:4] == ["oc", "get", "snapshots", "-n"]:
+                proc.stdout = list_out
+            elif cmd[3] == "snap-36":
+                proc.stdout = snap_36
+            else:
+                proc.stdout = snap_35
+            return proc
+
+        with patch("runners.cli.runner_mixin_list.run_cmd", side_effect=fake_run):
+            ts, img, meta = runner.latest_named_component_image_on_application(
+                DEFAULT_NAMESPACE,
+                "rhoai-fbc-fragment-ocp-421",
+                "rhoai-fbc-fragment-ocp-421",
+                RHOAI_FBCF_IMAGE_REF_PATTERN,
+                required_catalog_line="3.5-ea.2",
+            )
+        self.assertEqual(ts, "2026-09-15T00:00:00Z")
+        self.assertEqual(img, img_35)
+        self.assertEqual((meta or {}).get("name"), "snap-35")

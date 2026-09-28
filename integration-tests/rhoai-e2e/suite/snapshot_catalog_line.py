@@ -220,6 +220,105 @@ def catalog_version_for_install(
     return catalog_line_from_image_tag(fbcf_image)
 
 
+_OPERATOR_CSV_STREAM_RE = re.compile(
+    r"^[A-Za-z][A-Za-z0-9-]*\.(\d+\.\d+(?:\.\d+)?(?:-(?:ea|rc)\.\d+)?)$",
+    re.IGNORECASE,
+)
+_CATALOG_STREAM_RE = re.compile(
+    r"^(\d+)\.(\d+)(?:\.(\d+))?(?:-(ea|rc)\.(\d+))?$",
+    re.IGNORECASE,
+)
+
+
+def catalog_line_from_snapshot_and_image(
+    meta: dict[str, Any] | None,
+    image: str = "",
+) -> str:
+    """Catalog line from Snapshot PAC metadata or image tag only (no Konflux app fallback)."""
+    labels = None
+    annotations = None
+    if isinstance(meta, dict):
+        labels = meta.get("labels") if isinstance(meta.get("labels"), dict) else None
+        annotations = meta.get("annotations") if isinstance(meta.get("annotations"), dict) else None
+    line = catalog_line_from_snapshot_metadata(labels, annotations)
+    if line:
+        return line
+    return catalog_line_from_image_tag(image)
+
+
+def catalog_line_from_operator_csv(csv_name: str) -> str:
+    """``rhods-operator.3.5.0-ea.2`` → ``3.5.0-ea.2``."""
+    text = (csv_name or "").strip()
+    if not text:
+        return ""
+    match = _OPERATOR_CSV_STREAM_RE.match(text)
+    if match:
+        return match.group(1)
+    return ""
+
+
+def _parse_catalog_stream(value: str) -> tuple[int, int, str, str] | None:
+    """Return ``(major, minor, prerelease_kind, prerelease_n)`` or None."""
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    line = (
+        catalog_line_from_operator_csv(raw)
+        or catalog_line_from_free_text(raw)
+        or rhoai_catalog_line_from_konflux_app(raw)
+        or raw
+    )
+    if line.endswith(DEFAULT_SUFFIX):
+        line = line[: -len(DEFAULT_SUFFIX)].strip()
+    match = _CATALOG_STREAM_RE.match(line)
+    if not match:
+        return None
+    kind = (match.group(4) or "").lower()
+    number = match.group(5) or ""
+    return int(match.group(1)), int(match.group(2)), kind, number
+
+
+def catalog_streams_match(requested: str, observed: str) -> bool:
+    """True when *observed* FBC/CSV is the requested RHOAI stream.
+
+    ``3.5-ea.2`` matches ``3.5.0-ea.2`` / ``rhods-operator.3.5.0-ea.2``.
+    ``3.5-ea.2`` does not match ``3.6.0-ea.1``.
+    ``3.5`` matches GA ``3.5.x`` and does not match EA/RC lines.
+    """
+    want = _parse_catalog_stream(requested)
+    got = _parse_catalog_stream(observed)
+    if want is None or got is None:
+        return False
+    if want[0] != got[0] or want[1] != got[1]:
+        return False
+    if want[2]:
+        return got[2] == want[2]
+    return not got[2]
+
+
+def snapshot_matches_requested_catalog_stream(
+    *,
+    required: str,
+    observed: str,
+    app_name: str = "",
+) -> bool:
+    """Accept a Snapshot for ``--rhoai-version`` when catalog line or app stream matches.
+
+    Mixed FBC fragment apps (``rhoai-fbc-fragment-ocp-*``) must have an identifiable
+    catalog line; version-stream apps (``rhoai-v3-5-ea-2``) may omit PAC metadata.
+    """
+    want = (required or "").strip()
+    if not want:
+        return True
+    line = (observed or "").strip()
+    if line:
+        return catalog_streams_match(want, line)
+    app_line = rhoai_catalog_line_from_konflux_app(app_name)
+    if app_line:
+        return catalog_streams_match(want, app_line)
+    return False
+
+
 def catalog_line_meets_min_version(catalog_line: str, min_version: str) -> bool:
     line = (catalog_line or "").strip()
     minimum = (min_version or "3.5").strip() or "3.5"

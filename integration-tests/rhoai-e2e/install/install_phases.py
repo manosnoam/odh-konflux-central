@@ -237,6 +237,7 @@ def phase_catalog_and_pull_secrets(ctx: InstallContext) -> InstallContext:
             timeout=120,
         )
         iav.fail()
+    iav.require_packagemanifest_csv_matches_requested(starting_csv)
     print(f"Copying {cluster_pull_secret} to {ctx.operator_namespace} and linking to all SAs...")
     if not iav.copy_pull_secret(cluster_pull_secret, ctx.operator_namespace):
         print(

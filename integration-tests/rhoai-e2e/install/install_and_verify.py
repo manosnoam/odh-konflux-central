@@ -1172,6 +1172,23 @@ def packagemanifest_channel_csv(package_name: str, catalog_name: str, channel: s
     return None
 
 
+def require_packagemanifest_csv_matches_requested(csv_name: str) -> None:
+    """Fail install when catalog currentCSV is a different RHOAI stream than RHOAI_VERSION."""
+    from suite.pipelinerun_naming import version_placeholder
+    from suite.snapshot_catalog_line import catalog_streams_match
+
+    requested = os.environ.get("RHOAI_VERSION", "").strip()
+    if not requested or version_placeholder(requested):
+        return
+    if catalog_streams_match(requested, csv_name):
+        return
+    fail(
+        f"❌ PackageManifest currentCSV {csv_name} does not match requested RHOAI {requested}. "
+        "This FBC is a different catalog stream (e.g. 3.6 when --rhoai-version 3.5-ea.2). "
+        "Refusing to pin startingCSV / unpack it."
+    )
+
+
 def wait_packagemanifest_ready(
     package_name: str,
     catalog_name: str,
