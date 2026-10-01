@@ -20,6 +20,8 @@ from suite.its_registry import (
     materialize_upstream_main_its_manifest,
     resolve_integration_test_scenario_ref,
     resolve_integration_test_scenario_run_its_snapshot,
+    should_use_upstream_main_its_for_run_its,
+    upstream_main_its_manifest_available,
 )
 from suite.tests_config import load_tests_catalog
 from suite.tests_plan import (
@@ -344,14 +346,16 @@ def parse_cli_args(parser: CliArgumentParser, argv: list[str]) -> argparse.Names
         manifest_path, scenario_name = resolve_integration_test_scenario_ref(rhoai_e2e_root, its_ref)
         args.its_manifest_path = manifest_path
         args.its_scenario_name = scenario_name
-        if getattr(args, "upstream_main_its", False):
-            if not args.run_its:
-                raise AppError("--upstream-main-its requires --run-its.", 2)
-            if looks_like_its_manifest_path(args.run_its):
-                raise AppError(
-                    "--upstream-main-its requires --run-its NAME (not a manifest file path).",
-                    2,
-                )
+        if (
+            args.run_its
+            and not looks_like_its_manifest_path(args.run_its)
+            and should_use_upstream_main_its_for_run_its(
+                local_its=bool(getattr(args, "local_its", False)),
+                konflux_repo=(args.konflux_repo or "").strip(),
+                konflux_branch=(args.konflux_branch or "").strip(),
+            )
+            and upstream_main_its_manifest_available(scenario_name)
+        ):
             args.its_manifest_path = materialize_upstream_main_its_manifest(scenario_name)
         if args.run_its:
             snap_path = resolve_integration_test_scenario_run_its_snapshot(

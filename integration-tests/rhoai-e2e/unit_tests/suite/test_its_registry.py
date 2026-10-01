@@ -231,3 +231,28 @@ def test_ephc_pipelinerun_wrapper_prefix() -> None:
     path = _ROOT / "tekton" / "pipelines" / "rhoai-e2e-pipelinerun-ephc.yaml"
     text = path.read_text(encoding="utf-8")
     assert "generateName: e2e-its-ephc-smoke-" in text
+
+
+def test_should_use_upstream_main_its_for_run_its() -> None:
+    from suite.its_registry import should_use_upstream_main_its_for_run_its
+
+    assert should_use_upstream_main_its_for_run_its(
+        local_its=False,
+        konflux_repo="",
+        konflux_branch="",
+    )
+    assert not should_use_upstream_main_its_for_run_its(
+        local_its=False,
+        konflux_repo="https://github.com/x/y.git",
+        konflux_branch="",
+    )
+    assert not should_use_upstream_main_its_for_run_its(
+        local_its=False,
+        konflux_repo="",
+        konflux_branch="fix/foo",
+    )
+    assert not should_use_upstream_main_its_for_run_its(
+        local_its=True,
+        konflux_repo="",
+        konflux_branch="",
+    )

@@ -402,11 +402,11 @@ def _add_konflux_group(parser: CliArgumentParser) -> None:
         ),
     )
     konflux.add_argument(
-        "--upstream-main-its",
+        "--local-its",
         action="store_true",
         help=(
-            "With --run-its NAME only: stage the ITS YAML from upstream/main "
-            "(integration-tests/olminstall/tekton/its/) for main-branch pipeline comparison."
+            "With --run-its NAME: use the in-tree rhoai-e2e ITS manifest on this branch. "
+            "Default without --konflux-repo / --konflux-branch is upstream/main olminstall ITS when present."
         ),
     )
     konflux.add_argument(
