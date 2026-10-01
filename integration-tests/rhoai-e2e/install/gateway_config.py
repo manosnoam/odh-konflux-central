@@ -969,10 +969,22 @@ def ensure_openshift_gateway_istio_for_dep_operators(namespace: str = "openshift
         if _openshift_gateway_istio_stack_ready(target_version=target_version):
             return True
         if _openshift_gateway_istio_revision_doc() is not None:
-            return wait_openshift_gateway_istio_ready(
+            ready = wait_openshift_gateway_istio_ready(
                 timeout_sec=_openshift_gateway_istio_wait_sec(),
                 target_version=target_version,
             )
+            if ready:
+                return True
+            if cluster_source_is_ephc():
+                print(
+                    "WARN: EPHC IstioRevision present but openshift-gateway stack not ready "
+                    "after install-dep-operators; continuing (install-rhoai / verify-operator "
+                    "will gate GatewayConfig)",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                return True
+            return False
         return True
     if status == "error" or not doc:
         return _openshift_gateway_istio_stack_ready(target_version=target_version)

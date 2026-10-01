@@ -522,6 +522,38 @@ class OpenshiftGatewayIstioTest(unittest.TestCase):
             removed = gw_mod.reconcile_servicemesh_olm_conflicts("openshift-operators")
         self.assertEqual(removed, 0)
 
+    def test_ensure_istio_for_dep_ephc_continues_when_revision_wait_fails(self) -> None:
+        revision_doc = {
+            "spec": {"version": "v1.30.3"},
+            "status": {"conditions": [{"type": "Ready", "status": "False"}]},
+        }
+        with mock.patch.object(
+            gw_mod,
+            "_servicemesh_istio_version_from_csv",
+            return_value="v1.30.3",
+        ), mock.patch.object(
+            gw_mod,
+            "_openshift_gateway_istio_stack_ready",
+            return_value=False,
+        ), mock.patch.object(
+            gw_mod,
+            "_fetch_openshift_gateway_istio_doc",
+            return_value=(None, "missing"),
+        ), mock.patch.object(
+            gw_mod,
+            "_openshift_gateway_istio_revision_doc",
+            return_value=revision_doc,
+        ), mock.patch.object(
+            gw_mod,
+            "wait_openshift_gateway_istio_ready",
+            return_value=False,
+        ), mock.patch.object(
+            gw_mod,
+            "cluster_source_is_ephc",
+            return_value=True,
+        ):
+            self.assertTrue(gw_mod.ensure_openshift_gateway_istio_for_dep_operators())
+
     def test_ensure_istio_does_not_short_circuit_on_stale_reconciled_version(self) -> None:
         istio_doc = {
             "spec": {"version": "v1.26.2"},
