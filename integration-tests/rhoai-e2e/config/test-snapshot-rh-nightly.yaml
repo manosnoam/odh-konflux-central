@@ -1,5 +1,5 @@
 ---
-# Offline fallback for ``--run-its rhoai-e2e-rh-nightly-pm-ocp420``.
+# Offline fallback for ``--run-its rhoai-e2e-konflux-rhoai1-ocp420`` (legacy name rh-nightly-pm still maps here).
 # ``rhoai_e2e.py`` resolves the latest Konflux snapshot for ``RHOAI_FBC_NAME`` from the
 # ITS manifest; this pin is used only when Konflux lookup fails (no cluster access).
 # RHOAI 3.5 EA2 stage push (2026-07), OCP 4.20 fragment.

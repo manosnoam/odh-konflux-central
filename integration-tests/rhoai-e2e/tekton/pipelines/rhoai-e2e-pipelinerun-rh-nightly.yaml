@@ -1,9 +1,10 @@
 ---
-# IntegrationTestScenario wrapper for rh-nightly-pm external cluster (resourceKind: pipelinerun).
+# IntegrationTestScenario wrapper for konflux-rhoai1 external cluster (S3 install-data; resourceKind: pipelinerun).
+# Legacy generateName prefix kept for KubeArchive filters; cluster label is konflux-rhoai1.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: e2e-its-rh-nightly-pm-smoke-
+  generateName: e2e-its-konflux-rhoai1-smoke-
   labels:
     pipelines.appstudio.openshift.io/type: test
     pac.test.appstudio.openshift.io/event-type: push

@@ -5,6 +5,7 @@
 names:
   - odh-olminstall-testops
   - odh-olminstall-testops-rh-nightly
+  - rhoai-e2e-rh-nightly-pm-ocp420
   - odh-olminstall-smoke-testops
   - rhoai-test
   # Manual rhoai-e2e Snapshots use image-only components (no git source); EC fails SLSA

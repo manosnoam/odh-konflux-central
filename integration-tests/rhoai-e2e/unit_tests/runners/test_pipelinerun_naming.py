@@ -244,8 +244,8 @@ class TestPipelinerunNaming(unittest.TestCase):
         self.assertEqual(its_profile_from_scenario_name("rhoai-e2e-ephc-ocp422"), "ephc-ocp422")
         self.assertEqual(its_profile_from_scenario_name("rhoai-e2e-playpen-a"), "playpen-a")
         self.assertEqual(
-            its_profile_from_scenario_name("rhoai-e2e-rh-nightly-pm-ocp420"),
-            "rh-nightly-pm-ocp420",
+            its_profile_from_scenario_name("rhoai-e2e-konflux-rhoai1-ocp420"),
+            "konflux-rhoai1-ocp42",
         )
         self.assertEqual(its_profile_from_scenario_name(""), "")
 

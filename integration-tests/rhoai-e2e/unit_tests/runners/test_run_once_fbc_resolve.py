@@ -13,7 +13,7 @@ from runners.cli.runner import RhoaiE2ERunner
 
 _ROOT = Path(__file__).resolve().parents[2]
 _RH_NIGHTLY_SNAP = _ROOT / "config" / "test-snapshot-rh-nightly.yaml"
-_RH_NIGHTLY_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
+_RH_NIGHTLY_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
 _EPHC_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-ephc-ocp421.yaml"
 _EPHC_422_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-ephc-ocp422.yaml"
 _PINNED_420 = (
@@ -31,7 +31,7 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
         parser = make_parser()
         args = parse_cli_args(
             parser,
-            ["--run-its", "rhoai-e2e-rh-nightly-pm-ocp420"],
+            ["--run-its", "rhoai-e2e-konflux-rhoai1-ocp420"],
         )
         runner = RhoaiE2ERunner(args)
         runner.snapshot_file = _RH_NIGHTLY_SNAP
@@ -65,7 +65,8 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
     def test_run_its_keeps_manifest_cluster_source_without_cli_override(self) -> None:
         runner = self._runner()
         runner._apply_run_its_manifest_defaults(_RH_NIGHTLY_ITS)
-        self.assertEqual(runner.external_kubeconfig_secret, "rhoai-e2e-kubeconfig-rh-nightly-pm")
+        # konflux-rhoai1 ITS uses S3 install-data (no tenant kubeconfig Secret).
+        self.assertEqual(runner.external_kubeconfig_secret, "")
 
     def test_run_its_cli_external_kubeconfig_overrides_manifest_cluster_source(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".kubeconfig", delete=False) as tf:
@@ -294,7 +295,7 @@ class ResolveRhoaiFbcVersionStreamTest(unittest.TestCase):
             parser,
             [
                 "--run-its",
-                "rhoai-e2e-rh-nightly-pm-ocp420",
+                "rhoai-e2e-konflux-rhoai1-ocp420",
                 "--product",
                 "rhoai",
                 "--rhoai-version",
@@ -509,7 +510,7 @@ class RunItsPostTriggerWatchTest(unittest.TestCase):
         parser = make_parser()
         args = parse_cli_args(
             parser,
-            ["--run-its", "rhoai-e2e-rh-nightly-pm-ocp420"],
+            ["--run-its", "rhoai-e2e-konflux-rhoai1-ocp420"],
         )
         runner = RhoaiE2ERunner(args)
         with patch.object(runner, "_stage_its_manifest_tmp"), patch.object(

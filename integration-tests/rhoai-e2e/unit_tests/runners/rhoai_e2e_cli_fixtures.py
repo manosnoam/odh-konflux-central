@@ -131,9 +131,9 @@ def ok_cases() -> list[OkCase]:
             id="delete-dry-run",
         ),
         OkCase(
-            ["--enable-its", "rhoai-e2e-rh-nightly-pm-ocp420"],
+            ["--enable-its", "rhoai-e2e-konflux-rhoai1-ocp420"],
             check=lambda a: _checks(
-                a.enable_its == "rhoai-e2e-rh-nightly-pm-ocp420",
+                a.enable_its == "rhoai-e2e-konflux-rhoai1-ocp420",
                 not a.konflux_app_explicit,
                 a.app == "rhoai-fbc-fragment-ocp-420",
                 not a.disable_its,
@@ -143,11 +143,11 @@ def ok_cases() -> list[OkCase]:
         OkCase(
             [
                 "--run-its",
-                "tekton/its/its-rhoai-e2e-rh-nightly-pm-ocp420.yaml",
+                "tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp420.yaml",
             ],
             check=lambda a: _checks(
-                a.run_its.endswith("its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"),
-                a.its_scenario_name == "rhoai-e2e-rh-nightly-pm-ocp420",
+                a.run_its.endswith("its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"),
+                a.its_scenario_name == "rhoai-e2e-konflux-rhoai1-ocp420",
                 a.app == "rhoai-fbc-fragment-ocp-420",
             ),
             id="run-its-rh-nightly-by-path",
@@ -155,11 +155,11 @@ def ok_cases() -> list[OkCase]:
         OkCase(
             [
                 "--enable-its",
-                "tekton/its/its-rhoai-e2e-rh-nightly-pm-ocp420.yaml",
+                "tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp420.yaml",
             ],
             check=lambda a: _checks(
-                a.enable_its == "tekton/its/its-rhoai-e2e-rh-nightly-pm-ocp420.yaml",
-                a.its_scenario_name == "rhoai-e2e-rh-nightly-pm-ocp420",
+                a.enable_its == "tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp420.yaml",
+                a.its_scenario_name == "rhoai-e2e-konflux-rhoai1-ocp420",
             ),
             id="enable-its-by-rhoai-e2e-relative-path",
         ),
@@ -183,31 +183,31 @@ def ok_cases() -> list[OkCase]:
         OkCase(
             [
                 "--run-its",
-                "rhoai-e2e-rh-nightly-pm-ocp420",
+                "rhoai-e2e-konflux-rhoai1-ocp420",
                 "--tests",
                 "smoke",
                 "--components",
                 "dashboard_cypress",
             ],
             check=lambda a: _checks(
-                a.run_its == "rhoai-e2e-rh-nightly-pm-ocp420",
+                a.run_its == "rhoai-e2e-konflux-rhoai1-ocp420",
                 a.tests == "smoke",
                 a.components == "dashboard_cypress",
             ),
             id="run-its-scoped-smoke",
         ),
         OkCase(
-            ["--enable-its", "rhoai-e2e-rh-nightly-pm-ocp420", "--konflux-app", DEFAULT_APP],
+            ["--enable-its", "rhoai-e2e-konflux-rhoai1-ocp420", "--konflux-app", DEFAULT_APP],
             check=lambda a: _checks(
-                a.enable_its == "rhoai-e2e-rh-nightly-pm-ocp420",
+                a.enable_its == "rhoai-e2e-konflux-rhoai1-ocp420",
                 a.konflux_app_explicit,
                 a.app == DEFAULT_APP,
             ),
             id="enable-its-rh-nightly-playpen-debug",
         ),
         OkCase(
-            ["--disable-its", "rhoai-e2e-rh-nightly-pm-ocp420"],
-            check=lambda a: _checks(a.disable_its == "rhoai-e2e-rh-nightly-pm-ocp420", not a.enable_its),
+            ["--disable-its", "rhoai-e2e-konflux-rhoai1-ocp420"],
+            check=lambda a: _checks(a.disable_its == "rhoai-e2e-konflux-rhoai1-ocp420", not a.enable_its),
             id="disable-its-rh-nightly",
         ),
         OkCase(
@@ -358,24 +358,24 @@ def err_cases() -> list[ErrCase]:
         ErrCase(["--include-unowned-stuck"], "--delete-pending-pipelines", id="include-unowned-without-delete"),
         ErrCase(["--dry-run"], "--delete-pending-pipelines", id="dry-run-without-delete"),
         ErrCase(
-            ["--enable-its", "rhoai-e2e-rh-nightly-pm-ocp420", "--disable-its", "x"],
+            ["--enable-its", "rhoai-e2e-konflux-rhoai1-ocp420", "--disable-its", "x"],
             "mutually exclusive",
             id="enable-disable-its",
         ),
         ErrCase(
-            ["--enable-its", "rhoai-e2e-rh-nightly-pm-ocp420", "--run-its", "rhoai-e2e-rh-nightly-pm-ocp420"],
+            ["--enable-its", "rhoai-e2e-konflux-rhoai1-ocp420", "--run-its", "rhoai-e2e-konflux-rhoai1-ocp420"],
             "mutually exclusive",
             id="enable-run-its",
         ),
         ErrCase(
-            ["--disable-its", "rhoai-e2e-rh-nightly-pm-ocp420", "--run-its", "rhoai-e2e-rh-nightly-pm-ocp420"],
+            ["--disable-its", "rhoai-e2e-konflux-rhoai1-ocp420", "--run-its", "rhoai-e2e-konflux-rhoai1-ocp420"],
             "cannot be used with --disable-its",
             id="run-its-with-disable",
         ),
         ErrCase(
             [
                 "--enable-its",
-                "rhoai-e2e-rh-nightly-pm-ocp420",
+                "rhoai-e2e-konflux-rhoai1-ocp420",
                 "--external-kubeconfig",
                 "/etc/hosts",
             ],
@@ -385,7 +385,7 @@ def err_cases() -> list[ErrCase]:
         ErrCase(
             [
                 "--enable-its",
-                "rhoai-e2e-rh-nightly-pm-ocp420",
+                "rhoai-e2e-konflux-rhoai1-ocp420",
                 "--components",
                 "dashboard_cypress",
             ],

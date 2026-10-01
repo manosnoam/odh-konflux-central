@@ -8,7 +8,9 @@ DEFAULT_APP = "testops-playpen"
 KONFLUX_INTEGRATION_SERVICE_ACCOUNT = "konflux-integration-runner"
 # Canonical EPHC ITS (its-rhoai-e2e-ephc-ocp421.yaml).
 RHOAI_E2E_EPHC_ITS_NAME = "rhoai-e2e-ephc-ocp421"
-# External rh-nightly-pm cluster ITS (its-rhoai-e2e-rh-nightly-pm-ocp420.yaml).
+# External FBC ocp-420 ITS (its-rhoai-e2e-konflux-rhoai1-ocp420.yaml; konflux-rhoai1 S3 install-data).
+RHOAI_E2E_KONFLUX_RHOAI1_ITS_NAME = "rhoai-e2e-konflux-rhoai1-ocp420"
+# Deprecated: rh-nightly-pm pooled cluster ITS name (retired 2026-10-01).
 RHOAI_E2E_RH_NIGHTLY_ITS_NAME = "rhoai-e2e-rh-nightly-pm-ocp420"
 # Retired IntegrationTestScenario names on testops-playpen; Konflux starts one PipelineRun per ITS
 # when a Snapshot is created for the same application. Used by ``runners/report/prune_stale_testops_its.py``

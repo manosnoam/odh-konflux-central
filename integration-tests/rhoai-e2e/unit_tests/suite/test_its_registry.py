@@ -21,8 +21,11 @@ from suite.its_registry import (
 )
 
 _ROOT = Path(__file__).resolve().parents[2]
-_RH_NIGHTLY_REL = "integration-tests/rhoai-e2e/tekton/its/its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
-_RH_NIGHTLY_SHORT = "tekton/its/its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
+_KONFLUX_RHOAI1_REL = (
+    "integration-tests/rhoai-e2e/tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
+)
+_KONFLUX_RHOAI1_SHORT = "tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
+_KONFLUX_RHOAI1_NAME = "rhoai-e2e-konflux-rhoai1-ocp420"
 
 
 def test_validate_integration_test_scenario_name_ok() -> None:
@@ -37,9 +40,9 @@ def test_validate_integration_test_scenario_name_rejects_empty() -> None:
 
 
 def test_looks_like_its_manifest_path() -> None:
-    assert looks_like_its_manifest_path(_RH_NIGHTLY_REL)
-    assert looks_like_its_manifest_path(_RH_NIGHTLY_SHORT)
-    assert not looks_like_its_manifest_path("rhoai-e2e-rh-nightly-pm-ocp420")
+    assert looks_like_its_manifest_path(_KONFLUX_RHOAI1_REL)
+    assert looks_like_its_manifest_path(_KONFLUX_RHOAI1_SHORT)
+    assert not looks_like_its_manifest_path(_KONFLUX_RHOAI1_NAME)
 
 
 def test_resolve_ephc_manifest() -> None:
@@ -48,20 +51,24 @@ def test_resolve_ephc_manifest() -> None:
     assert integration_test_scenario_application(path) == "rhoai-fbc-fragment-ocp-421"
 
 
-def test_resolve_rh_nightly_manifest() -> None:
-    path = resolve_integration_test_scenario_manifest(
-        _ROOT,
-        "rhoai-e2e-rh-nightly-pm-ocp420",
-    )
-    assert path.name == "its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
+def test_resolve_konflux_rhoai1_manifest() -> None:
+    path = resolve_integration_test_scenario_manifest(_ROOT, _KONFLUX_RHOAI1_NAME)
+    assert path.name == "its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
     assert integration_test_scenario_application(path) == "rhoai-fbc-fragment-ocp-420"
+    from suite.its_registry import its_manifest_param
+
+    cluster = its_manifest_param(path, "CLUSTER_SOURCE")
+    assert cluster == "rhoai-e2e-s3-konflux-rhoai1"
+    comps = its_manifest_param(path, "COMPONENTS").split(",")
+    assert "dashboard_cypress" in comps
+    assert "platform" in comps
 
 
 def test_resolve_manifest_path_repo_relative(monkeypatch: pytest.MonkeyPatch) -> None:
     repo_root = _ROOT.resolve().parent.parent
     monkeypatch.chdir(repo_root)
-    path = resolve_integration_test_scenario_manifest_path(_ROOT, _RH_NIGHTLY_REL)
-    assert path.name == "its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
+    path = resolve_integration_test_scenario_manifest_path(_ROOT, _KONFLUX_RHOAI1_REL)
+    assert path.name == "its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
 
 
 def test_resolve_manifest_path_explicit_wrong_cwd_fails(
@@ -71,19 +78,19 @@ def test_resolve_manifest_path_explicit_wrong_cwd_fails(
     with pytest.raises(AppError, match="ITS manifest not found"):
         resolve_integration_test_scenario_manifest_path(
             _ROOT,
-            "./integration-tests/rhoai-e2e/tekton/its/its-rhoai-e2e-rh-nightly-pm-ocp420.yaml",
+            "./integration-tests/rhoai-e2e/tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp420.yaml",
         )
 
 
 def test_resolve_manifest_path_rhoai_e2e_relative() -> None:
-    path = resolve_integration_test_scenario_manifest_path(_ROOT, _RH_NIGHTLY_SHORT)
-    assert path.name == "its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
+    path = resolve_integration_test_scenario_manifest_path(_ROOT, _KONFLUX_RHOAI1_SHORT)
+    assert path.name == "its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
 
 
 def test_resolve_ref_from_path_returns_metadata_name() -> None:
-    manifest, name = resolve_integration_test_scenario_ref(_ROOT, _RH_NIGHTLY_SHORT)
-    assert manifest.name == "its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
-    assert name == "rhoai-e2e-rh-nightly-pm-ocp420"
+    manifest, name = resolve_integration_test_scenario_ref(_ROOT, _KONFLUX_RHOAI1_SHORT)
+    assert manifest.name == "its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
+    assert name == _KONFLUX_RHOAI1_NAME
 
 
 def test_resolve_manifest_path_rejects_missing_file() -> None:
@@ -94,9 +101,9 @@ def test_resolve_manifest_path_rejects_missing_file() -> None:
         )
 
 
-def test_rh_nightly_default_konflux_app() -> None:
+def test_konflux_rhoai1_default_konflux_app() -> None:
     assert (
-        integration_test_scenario_default_konflux_app("rhoai-e2e-rh-nightly-pm-ocp420")
+        integration_test_scenario_default_konflux_app(_KONFLUX_RHOAI1_NAME)
         == "rhoai-fbc-fragment-ocp-420"
     )
     assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp421") == (
@@ -104,11 +111,8 @@ def test_rh_nightly_default_konflux_app() -> None:
     )
 
 
-def test_resolve_run_its_snapshot_rh_nightly() -> None:
-    path = resolve_integration_test_scenario_run_its_snapshot(
-        _ROOT,
-        "rhoai-e2e-rh-nightly-pm-ocp420",
-    )
+def test_resolve_run_its_snapshot_konflux_rhoai1() -> None:
+    path = resolve_integration_test_scenario_run_its_snapshot(_ROOT, _KONFLUX_RHOAI1_NAME)
     assert path is not None
     assert path.name == "test-snapshot-rh-nightly.yaml"
 
@@ -121,20 +125,20 @@ def test_resolve_run_its_snapshot_unsupported_returns_none() -> None:
 
 
 def test_its_manifest_param_reads_product() -> None:
-    path = _ROOT / "tekton" / "its" / "its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
+    path = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
     from suite.its_registry import its_manifest_param
 
     assert its_manifest_param(path, "PRODUCT") == "rhoai"
 
 
 def test_resolve_manifest_path_absolute_under_repo() -> None:
-    abs_path = _ROOT / "tekton" / "its" / "its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
+    abs_path = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
     path = resolve_integration_test_scenario_manifest_path(_ROOT, str(abs_path))
     assert path == abs_path.resolve()
 
 
 def test_resolve_manifest_path_cwd_relative(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    source = _ROOT / "tekton" / "its" / "its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
+    source = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
     copy = tmp_path / "my-its.yaml"
     copy.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
@@ -143,7 +147,7 @@ def test_resolve_manifest_path_cwd_relative(tmp_path: Path, monkeypatch: pytest.
 
 
 def test_resolve_manifest_path_absolute_outside_repo(tmp_path: Path) -> None:
-    source = _ROOT / "tekton" / "its" / "its-rhoai-e2e-rh-nightly-pm-ocp420.yaml"
+    source = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp420.yaml"
     copy = tmp_path / "its-copy.yaml"
     copy.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     path = resolve_integration_test_scenario_manifest_path(_ROOT, str(copy))
@@ -172,7 +176,7 @@ def test_list_manifests_includes_playpen_its() -> None:
     names = list_integration_test_scenario_manifests(_ROOT)
     assert "rhoai-e2e-ephc-ocp421" in names
     assert "rhoai-e2e-ephc-ocp422" in names
-    assert "rhoai-e2e-rh-nightly-pm-ocp420" in names
+    assert _KONFLUX_RHOAI1_NAME in names
     assert "rhoai-e2e-ephc-playpen-a" in names
     assert "rhoai-e2e-ephc-playpen-b" in names
     assert "rhoai-e2e-ephc-ocp420-a" not in names
@@ -225,6 +229,12 @@ def test_resolve_ephc_fbc_slice_a_on_421_b_on_422() -> None:
     assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp422") == (
         "rhoai-fbc-fragment-ocp-422"
     )
+
+
+def test_external_fbc_pipelinerun_wrapper_prefix() -> None:
+    path = _ROOT / "tekton" / "pipelines" / "rhoai-e2e-pipelinerun-rh-nightly.yaml"
+    text = path.read_text(encoding="utf-8")
+    assert "generateName: e2e-its-konflux-rhoai1-smoke-" in text
 
 
 def test_ephc_pipelinerun_wrapper_prefix() -> None:

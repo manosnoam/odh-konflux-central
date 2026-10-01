@@ -46,10 +46,10 @@ Examples:
   %(prog)s -l                                  # list last 10 runs
   %(prog)s --delete-pending-pipelines          # stop stuck/incomplete live runs
   %(prog)s --delete-pending-pipelines --dry-run
-  %(prog)s --enable-its rhoai-e2e-rh-nightly-pm-ocp420
+  %(prog)s --enable-its rhoai-e2e-konflux-rhoai1-ocp420
   %(prog)s --run-its rhoai-e2e-ephc-playpen-a --tests smoke --components all
   %(prog)s --enable-its rhoai-e2e-ephc-ocp421
-  %(prog)s --disable-its rhoai-e2e-rh-nightly-pm-ocp420
+  %(prog)s --disable-its rhoai-e2e-konflux-rhoai1-ocp420
   %(prog)s --list-supported-ocp --ocp-version 4.19
   %(prog)s --tests bvt
   %(prog)s --tests smoke --components workbenches

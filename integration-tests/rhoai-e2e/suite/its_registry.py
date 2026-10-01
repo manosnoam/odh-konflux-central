@@ -16,11 +16,13 @@ _K8S_NAME_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 
 # metadata.name -> config snapshot YAML for ``--run-its NAME`` offline FBC fallback
 _ITS_RUN_ITS_SNAPSHOT_BY_NAME: dict[str, str] = {
+    "rhoai-e2e-konflux-rhoai1-ocp420": "config/test-snapshot-rh-nightly.yaml",
     "rhoai-e2e-rh-nightly-pm-ocp420": "config/test-snapshot-rh-nightly.yaml",
 }
 
 # metadata.name -> Konflux Application when ``--konflux-app`` differs from DEFAULT_APP
 _ITS_DEFAULT_KONFLUX_APP_BY_NAME: dict[str, str] = {
+    "rhoai-e2e-konflux-rhoai1-ocp420": "rhoai-fbc-fragment-ocp-420",
     "rhoai-e2e-rh-nightly-pm-ocp420": "rhoai-fbc-fragment-ocp-420",
     "rhoai-e2e-ephc-ocp421": "rhoai-fbc-fragment-ocp-421",
     "rhoai-e2e-ephc-ocp422": "rhoai-fbc-fragment-ocp-422",
