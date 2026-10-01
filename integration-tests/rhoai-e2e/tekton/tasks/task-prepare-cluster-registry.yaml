@@ -100,6 +100,8 @@ spec:
       env:
         - name: CLUSTER_SOURCE
           value: $(params.CLUSTER_SOURCE)
+        - name: TESTS_SHARED
+          value: $(workspaces.tests-shared.path)
         - name: SCRIPTS_REPO_ROOT
           value: $(workspaces.tests-shared.path)/scripts-repo/integration-tests/rhoai-e2e
       script: |
