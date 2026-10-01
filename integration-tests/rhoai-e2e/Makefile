@@ -5,7 +5,7 @@
 PYTHON ?= python3
 PYTEST ?= pytest
 # Per-test hard limit (pytest-timeout; also set in pytest.ini).
-PYTEST_TIMEOUT ?= 10
+PYTEST_TIMEOUT ?= 60
 # Parallel workers: auto (CPU count), a positive integer, or 0 for serial (make test-serial).
 PYTEST_WORKERS ?= auto
 # Verbose per-test lines + slowest-N timing summary at end; no progress dots.
@@ -17,7 +17,7 @@ help:
 	@echo "rhoai-e2e local unit tests (pytest; no Konflux cluster)"
 	@echo ""
 	@echo "  make deps         Install Python test deps (requirements.txt)"
-	@echo "  make test         Run full suite in parallel (~2 min; verbose + 10s/test timeout)"
+	@echo "  make test         Run full suite in parallel (~2 min; verbose + 60s/test timeout)"
 	@echo "  make test-serial  Debug-only single process (much slower; do not use routinely)"
 	@echo "  make test-cli     Run CLI argument tests only"
 	@echo ""

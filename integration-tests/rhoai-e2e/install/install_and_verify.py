@@ -209,6 +209,72 @@ def oc_run(
     )
 
 
+def subscription_source_namespace(operator_name: str, operator_namespace: str) -> str:
+    r = oc_run(
+        ["get", "subscription", operator_name, "-n", operator_namespace, "-o", "json"],
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if r.returncode == 0:
+        try:
+            value = json.loads(r.stdout or "{}").get("spec", {}).get("sourceNamespace")
+        except json.JSONDecodeError:
+            value = None
+        namespace = str(value or "").strip()
+        if namespace:
+            return namespace
+    return _MARKETPLACE_NS
+
+
+def manifest_source_namespace(manifest_path: Path) -> str:
+    text = manifest_path.read_text(encoding="utf-8")
+    match = re.search(
+        r"^\s*sourceNamespace:\s*['\"]?([a-z0-9](?:[-a-z0-9]*[a-z0-9])?)['\"]?\s*$",
+        text,
+        re.MULTILINE,
+    )
+    return match.group(1) if match else _MARKETPLACE_NS
+
+
+def verify_guest_access(operator_namespace: str, source_namespace: str) -> None:
+    identity = oc_run(["whoami"], check=False, capture_output=True, timeout=60)
+    if identity.returncode != 0 or not (identity.stdout or "").strip():
+        fail(f"❌ Guest cluster authentication failed: {(identity.stderr or identity.stdout).strip()}")
+    print(f"Guest cluster identity: {(identity.stdout or '').strip()}", flush=True)
+
+    version = oc_run(["get", "clusterversion"], check=False, capture_output=True, timeout=60)
+    if version.returncode != 0:
+        fail(f"❌ Guest cluster access check failed: {(version.stderr or version.stdout).strip()}")
+    print("✓ Guest cluster API access verified (clusterversion)", flush=True)
+
+    subscription_access = oc_run(
+        ["auth", "can-i", "get", "subscriptions", "-n", operator_namespace],
+        check=False,
+        capture_output=True,
+        timeout=60,
+    )
+    if subscription_access.returncode != 0 or (subscription_access.stdout or "").strip().lower() != "yes":
+        fail(
+            f"❌ Guest identity cannot read Subscriptions in {operator_namespace}: "
+            f"{(subscription_access.stdout or subscription_access.stderr).strip()}"
+        )
+    print(f"✓ Guest Subscription access verified in {operator_namespace}", flush=True)
+
+    can_create_jobs = oc_run(
+        ["auth", "can-i", "create", "jobs", "-n", source_namespace],
+        check=False,
+        capture_output=True,
+        timeout=60,
+    )
+    result = (can_create_jobs.stdout or "").strip().lower() or "unknown"
+    print(
+        f"Guest identity can create jobs in {source_namespace}: {result} "
+        "(informational; OLM creates unpack Jobs using its controller identity)",
+        flush=True,
+    )
+
+
 def validate_fbcf_image(ref: str) -> None:
     if not FBCF_IMAGE_PATTERN.fullmatch(ref):
         fail(f"❌ FBCF_IMAGE contains unexpected characters: {ref}")
@@ -403,7 +469,8 @@ def ensure_rhoai_registry_access() -> None:
                 print(f"✓ IDMS mirror already configured ({RHOAI_IDMS_SOURCE} → {RHOAI_IDMS_MIRROR})")
                 return
 
-    from install.rosa_hcp_pull_setup import is_hypershift_managed_cluster, rosa_hcp_pull_setup_ready
+    from install.rosa_hcp_pull_setup import (is_hypershift_managed_cluster,
+                                             rosa_hcp_pull_setup_ready)
 
     if is_hypershift_managed_cluster():
         if rosa_hcp_pull_setup_ready():
@@ -1165,14 +1232,18 @@ def recycle_catalog_source_pod(catalog_name: str, *, marketplace_namespace: str 
 def log_marketplace_bundle_unpack_state(
     *,
     marketplace_namespace: str = _MARKETPLACE_NS,
+    operator_name: str | None = None,
+    operator_namespace: str | None = None,
 ) -> None:
-    """Log unpack Jobs and olm.bundle pods for triage when unpack is stuck."""
+    """Log source-namespace unpack Jobs and their pods for failure triage."""
+    if operator_name and operator_namespace:
+        marketplace_namespace = subscription_source_namespace(operator_name, operator_namespace)
     print(
-        f"Marketplace bundle-unpack state ({marketplace_namespace}):",
+        f"OLM bundle-unpack state ({marketplace_namespace}):",
         flush=True,
     )
     oc_run(
-        ["get", "jobs", "-n", marketplace_namespace, "-o", "wide"],
+        ["get", "jobs", "-n", marketplace_namespace, "-l", "operatorframework.io/bundle-unpack-ref", "-o", "wide"],
         capture_output=False,
         check=False,
         timeout=120,
@@ -1184,7 +1255,7 @@ def log_marketplace_bundle_unpack_state(
             "-n",
             marketplace_namespace,
             "-l",
-            "olm.bundle",
+            "operatorframework.io/bundle-unpack-ref",
             "-o",
             "wide",
         ],
@@ -1193,7 +1264,7 @@ def log_marketplace_bundle_unpack_state(
         timeout=120,
     )
     r = oc_run(
-        ["get", "jobs", "-n", marketplace_namespace, "-o", "json"],
+        ["get", "jobs", "-n", marketplace_namespace, "-l", "operatorframework.io/bundle-unpack-ref", "-o", "json"],
         capture_output=True,
         check=False,
         timeout=120,
@@ -1301,7 +1372,8 @@ def wait_for_succeeded_csv_version(
                 continue
         if poll_count % 4 == 0:
             try:
-                from install.approve_transitive_installplans import approve_pending_installplans
+                from install.approve_transitive_installplans import \
+                  approve_pending_installplans
 
                 approved = approve_pending_installplans("openshift-operators")
                 if approved:
@@ -1775,7 +1847,8 @@ def recover_bundle_unpack_deadline_exceeded(
 ) -> int:
     """Clear stale unpack Jobs (failed or stuck-active) and ensure OG unpack timeout."""
     try:
-        from install.cluster_registry import ensure_openshift_release_dev_pull_auth
+        from install.cluster_registry import \
+          ensure_openshift_release_dev_pull_auth
 
         ensure_openshift_release_dev_pull_auth()
     except Exception as exc:
@@ -1804,7 +1877,9 @@ def recover_bundle_unpack_deadline_exceeded(
             f"in {_MARKETPLACE_NS}",
             flush=True,
         )
-        log_marketplace_bundle_unpack_state()
+        log_marketplace_bundle_unpack_state(
+            operator_name=operator_name, operator_namespace=operator_namespace
+        )
     return deleted
 
 
@@ -1819,7 +1894,9 @@ def kick_subscription_bundle_unpack(
         f"{manifest_path}",
         flush=True,
     )
-    log_marketplace_bundle_unpack_state()
+    log_marketplace_bundle_unpack_state(
+        operator_name=operator_name, operator_namespace=operator_namespace
+    )
     oc_run(
         ["delete", "subscription", operator_name, "-n", operator_namespace, "--ignore-not-found"],
         capture_output=True,
@@ -2088,7 +2165,9 @@ def wait_subscription_bundle_unpacked(
                         file=sys.stderr,
                         flush=True,
                     )
-                    log_marketplace_bundle_unpack_state()
+                    log_marketplace_bundle_unpack_state(
+                        operator_name=operator_name, operator_namespace=operator_namespace
+                    )
                     return False
             else:
                 no_jobs_since = None
@@ -2114,7 +2193,9 @@ def wait_subscription_bundle_unpacked(
                             file=sys.stderr,
                             flush=True,
                         )
-                        log_marketplace_bundle_unpack_state()
+                        log_marketplace_bundle_unpack_state(
+                            operator_name=operator_name, operator_namespace=operator_namespace
+                        )
                         return False
             else:
                 last_updated_seen = updated
@@ -2142,9 +2223,13 @@ def wait_subscription_bundle_unpacked(
                 timeout=60,
             )
             if subscription_bundle_unpack_in_progress(operator_name, operator_namespace):
-                log_marketplace_bundle_unpack_state()
+                log_marketplace_bundle_unpack_state(
+                    operator_name=operator_name, operator_namespace=operator_namespace
+                )
         time.sleep(10)
-    log_marketplace_bundle_unpack_state()
+    log_marketplace_bundle_unpack_state(
+        operator_name=operator_name, operator_namespace=operator_namespace
+    )
     return False
 
 

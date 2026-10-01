@@ -28,6 +28,7 @@ Env (optional):
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
@@ -42,8 +43,10 @@ ensure_rhoai_e2e_path()
 from install.kubeconfig_cluster_label import cluster_label_from_kubeconfig
 from runners.report.pipelinerun_metadata import infer_installed_product
 from steps.rhoai_triage import resolve_logs_since_time, run_rhoai_triage
-from steps.tekton_util import clamp_tekton_result, require_env, run, write_result
-from steps.tests_payload import mark_collect_diagnostics_done, tests_payload_results_dir
+from steps.tekton_util import (clamp_tekton_result, require_env, run,
+                               write_result)
+from steps.tests_payload import (mark_collect_diagnostics_done,
+                                 tests_payload_results_dir)
 from suite.conforma_gate import CONFORMA_GATE_SKIP
 from suite.pipelinerun_naming import build_diagnostic_artifact_log_name
 
@@ -70,6 +73,8 @@ _MANIFEST_MAX = 512
 _STEP_LOG_SECTION_MAX_LINES = 500
 _STEP_LOG_POD_EXCERPT_LINES = 40
 _STEP_LOG_POD_FILES_MAX = 20
+_OLM_BUNDLE_UNPACK_LABEL = "operatorframework.io/bundle-unpack-ref"
+_MARKETPLACE_NAMESPACE = "openshift-marketplace"
 
 
 def _truthy(raw: str | None, *, default: bool = False) -> bool:
@@ -140,54 +145,103 @@ def _collect_rhoai_cr_status(diag_dir: Path) -> None:
     _oc_to_file(["describe", "dsci", "-A"], cr_dir / "dsci-describe.txt")
 
 
+def _subscription_catalog_sources(operator_ns: str) -> list[tuple[str, str]]:
+    result = _oc(["get", "subscriptions", "-n", operator_ns, "-o", "json"])
+    if result.returncode == 0:
+        try:
+            items = json.loads(result.stdout or "{}").get("items") or []
+        except json.JSONDecodeError:
+            items = []
+        sources = {
+            (
+                str((item.get("spec") or {}).get("sourceNamespace") or _MARKETPLACE_NAMESPACE).strip(),
+                str((item.get("spec") or {}).get("source") or "").strip(),
+            )
+            for item in items
+            if isinstance(item, dict)
+        }
+        sources = {(namespace, name) for namespace, name in sources if namespace}
+        if sources:
+            return sorted(sources)
+    return [(_MARKETPLACE_NAMESPACE, "")]
+
+
 def _collect_olm_detail(diag_dir: Path, operator_ns: str) -> None:
     _oc_to_file(["get", "csv", "-n", operator_ns, "-o", "yaml"], diag_dir / "csv.yaml")
     _oc_to_file(["describe", "sub", "-n", operator_ns], diag_dir / "subscription-describe.txt")
+    _oc_to_file(
+        ["get", "installplans,csv,operatorgroups", "-n", operator_ns, "-o", "yaml"],
+        diag_dir / "operator-install-resources.yaml",
+    )
 
     lines: list[str] = []
-    lines.append("=== jobs openshift-marketplace (wide) ===")
-    r = _oc(["get", "jobs", "-n", "openshift-marketplace", "-o", "wide"])
-    lines.append(r.stdout or "")
+    for source_ns, catalog_name in _subscription_catalog_sources(operator_ns):
+        lines.append(f"=== CatalogSource {catalog_name or '<all>'} in {source_ns} ===")
+        catalog_args = ["get", "catalogsources", "-n", source_ns]
+        if catalog_name:
+            catalog_args = ["get", "catalogsource", catalog_name, "-n", source_ns]
+        catalog_args.extend(["-o", "yaml"])
+        catalog = _oc(catalog_args)
+        lines.extend([catalog.stdout or "", catalog.stderr or ""])
 
-    lines.append("=== bundle-unpack job spec (image + SA) ===")
-    r = _oc(["get", "jobs", "-n", "openshift-marketplace", "-o", "yaml"])
-    if r.stdout:
-        for line in r.stdout.splitlines():
-            stripped = line.strip()
-            if any(
-                stripped.startswith(k)
-                for k in ("image:", "serviceAccountName:", "activeDeadlineSeconds:")
+        lines.append(f"=== bundle-unpack jobs in {source_ns} (wide) ===")
+        jobs_args = ["get", "jobs", "-n", source_ns, "-l", _OLM_BUNDLE_UNPACK_LABEL]
+        jobs_wide = _oc([*jobs_args, "-o", "wide"])
+        lines.extend([jobs_wide.stdout or "", jobs_wide.stderr or ""])
+        jobs_json = _oc([*jobs_args, "-o", "json"])
+        try:
+            jobs = json.loads(jobs_json.stdout or "{}").get("items") or []
+        except json.JSONDecodeError:
+            jobs = []
+
+        for item in jobs:
+            if not isinstance(item, dict):
+                continue
+            job = str((item.get("metadata") or {}).get("name") or "").strip()
+            if not job:
+                continue
+            lines.append(f"=== Job {job} in {source_ns} ===")
+            for args in (
+                ["describe", "job", job, "-n", source_ns],
+                ["get", "pods", "-n", source_ns, "-l", f"job-name={job}", "-o", "wide"],
+                ["describe", "pods", "-n", source_ns, "-l", f"job-name={job}"],
             ):
-                lines.append(line)
+                result = _oc(args)
+                lines.extend([result.stdout or "", result.stderr or ""])
 
-    lines.append("=== bundle-unpack job events (trimmed) ===")
-    r = _oc(["get", "jobs", "-n", "openshift-marketplace", "-o", "jsonpath={.items[*].metadata.name}"])
-    job_names = (r.stdout or "").split()
-    for job in job_names:
-        lines.append(f"Job: {job}")
-        desc = _oc(["describe", "job", job, "-n", "openshift-marketplace"])
-        if desc.stdout:
-            for dl in desc.stdout.splitlines():
-                if any(kw in dl for kw in ("Events", "Image", "Status", "Message", "Reason")):
-                    lines.append(dl)
-        lines.append("Job logs (last 20 lines):")
-        logs = _oc(["logs", f"job/{job}", "-n", "openshift-marketplace", "--tail=20"])
-        lines.append(logs.stdout or "  (no logs)")
+            pods_result = _oc(
+                ["get", "pods", "-n", source_ns, "-l", f"job-name={job}", "-o", "json"]
+            )
+            try:
+                pods = json.loads(pods_result.stdout or "{}").get("items") or []
+            except json.JSONDecodeError:
+                pods = []
+            for pod_item in pods:
+                if not isinstance(pod_item, dict):
+                    continue
+                pod = str((pod_item.get("metadata") or {}).get("name") or "").strip()
+                if not pod:
+                    continue
+                for container in ("pull", "extract"):
+                    lines.append(f"=== logs {pod} container {container} ===")
+                    result = _oc(
+                        ["logs", pod, "-n", source_ns, "-c", container, "--tail=100"]
+                    )
+                    lines.extend([result.stdout or "", result.stderr or ""])
 
-    lines.append("=== SAs openshift-marketplace (pull secrets) ===")
-    r = _oc(
-        [
-            "get",
-            "sa",
-            "-n",
-            "openshift-marketplace",
-            "-o",
-            "custom-columns=NAME:.metadata.name,PULL_SECRETS:.imagePullSecrets",
-        ]
+        lines.append(f"=== events in {source_ns} ===")
+        events = _oc(["get", "events", "-n", source_ns, "--sort-by=.lastTimestamp"])
+        lines.extend([events.stdout or "", events.stderr or ""])
+        lines.append(f"=== service accounts in {source_ns} ===")
+        service_accounts = _oc(
+            ["get", "sa", "-n", source_ns,
+             "-o", "custom-columns=NAME:.metadata.name,PULL_SECRETS:.imagePullSecrets"]
+        )
+        lines.extend([service_accounts.stdout or "", service_accounts.stderr or ""])
+
+    (diag_dir / "olm-bundle-unpack-summary.txt").write_text(
+        "\n".join(line for line in lines if line), encoding="utf-8"
     )
-    lines.append(r.stdout or "")
-
-    (diag_dir / "marketplace-jobs-summary.txt").write_text("\n".join(lines), encoding="utf-8")
 
 
 def _collect_adm_inspect(diag_dir: Path, operator_ns: str) -> bool:
@@ -244,7 +298,7 @@ def _build_manifest(diag_dir: Path, *, adm_inspect_failed: bool, operator_ns: st
     for rel in (
         "rhoai-cr-status/dsc-describe.txt",
         "subscription-describe.txt",
-        "marketplace-jobs-summary.txt",
+        "olm-bundle-unpack-summary.txt",
     ):
         path = diag_dir / rel
         if not path.is_file():
@@ -401,7 +455,7 @@ def _print_triage_to_step_log(diag_dir: Path, *, artifact_name: str) -> None:
             title=title,
             max_lines=_STEP_LOG_SECTION_MAX_LINES,
         )
-    olm_summary = diag_dir / "marketplace-jobs-summary.txt"
+    olm_summary = diag_dir / "olm-bundle-unpack-summary.txt"
     if olm_summary.is_file():
         _print_file_excerpt_to_step_log(
             olm_summary,

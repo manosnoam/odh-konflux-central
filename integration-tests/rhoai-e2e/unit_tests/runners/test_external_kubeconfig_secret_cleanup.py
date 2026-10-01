@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
 import unittest
 from unittest import mock
 
 from k8s.external_kubeconfig import (
-    _pipelinerun_cluster_source_param,
-    list_active_pipelineruns_for_cluster_source,
-)
+  _pipelinerun_cluster_source_param,
+  list_active_pipelineruns_for_cluster_source)
+from suite.constants import DEFAULT_APP, DEFAULT_NAMESPACE
+
 
 class ExternalKubeconfigSecretCleanupTest(unittest.TestCase):
     def test_cluster_source_param(self) -> None:
@@ -29,19 +29,22 @@ class ExternalKubeconfigSecretCleanupTest(unittest.TestCase):
         payload = {
             "items": [
                 {
-                    "metadata": {"name": "rhoai-e2e-pr-done"},
+                    "metadata": {"name": "e2e-cli-test-done"},
                     "spec": {"params": [{"name": "CLUSTER_SOURCE", "value": "sec-a"}]},
                     "status": {"completionTime": "2026-06-28T12:00:00Z"},
                 },
                 {
-                    "metadata": {"name": "rhoai-e2e-pr-other-secret"},
+                    "metadata": {"name": "e2e-cli-test-other-secret"},
                     "spec": {"params": [{"name": "CLUSTER_SOURCE", "value": "sec-b"}]},
                     "status": {},
                 },
                 {
-                    "metadata": {"name": "rhoai-e2e-pr-active"},
+                    "metadata": {"name": "e2e-cli-test-active"},
                     "spec": {"params": [{"name": "CLUSTER_SOURCE", "value": "sec-a"}]},
-                    "status": {"conditions": [{"type": "Succeeded", "status": "Unknown", "reason": "Running"}]},
+                    "status": {
+                        "conditions": [{"type": "Succeeded", "status": "Unknown", "reason": "Running"}],
+                        "childReferences": [{"kind": "TaskRun", "name": "install"}],
+                    },
                 },
             ]
         }
@@ -63,9 +66,9 @@ class ExternalKubeconfigSecretCleanupTest(unittest.TestCase):
                     active = list_active_pipelineruns_for_cluster_source(
                         namespace=DEFAULT_NAMESPACE,
                         cluster_source="sec-a",
-                        exclude_name="rhoai-e2e-pr-self",
+                        exclude_name="e2e-cli-test-self",
                     )
-        self.assertEqual(active, ["rhoai-e2e-pr-active"])
+        self.assertEqual(active, ["e2e-cli-test-active"])
 
     def test_list_active_returns_none_when_oc_fails(self) -> None:
         with mock.patch(

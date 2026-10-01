@@ -12,22 +12,17 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from install import install_and_verify as iav
-from install.approve_transitive_installplans import approve_pending_installplans
-from install.dsc_install import (
-    ensure_dsc_models_as_service,
-    require_dsc_ready_for_install,
-    setup_dsc_resources,
-    wait_dsc_ready,
-)
+from install.approve_transitive_installplans import \
+  approve_pending_installplans
+from install.dsc_install import (ensure_dsc_models_as_service,
+                                 require_dsc_ready_for_install,
+                                 setup_dsc_resources, wait_dsc_ready)
 from install.gateway_config import (
-    cluster_source_is_ephc,
-    ensure_openshift_gateway_istio_for_dep_operators,
-    ensure_rhoai_gateway_for_install,
-    gateway_config_ready,
-    reconcile_servicemesh_olm_conflicts,
-    wait_openshift_gateway_controller_deployments,
-    wait_servicemesh_csv_succeeded,
-)
+  cluster_source_is_ephc, ensure_openshift_gateway_istio_for_dep_operators,
+  ensure_rhoai_gateway_for_install, gateway_config_ready,
+  reconcile_servicemesh_olm_conflicts,
+  wait_openshift_gateway_controller_deployments,
+  wait_servicemesh_csv_succeeded)
 
 _INSTALL_OPERATOR_SCRIPT_TIMEOUT_SEC = 2640  # Headroom under install-rhoai Tekton task limit
 _INSTALL_RHOAI_TASK_TIMEOUT_SEC = 105 * 60  # rhoai-e2e-pipeline install-rhoai (EPHC 3.6 unpack)
@@ -274,6 +269,9 @@ def phase_operator_install_subscription(ctx: InstallContext) -> str:
     else:
         print(f"Subscription manifest: channel={ctx.update_channel} (no startingCSV from PackageManifest)")
     iav.patch_manifest_operatorgroup_bundle_unpack(manifest_path)
+    source_namespace = iav.manifest_source_namespace(manifest_path)
+    print(f"Verifying guest credentials before Subscription install (source namespace {source_namespace})...")
+    iav.verify_guest_access(ctx.operator_namespace, source_namespace)
     if cluster_source_is_ephc():
         cleared = iav.delete_terminal_olm_bundle_unpack_jobs()
         if cleared:
@@ -421,7 +419,8 @@ def phase_post_install_dsc(ctx: InstallContext) -> None:
     }
     if serving_ids:
         try:
-            from components.maas_billing.common import maas_api_deployment_exists
+            from components.maas_billing.common import \
+              maas_api_deployment_exists
 
             wait_aigateway = maas_api_deployment_exists()
             if not wait_aigateway:

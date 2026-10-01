@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import pytest
+from steps.rhoai_triage import (ISSUE_GREP_EXCLUDE_RE, ISSUE_GREP_RE,
+                                ODH_RHOAI_WORKLOAD_NS_RE,
+                                _latest_pod_per_prefix, build_issues_summary,
+                                needs_dependency_install_diagnostics,
+                                resolve_logs_since_time)
 
-from steps.rhoai_triage import (
-    ISSUE_GREP_EXCLUDE_RE,
-    ISSUE_GREP_RE,
-    _latest_pod_per_prefix,
-    build_issues_summary,
-    needs_dependency_install_diagnostics,
-    resolve_logs_since_time,
-    ODH_RHOAI_WORKLOAD_NS_RE,
-)
 
 def test_resolve_logs_since_time_accepts_rfc3339() -> None:
     assert resolve_logs_since_time("2026-06-22T10:15:30Z") == "2026-06-22T10:15:30Z"
@@ -168,13 +164,11 @@ def test_build_issues_summary_filters_noise(tmp_path) -> None:
     assert ISSUE_GREP_EXCLUDE_RE.search("Registering webhook")
 
 def test_collect_diagnostics_pipeline_failed(monkeypatch: pytest.MonkeyPatch) -> None:
-    from steps.collect_diagnostics import (
-        _install_task_failed,
-        _pipeline_failed,
-        _resolve_kubeconfig,
-        _should_collect_adm_inspect,
-        _stage_triage_for_artifacts,
-    )
+    from steps.collect_diagnostics import (_install_task_failed,
+                                           _pipeline_failed,
+                                           _resolve_kubeconfig,
+                                           _should_collect_adm_inspect,
+                                           _stage_triage_for_artifacts)
 
     monkeypatch.delenv("PIPELINE_RUN_STATUS", raising=False)
     monkeypatch.delenv("INSTALL_OPERATOR_RHOAI_STATUS", raising=False)
@@ -189,6 +183,36 @@ def test_collect_diagnostics_pipeline_failed(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("INSTALL_OPERATOR_RHOAI_STATUS", "Failed")
     assert _install_task_failed()
     assert _should_collect_adm_inspect()
+
+
+def test_collect_olm_details_uses_subscription_source_namespace(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+    from subprocess import CompletedProcess
+
+    from steps import collect_diagnostics as mod
+
+    calls: list[list[str]] = []
+
+    def fake_oc(args: list[str], **_kwargs: object) -> CompletedProcess[str]:
+        calls.append(args)
+        stdout = ""
+        if args[:3] == ["get", "subscriptions", "-n"]:
+            stdout = json.dumps(
+                {"items": [{"spec": {"source": "rhoai-catalog", "sourceNamespace": "catalog-tenant"}}]}
+            )
+        elif args[0:2] == ["get", "jobs"] and "-o" in args and args[-1] == "json":
+            stdout = json.dumps({"items": []})
+        return CompletedProcess(args, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(mod, "_oc", fake_oc)
+    mod._collect_olm_detail(tmp_path, "redhat-ods-operator")
+
+    assert ["get", "jobs", "-n", "catalog-tenant", "-l", "operatorframework.io/bundle-unpack-ref", "-o", "wide"] in calls
+    assert ["get", "catalogsource", "rhoai-catalog", "-n", "catalog-tenant", "-o", "yaml"] in calls
+    summary = (tmp_path / "olm-bundle-unpack-summary.txt").read_text(encoding="utf-8")
+    assert "catalog-tenant" in summary
 
 def test_resolve_kubeconfig_prefers_existing_file(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     from steps.collect_diagnostics import _resolve_kubeconfig

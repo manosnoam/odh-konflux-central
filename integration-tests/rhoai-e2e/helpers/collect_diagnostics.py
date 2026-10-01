@@ -10,6 +10,7 @@ Env (optional):
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
@@ -24,6 +25,8 @@ if str(_RHOAI_E2E) not in sys.path:
 from helpers.tekton_util import require_env, run, write_result
 
 _OC = shutil.which("oc") or "oc"
+_MARKETPLACE_NAMESPACE = "openshift-marketplace"
+_BUNDLE_UNPACK_LABEL = "operatorframework.io/bundle-unpack-ref"
 
 
 def _oc(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -45,6 +48,27 @@ def _oc_to_file(args: list[str], dest: Path) -> None:
         dest.write_text(blob, encoding="utf-8")
     else:
         dest.write_text(r.stdout or "", encoding="utf-8")
+
+
+def _catalog_sources(operator_namespace: str) -> list[tuple[str, str]]:
+    result = _oc(["get", "subscriptions", "-n", operator_namespace, "-o", "json"])
+    if result.returncode == 0:
+        try:
+            items = json.loads(result.stdout or "{}").get("items") or []
+        except json.JSONDecodeError:
+            items = []
+        sources = {
+            (
+                str((item.get("spec") or {}).get("sourceNamespace") or _MARKETPLACE_NAMESPACE).strip(),
+                str((item.get("spec") or {}).get("source") or "").strip(),
+            )
+            for item in items
+            if isinstance(item, dict)
+        }
+        sources = {(namespace, name) for namespace, name in sources if namespace}
+        if sources:
+            return sorted(sources)
+    return [(_MARKETPLACE_NAMESPACE, "")]
 
 
 def main() -> int:
@@ -75,41 +99,74 @@ def main() -> int:
         )
     _oc_to_file(["get", "csv", "-n", ns, "-o", "yaml"], diag_dir / "csv.yaml")
     _oc_to_file(["describe", "sub", "-n", ns], diag_dir / "subscription-describe.txt")
+    _oc_to_file(
+        ["get", "installplans,csv,operatorgroups", "-n", ns, "-o", "yaml"],
+        diag_dir / "operator-install-resources.yaml",
+    )
 
-    # Marketplace jobs summary
     lines: list[str] = []
-    lines.append("=== jobs openshift-marketplace (wide) ===")
-    r = _oc(["get", "jobs", "-n", "openshift-marketplace", "-o", "wide"])
-    lines.append(r.stdout or "")
+    for source_namespace, catalog_name in _catalog_sources(ns):
+        lines.append(f"=== CatalogSource {catalog_name or '<all>'} in {source_namespace} ===")
+        catalog_args = ["get", "catalogsources", "-n", source_namespace]
+        if catalog_name:
+            catalog_args = ["get", "catalogsource", catalog_name, "-n", source_namespace]
+        catalog = _oc([*catalog_args, "-o", "yaml"])
+        lines.extend([catalog.stdout or "", catalog.stderr or ""])
 
-    lines.append("=== bundle-unpack job spec (image + SA) ===")
-    r = _oc(["get", "jobs", "-n", "openshift-marketplace", "-o", "yaml"])
-    if r.stdout:
-        for line in r.stdout.splitlines():
-            stripped = line.strip()
-            if any(stripped.startswith(k) for k in ("image:", "serviceAccountName:", "activeDeadlineSeconds:")):
-                lines.append(line)
+        jobs_args = ["get", "jobs", "-n", source_namespace, "-l", _BUNDLE_UNPACK_LABEL]
+        lines.append(f"=== bundle-unpack jobs in {source_namespace} (wide) ===")
+        jobs_wide = _oc([*jobs_args, "-o", "wide"])
+        lines.extend([jobs_wide.stdout or "", jobs_wide.stderr or ""])
+        jobs_json = _oc([*jobs_args, "-o", "json"])
+        try:
+            jobs = json.loads(jobs_json.stdout or "{}").get("items") or []
+        except json.JSONDecodeError:
+            jobs = []
+        for item in jobs:
+            if not isinstance(item, dict):
+                continue
+            job = str((item.get("metadata") or {}).get("name") or "").strip()
+            if not job:
+                continue
+            lines.append(f"=== Job {job} in {source_namespace} ===")
+            for args in (
+                ["describe", "job", job, "-n", source_namespace],
+                ["get", "pods", "-n", source_namespace, "-l", f"job-name={job}", "-o", "wide"],
+                ["describe", "pods", "-n", source_namespace, "-l", f"job-name={job}"],
+            ):
+                result = _oc(args)
+                lines.extend([result.stdout or "", result.stderr or ""])
+            pods_result = _oc(
+                ["get", "pods", "-n", source_namespace, "-l", f"job-name={job}", "-o", "json"]
+            )
+            try:
+                pods = json.loads(pods_result.stdout or "{}").get("items") or []
+            except json.JSONDecodeError:
+                pods = []
+            for pod_item in pods:
+                if not isinstance(pod_item, dict):
+                    continue
+                pod = str((pod_item.get("metadata") or {}).get("name") or "").strip()
+                if not pod:
+                    continue
+                for container in ("pull", "extract"):
+                    lines.append(f"=== logs {pod} container {container} ===")
+                    result = _oc(
+                        ["logs", pod, "-n", source_namespace, "-c", container, "--tail=100"]
+                    )
+                    lines.extend([result.stdout or "", result.stderr or ""])
+        lines.append(f"=== events in {source_namespace} ===")
+        events = _oc(["get", "events", "-n", source_namespace, "--sort-by=.lastTimestamp"])
+        lines.extend([events.stdout or "", events.stderr or ""])
+        lines.append(f"=== service accounts in {source_namespace} ===")
+        service_accounts = _oc(
+            ["get", "sa", "-n", source_namespace,
+             "-o", "custom-columns=NAME:.metadata.name,PULL_SECRETS:.imagePullSecrets"]
+        )
+        lines.extend([service_accounts.stdout or "", service_accounts.stderr or ""])
 
-    lines.append("=== bundle-unpack job events (trimmed) ===")
-    r = _oc(["get", "jobs", "-n", "openshift-marketplace", "-o", "jsonpath={.items[*].metadata.name}"])
-    job_names = (r.stdout or "").split()
-    for job in job_names:
-        lines.append(f"Job: {job}")
-        desc = _oc(["describe", "job", job, "-n", "openshift-marketplace"])
-        if desc.stdout:
-            for dl in desc.stdout.splitlines():
-                if any(kw in dl for kw in ("Events", "Image", "Status", "Message", "Reason")):
-                    lines.append(dl)
-        lines.append("Job logs (last 20 lines):")
-        logs = _oc(["logs", f"job/{job}", "-n", "openshift-marketplace", "--tail=20"])
-        lines.append(logs.stdout or "  (no logs)")
-
-    lines.append("=== SAs openshift-marketplace (pull secrets) ===")
-    r = _oc(["get", "sa", "-n", "openshift-marketplace",
-             "-o", "custom-columns=NAME:.metadata.name,PULL_SECRETS:.imagePullSecrets"])
-    lines.append(r.stdout or "")
-
-    (diag_dir / "marketplace-jobs-summary.txt").write_text("\n".join(lines), encoding="utf-8")
+    summary_path = diag_dir / "olm-bundle-unpack-summary.txt"
+    summary_path.write_text("\n".join(line for line in lines if line), encoding="utf-8")
 
     # Bundle beside diag_dir so "tar -C diag_dir ." never archives the growing output file.
     bundle = diag_dir.parent / "diagnostics-bundle.tgz"
@@ -144,10 +201,10 @@ def main() -> int:
         manifest_lines.append("=== subscription-describe (first 80 lines) ===")
         manifest_lines.extend(sub_desc.read_text(encoding="utf-8", errors="replace").splitlines()[:80])
 
-    mkt = diag_dir / "marketplace-jobs-summary.txt"
-    if mkt.exists():
-        manifest_lines.append("=== marketplace-jobs-summary (first 120 lines) ===")
-        manifest_lines.extend(mkt.read_text(encoding="utf-8", errors="replace").splitlines()[:120])
+    olm_summary = diag_dir / "olm-bundle-unpack-summary.txt"
+    if olm_summary.exists():
+        manifest_lines.append("=== olm-bundle-unpack-summary (first 120 lines) ===")
+        manifest_lines.extend(olm_summary.read_text(encoding="utf-8", errors="replace").splitlines()[:120])
 
     raw = "\n".join(manifest_lines).encode("utf-8", errors="replace")[:3584]
     manifest = raw.decode("utf-8", errors="ignore")

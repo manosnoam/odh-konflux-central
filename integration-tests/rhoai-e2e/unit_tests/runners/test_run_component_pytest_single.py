@@ -269,6 +269,7 @@ def test_pooled_external_smoke_prep_runs_when_cluster_prep_done(
     with (
         mock.patch("runners.run_component_pytest.prepare_kubeconfig_auth_for_tests"),
         mock.patch("runners.run_component_pytest.cluster_smoke_infra_blocked_reason", return_value=""),
+        mock.patch("runners.run_component_pytest._wait_for_schedulable_nodes_before_component_pytest", return_value=""),
         mock.patch("runners.run_component_pytest.load_shift_left_env_from_mount"),
         mock.patch("runners.run_component_pytest.apply_cluster_router_ca_from_kubeconfig"),
         mock.patch("runners.orchestrator.stage_git_for_prereqs"),
