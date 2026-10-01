@@ -19,6 +19,7 @@ from suite.its_trigger_params import (
     is_external_cluster_source,
     is_s3_install_cluster_source,
     ocp_install_prefix,
+    ocp_version_from_rhoai_fbc_name,
 )
 from suite.pipelinerun_naming import build_rhoai_e2e_generate_prefix
 
@@ -86,6 +87,10 @@ class RunnerItsAdminMixin:
             prefix = ocp_install_prefix(ocp_version)
             if prefix:
                 self.args.ocp_version = prefix
+            elif (fbc_name or "").strip():
+                from_fbc = ocp_version_from_rhoai_fbc_name(fbc_name)
+                if from_fbc:
+                    self.args.ocp_version = from_fbc
         if not (
             getattr(self.args, "components_explicit", False)
             or getattr(self.args, "components_inferred", False)

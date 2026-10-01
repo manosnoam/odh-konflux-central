@@ -150,11 +150,16 @@ class RunnerListMixin(RunnerOcpMixin):
 
     def _warn_couldnt_get_pipeline_git_source(self) -> None:
         """Contextual hint after CouldntGetPipeline / missing pipeline file in Git resolver."""
+        from suite.its_git_pipeline_path import DEFAULT_RHOAI_E2E_GIT_PIPELINE_PATH
+
         repo = (getattr(self.args, "konflux_repo", None) or "").strip()
         branch = (getattr(self.args, "konflux_branch", None) or "").strip()
+        pipeline_path = (
+            getattr(self, "_cli_git_pipeline_path", "") or DEFAULT_RHOAI_E2E_GIT_PIPELINE_PATH
+        )
         head = (
             "WARN Pipeline did not start: Git resolver could not load "
-            "``integration-tests/rhoai-e2e/tekton/pipelines/rhoai-e2e-pipeline.yaml`` (CouldntGetPipeline).\n"
+            f"``{pipeline_path}`` (CouldntGetPipeline).\n"
         )
         if repo and branch:
             ns = self.args.namespace

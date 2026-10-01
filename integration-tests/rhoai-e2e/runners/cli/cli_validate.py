@@ -16,6 +16,8 @@ from suite.errors import AppError
 from suite.its_registry import (
     integration_test_scenario_application,
     integration_test_scenario_default_konflux_app,
+    looks_like_its_manifest_path,
+    materialize_upstream_main_its_manifest,
     resolve_integration_test_scenario_ref,
     resolve_integration_test_scenario_run_its_snapshot,
 )
@@ -342,6 +344,15 @@ def parse_cli_args(parser: CliArgumentParser, argv: list[str]) -> argparse.Names
         manifest_path, scenario_name = resolve_integration_test_scenario_ref(rhoai_e2e_root, its_ref)
         args.its_manifest_path = manifest_path
         args.its_scenario_name = scenario_name
+        if getattr(args, "upstream_main_its", False):
+            if not args.run_its:
+                raise AppError("--upstream-main-its requires --run-its.", 2)
+            if looks_like_its_manifest_path(args.run_its):
+                raise AppError(
+                    "--upstream-main-its requires --run-its NAME (not a manifest file path).",
+                    2,
+                )
+            args.its_manifest_path = materialize_upstream_main_its_manifest(scenario_name)
         if args.run_its:
             snap_path = resolve_integration_test_scenario_run_its_snapshot(
                 rhoai_e2e_root, scenario_name

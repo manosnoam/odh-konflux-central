@@ -22,6 +22,7 @@ from suite.constants import (
     RHOAI_E2E_EPHC_ITS_NAME,
     RHOAI_FBCF_IMAGE_REF_PATTERN,
 )
+from suite.its_git_pipeline_path import resolve_git_pipeline_path_from_its_resolver
 from suite.its_trigger_params import (
     is_external_cluster_source,
     resolve_cluster_source_for_trigger,
@@ -342,6 +343,13 @@ class RunnerTriggerMixin:
             if detected:
                 print(f"Detected cluster OCP {detected} from external kubeconfig")
                 return detected
+        fbc_name = (getattr(self, "resolved_rhoai_fbc_name", "") or "").strip()
+        if fbc_name:
+            from suite.its_trigger_params import ocp_version_from_rhoai_fbc_name
+
+            from_fbc = ocp_version_from_rhoai_fbc_name(fbc_name)
+            if from_fbc:
+                return from_fbc
         return ""
 
     def _resolve_rhoai_fbc_on_version_apps(
@@ -656,8 +664,12 @@ class RunnerTriggerMixin:
             run_its = bool((getattr(self.args, "run_its", "") or "").strip())
             if run_its:
                 manifest = Path(getattr(self.args, "its_manifest_path", "") or "")
-                its_app = integration_test_scenario_application(manifest) if manifest.is_file() else ""
-                its_app = its_app or fbc_name
+                cli_app = (self.args.app or "").strip()
+                if getattr(self.args, "konflux_app_explicit", False) and cli_app:
+                    its_app = cli_app
+                else:
+                    its_app = integration_test_scenario_application(manifest) if manifest.is_file() else ""
+                    its_app = its_app or fbc_name
                 with spin_while(
                     f"Resolving latest Konflux FBCF image for {fbc_name} (ITS application {its_app})"
                 ):
@@ -891,10 +903,16 @@ class RunnerTriggerMixin:
 
     def _read_its_resolver_ref(self) -> tuple[str, str]:
         """Read resolverRef url/revision from the patched ITS tmp file."""
+        url, rev, _path = self._read_its_git_resolver()
+        return url, rev
+
+    def _read_its_git_resolver(self) -> tuple[str, str, str]:
+        """Read resolverRef url, revision, and pathInRepo from the patched ITS tmp file."""
         if not self.its_apply_tmp:
-            return DEFAULT_UPSTREAM_KONFLUX_GIT, "main"
+            return DEFAULT_UPSTREAM_KONFLUX_GIT, "main", ""
         url = ""
         rev = ""
+        path_in_repo = ""
         proc = run_cmd(
             ["yq", "e", "-o=json", ".spec.resolverRef.params", self.its_apply_tmp],
             capture=True, check=True,
@@ -910,8 +928,9 @@ class RunnerTriggerMixin:
                 url = str(p.get("value", ""))
             elif p.get("name") == "revision":
                 rev = str(p.get("value", ""))
-        return url or DEFAULT_UPSTREAM_KONFLUX_GIT, rev or "main"
-
+            elif p.get("name") == "pathInRepo":
+                path_in_repo = str(p.get("value", ""))
+        return url or DEFAULT_UPSTREAM_KONFLUX_GIT, rev or "main", path_in_repo
 
     def create_direct_pipelinerun(self, odh_overrides: bool) -> None:
         """Create PipelineRun directly (no Snapshot/Integration Service) with dynamic generateName."""
@@ -922,7 +941,13 @@ class RunnerTriggerMixin:
         cluster_source = self._cluster_source_for_its()
         if cluster_source:
             its_params["CLUSTER_SOURCE"] = cluster_source
-        resolver_url, resolver_rev = self._read_its_resolver_ref()
+        resolver_url, resolver_rev, resolver_path_in_repo = self._read_its_git_resolver()
+        pipeline_git_path = resolve_git_pipeline_path_from_its_resolver(resolver_path_in_repo)
+        self._cli_git_pipeline_path = pipeline_git_path
+        print(
+            f"  pipelineRef git: {resolver_url} @ {resolver_rev} path={pipeline_git_path}",
+            flush=True,
+        )
         generate_prefix = getattr(self, "_pipelinerun_generate_prefix", default_pipelinerun_generate_prefix())
 
         pr_params: list[dict[str, str]] = [{"name": "SNAPSHOT", "value": snapshot_json}]
@@ -959,7 +984,7 @@ class RunnerTriggerMixin:
                     "params": [
                         {"name": "url", "value": resolver_url},
                         {"name": "revision", "value": resolver_rev},
-                        {"name": "pathInRepo", "value": "integration-tests/rhoai-e2e/tekton/pipelines/rhoai-e2e-pipeline.yaml"},
+                        {"name": "pathInRepo", "value": pipeline_git_path},
                     ],
                 },
                 "params": pr_params,

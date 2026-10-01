@@ -402,6 +402,14 @@ def _add_konflux_group(parser: CliArgumentParser) -> None:
         ),
     )
     konflux.add_argument(
+        "--upstream-main-its",
+        action="store_true",
+        help=(
+            "With --run-its NAME only: stage the ITS YAML from upstream/main "
+            "(integration-tests/olminstall/tekton/its/) for main-branch pipeline comparison."
+        ),
+    )
+    konflux.add_argument(
         "--konflux-ui",
         metavar="URL",
         default=os.environ.get("KONFLUX_UI", DEFAULT_KONFLUX_UI),

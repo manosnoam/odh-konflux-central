@@ -181,6 +181,18 @@ class ItsTriggerParamsTests(unittest.TestCase):
             "latest (default)",
         )
 
+    def test_ocp_version_ephc_from_rhoai_fbc_name(self) -> None:
+        self.assertEqual(
+            resolve_ocp_version_display(
+                product="rhoai",
+                cluster_source=CLUSTER_SOURCE_EPHC,
+                cli_ocp="",
+                explicit_cli=False,
+                rhoai_fbc_name="rhoai-fbc-fragment-ocp-422",
+            ),
+            "4.22 (default)",
+        )
+
     def test_ocp_install_prefix_ignores_display_placeholders(self) -> None:
         self.assertEqual(ocp_install_prefix("latest (default)"), "")
         self.assertEqual(ocp_install_prefix("unspecified (default)"), "")

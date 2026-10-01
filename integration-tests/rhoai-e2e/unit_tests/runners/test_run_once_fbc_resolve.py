@@ -46,13 +46,21 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
         self.assertEqual(runner._run_its_pinned_fbcf_image, _PINNED_420)
         self.assertEqual(runner.image, "")
 
-    def test_run_its_ephc_does_not_set_ocp_prefix_from_latest_default_label(self) -> None:
+    def test_run_its_ephc_sets_ocp_from_rhoai_fbc_name_when_manifest_is_latest(self) -> None:
         parser = make_parser()
         args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp421"])
         runner = RhoaiE2ERunner(args)
         runner._apply_run_its_manifest_defaults(_EPHC_ITS)
-        self.assertEqual(runner.args.ocp_version, "")
+        self.assertEqual(runner.args.ocp_version, "4.21")
         self.assertEqual(runner.resolved_rhoai_fbc_name, "rhoai-fbc-fragment-ocp-421")
+
+    def test_run_its_ephc_ocp422_sets_minor_from_manifest(self) -> None:
+        parser = make_parser()
+        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp422"])
+        runner = RhoaiE2ERunner(args)
+        runner._apply_run_its_manifest_defaults(_EPHC_422_ITS)
+        self.assertEqual(runner.args.ocp_version, "4.22")
+        self.assertEqual(runner.resolved_rhoai_fbc_name, "rhoai-fbc-fragment-ocp-422")
 
     def test_run_its_keeps_manifest_cluster_source_without_cli_override(self) -> None:
         runner = self._runner()
@@ -140,6 +148,31 @@ class ResolveRhoaiFbcForItsApplicationTest(unittest.TestCase):
         ) as mock_full:
             runner.resolve_image(odh_overrides=False)
         mock_its.assert_called_once_with("rhoai-fbc-fragment-ocp-421", "rhoai-fbc-fragment-ocp-421")
+        mock_full.assert_not_called()
+
+    def test_resolve_image_run_its_uses_konflux_app_for_playpen_debug(self) -> None:
+        parser = make_parser()
+        args = parse_cli_args(
+            parser,
+            [
+                "--run-its",
+                "rhoai-e2e-ephc-ocp422",
+                "--konflux-app",
+                "testops-playpen",
+            ],
+        )
+        runner = RhoaiE2ERunner(args)
+        runner.args.product = "rhoai"
+        runner.resolved_rhoai_fbc_name = "rhoai-fbc-fragment-ocp-422"
+        with patch.object(
+            runner,
+            "_resolve_rhoai_fbc_for_its_application",
+        ) as mock_its, patch.object(
+            runner,
+            "_resolve_rhoai_fbc_latest_for_component",
+        ) as mock_full:
+            runner.resolve_image(odh_overrides=False)
+        mock_its.assert_called_once_with("testops-playpen", "rhoai-fbc-fragment-ocp-422")
         mock_full.assert_not_called()
 
 

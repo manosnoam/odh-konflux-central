@@ -267,6 +267,8 @@ def resolve_ocp_version_display(
         return NOT_APPLICABLE
 
     if is_ephemeral_hosted_cluster_source(source) or prod in ("rhoai", "odh"):
+        if catalog_ocp:
+            return with_default_suffix(catalog_ocp, explicit=False)
         return f"latest{DEFAULT_SUFFIX}"
     return NOT_APPLICABLE
 
