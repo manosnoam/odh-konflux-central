@@ -219,7 +219,7 @@ class LoadHcpInstallAwsCredentialsTest(unittest.TestCase):
         )
         self.assertEqual(creds["AWS_ACCESS_KEY_ID"], "AKIA_ENV")
 
-    def test_reads_openshift_vault_keys(self) -> None:
+    def test_reads_rosa_ccs_admin_vault_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             auth = Path(tmp)
             auth.joinpath("VAULT_ADDR").write_text("https://vault.example:8200\n", encoding="utf-8")
@@ -232,11 +232,40 @@ class LoadHcpInstallAwsCredentialsTest(unittest.TestCase):
             with mock.patch(
                 "k8s.vault_runtime.vault_login_and_read_kv_data",
                 return_value={
-                    "installData": {
-                        "aws_access_key_id": "AKIA_OPENSHIFT",
-                        "aws_secret_access_key": "openshift-secret",
-                    }
+                    "rosa-access-key-id": "AKIA_ROSA",
+                    "rosa-secret-access-key": "rosa-secret",
                 },
+            ) as read_kv:
+                creds = load_hcp_install_aws_credentials(auth_dir=auth, environ={})
+        self.assertEqual(creds["AWS_ACCESS_KEY_ID"], "AKIA_ROSA")
+        self.assertEqual(creds["AWS_SECRET_ACCESS_KEY"], "rosa-secret")
+        read_kv.assert_called_once()
+        self.assertIn("rosaCcsAdmin", read_kv.call_args.kwargs["kv_path"])
+
+    def test_reads_openshift_vault_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            auth = Path(tmp)
+            auth.joinpath("VAULT_ADDR").write_text("https://vault.example:8200\n", encoding="utf-8")
+            auth.joinpath("role_id").write_text("role\n", encoding="utf-8")
+            auth.joinpath("secret_id").write_text("secret\n", encoding="utf-8")
+            auth.joinpath("ca.crt").write_text(
+                "-----BEGIN CERTIFICATE-----\nM\n-----END CERTIFICATE-----\n",
+                encoding="utf-8",
+            )
+
+            def _kv(**kwargs: object) -> dict[str, str]:
+                if "openshift" in str(kwargs.get("kv_path", "")):
+                    return {
+                        "installData": {
+                            "aws_access_key_id": "AKIA_OPENSHIFT",
+                            "aws_secret_access_key": "openshift-secret",
+                        }
+                    }
+                return {}
+
+            with mock.patch(
+                "k8s.vault_runtime.vault_login_and_read_kv_data",
+                side_effect=_kv,
             ):
                 creds = load_hcp_install_aws_credentials(auth_dir=auth, environ={})
         self.assertEqual(creds["AWS_ACCESS_KEY_ID"], "AKIA_OPENSHIFT")

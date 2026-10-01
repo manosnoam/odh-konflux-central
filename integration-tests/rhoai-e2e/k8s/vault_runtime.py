@@ -21,7 +21,10 @@ SECRET_SOURCE_VAULT = "vault"
 SECRET_SOURCE_TENANT = "tenant"
 SHIFT_LEFT_KV_PATH = "apps/data/rhods-ci/shift-left"
 OPENSHIFT_KV_PATH = "apps/data/rhods-ci/openshift"
+# Jenkins deployOSDCluster: VaultSecrets.ROSA_CREDENTIALS → apps/rhods-ci/aws/rosaCcsAdmin
+ROSA_CCS_ADMIN_KV_PATH = "apps/data/rhods-ci/aws/rosaCcsAdmin"
 HCP_INSTALL_AWS_KV_PATHS: tuple[str, ...] = (
+    ROSA_CCS_ADMIN_KV_PATH,
     OPENSHIFT_KV_PATH,
     "apps/data/rhods-ci/aws",
 )
@@ -35,6 +38,9 @@ _AWS_KEY_ALIASES: dict[str, tuple[str, ...]] = {
         "AWS_ACCESS_KEY",
         "HCP_AWS_ACCESS_KEY_ID",
         "hcp_aws_access_key_id",
+        "rosa-access-key-id",
+        "rosa_access_key_id",
+        "ROSA_ACCESS_KEY_ID",
     ),
     "AWS_SECRET_ACCESS_KEY": (
         "aws_secret_access_key",
@@ -42,6 +48,9 @@ _AWS_KEY_ALIASES: dict[str, tuple[str, ...]] = {
         "AWS_SECRET_KEY",
         "HCP_AWS_SECRET_ACCESS_KEY",
         "hcp_aws_secret_access_key",
+        "rosa-secret-access-key",
+        "rosa_secret_access_key",
+        "ROSA_SECRET_ACCESS_KEY",
     ),
     "AWS_SESSION_TOKEN": ("aws_session_token", "awsSessionToken", "HCP_AWS_SESSION_TOKEN"),
 }
@@ -322,7 +331,7 @@ def load_hcp_install_aws_credentials(
     environ: Mapping[str, str] | None = None,
     urlopen: UrlOpen | None = None,
 ) -> dict[str, str]:
-    """AWS keys for openshift-cli-installer S3 (Vault apps/rhods-ci/openshift only)."""
+    """AWS keys for openshift-cli-installer S3 (Jenkins rosaCcsAdmin, then openshift KV)."""
     env: Mapping[str, str] = os.environ if environ is None else environ
     existing = _aws_credentials_from_mapping(env)
     if existing.get("AWS_ACCESS_KEY_ID") and existing.get("AWS_SECRET_ACCESS_KEY"):
