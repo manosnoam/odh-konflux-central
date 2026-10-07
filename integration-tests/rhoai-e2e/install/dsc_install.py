@@ -96,7 +96,10 @@ _DSCI_CRD = "dscinitializations.dscinitialization.opendatahub.io"
 
 
 def _probe_dsc_resource_kind() -> tuple[str, bool]:
-    """Resolve oc resource kind; second value True when api-resources probe succeeded."""
+    """Resolve oc resource kind for ``oc get/patch default-dsc``; True when resolved confidently."""
+    for kind in ("datasciencecluster", "datascienceclusters"):
+        if _cr_exists(kind, "default-dsc"):
+            return kind, True
     proc = oc_run(
         ["api-resources", "--api-group=datasciencecluster.opendatahub.io", "-o", "name"],
         check=False,
@@ -104,11 +107,15 @@ def _probe_dsc_resource_kind() -> tuple[str, bool]:
         timeout=30,
     )
     if proc.returncode != 0:
-        return "datascienceclusters", False
-    stdout = (proc.stdout or "").lower()
-    if "datascienceclusters" in stdout:
-        return "datascienceclusters", True
-    return "datasciencecluster", True
+        return "datasciencecluster", False
+    for line in (proc.stdout or "").lower().splitlines():
+        token = line.strip().split()[-1] if line.strip() else ""
+        base = token.split("/")[-1].split(".")[0]
+        if base == "datascienceclusters":
+            return "datascienceclusters", True
+        if base == "datasciencecluster":
+            return "datasciencecluster", True
+    return "datasciencecluster", False
 
 
 def dsc_crd_available() -> bool:

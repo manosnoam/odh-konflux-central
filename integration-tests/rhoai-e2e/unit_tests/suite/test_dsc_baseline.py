@@ -186,10 +186,13 @@ class DscResourceKindCacheTest(unittest.TestCase):
 
         dsc_install.reset_dsc_resource_kind_cache()
         fail = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="timeout")
-        with mock.patch("install.dsc_install.oc_run", return_value=fail) as mock_oc:
-            self.assertEqual(dsc_install.dsc_resource_kind(), "datascienceclusters")
-            self.assertEqual(dsc_install.dsc_resource_kind(), "datascienceclusters")
-            self.assertEqual(mock_oc.call_count, 2)
+        with (
+            mock.patch("install.dsc_install._cr_exists", return_value=False),
+            mock.patch("install.dsc_install.oc_run", return_value=fail) as mock_oc,
+        ):
+            self.assertEqual(dsc_install.dsc_resource_kind(), "datasciencecluster")
+            self.assertEqual(dsc_install.dsc_resource_kind(), "datasciencecluster")
+            self.assertGreaterEqual(mock_oc.call_count, 2)
 
     def test_caches_kind_after_successful_probe(self) -> None:
         import subprocess
@@ -201,10 +204,37 @@ class DscResourceKindCacheTest(unittest.TestCase):
         ok = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="datascienceclusters\n", stderr=""
         )
-        with mock.patch("install.dsc_install.oc_run", return_value=ok) as mock_oc:
+        with (
+            mock.patch("install.dsc_install._cr_exists", return_value=False),
+            mock.patch("install.dsc_install.oc_run", return_value=ok) as mock_oc,
+        ):
             self.assertEqual(dsc_install.dsc_resource_kind(), "datascienceclusters")
             self.assertEqual(dsc_install.dsc_resource_kind(), "datascienceclusters")
             self.assertEqual(mock_oc.call_count, 1)
+
+    def test_prefers_existing_default_dsc_singular_over_crd_substring(self) -> None:
+        import subprocess
+        import unittest.mock as mock
+
+        import install.dsc_install as dsc_install
+
+        dsc_install.reset_dsc_resource_kind_cache()
+        crd_line = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="datascienceclusters.datasciencecluster.opendatahub.io\n",
+            stderr="",
+        )
+
+        def cr_exists(kind: str, name: str) -> bool:
+            return kind == "datasciencecluster" and name == "default-dsc"
+
+        with (
+            mock.patch("install.dsc_install._cr_exists", side_effect=cr_exists),
+            mock.patch("install.dsc_install.oc_run", return_value=crd_line) as mock_oc,
+        ):
+            self.assertEqual(dsc_install.dsc_resource_kind(), "datasciencecluster")
+            mock_oc.assert_not_called()
 
 class FilterDriftsForComponentTest(unittest.TestCase):
     def test_filters_to_managed_keys(self) -> None:

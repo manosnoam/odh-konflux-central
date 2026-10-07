@@ -191,37 +191,38 @@ def _patch_dsc_components(kind: str, patch_doc: str):
     )
 
 
+def _dsc_patch_kind_candidates() -> list[str]:
+    from install.dsc_install import dsc_resource_kind, reset_dsc_resource_kind_cache
+
+    reset_dsc_resource_kind_cache()
+    kinds: list[str] = []
+    for candidate in (
+        dsc_resource_kind(),
+        dsc_resource_kind(force_refresh=True),
+        "datasciencecluster",
+        "datascienceclusters",
+    ):
+        if candidate not in kinds:
+            kinds.append(candidate)
+    return kinds
+
+
 def restore_dsc_from_baseline(artifacts_dir: Path) -> bool:
     """Patch DSC spec.components back to baseline state. Returns True on success."""
     baseline = load_dsc_baseline(artifacts_dir)
     if baseline is None:
         return False
-    from install.dsc_install import dsc_resource_kind, reset_dsc_resource_kind_cache
 
     patch_doc = json.dumps({"spec": {"components": baseline}})
-    kind = dsc_resource_kind()
-    r = _patch_dsc_components(kind, patch_doc)
-    if r.returncode != 0:
-        reset_dsc_resource_kind_cache()
-        retry_kinds: list[str] = []
-        for candidate in (
-            dsc_resource_kind(force_refresh=True),
-            _alternate_dsc_resource_kind(kind),
-        ):
-            if candidate not in retry_kinds:
-                retry_kinds.append(candidate)
-        for retry_kind in retry_kinds:
-            if retry_kind == kind:
-                continue
-            r = _patch_dsc_components(retry_kind, patch_doc)
-            if r.returncode == 0:
-                break
-        if r.returncode != 0:
-            err = (r.stderr or r.stdout or "").strip()
-            print(f"WARN: DSC restore from baseline failed: {err}", file=sys.stderr, flush=True)
-            return False
-    print("\u2713 DSC restored to baseline", flush=True)
-    return True
+    r = None
+    for kind in _dsc_patch_kind_candidates():
+        r = _patch_dsc_components(kind, patch_doc)
+        if r.returncode == 0:
+            print("\u2713 DSC restored to baseline", flush=True)
+            return True
+    err = ((r.stderr or r.stdout) if r is not None else "").strip()
+    print(f"WARN: DSC restore from baseline failed: {err}", file=sys.stderr, flush=True)
+    return False
 
 
 def wait_for_baseline_spec(
