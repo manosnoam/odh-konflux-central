@@ -81,6 +81,22 @@ class MlflowEhcTrackingTest(unittest.TestCase):
             os.environ.pop("ARTIFACTS_SERVER_GATEWAY", None)
             os.environ.pop("CLUSTER_SOURCE", None)
 
+    def test_skips_force_port_forward_when_aigateway_maas_on_cluster(self) -> None:
+        import os
+        from unittest import mock
+
+        os.environ["CLUSTER_SOURCE"] = CLUSTER_SOURCE_EPHC
+        os.environ.pop("ARTIFACTS_SERVER_GATEWAY", None)
+        try:
+            with mock.patch(
+                "install.dsc_install.uses_aigateway_models_as_a_service",
+                return_value=True,
+            ):
+                cmd = "bash mlflow-tests/images/test-run.sh -m smoke"
+                self.assertEqual(prepend_mlflow_ephc_tracking(cmd), cmd)
+        finally:
+            os.environ.pop("CLUSTER_SOURCE", None)
+
     def test_wall_clock_wraps_run_command(self) -> None:
         cmd = "bash mlflow-tests/images/test-run.sh -m smoke"
         out = prepend_mlflow_run_wall_clock(cmd, 900.0)

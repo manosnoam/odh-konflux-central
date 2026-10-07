@@ -17,11 +17,20 @@ def _mlflow_tracking_patch_enabled() -> bool:
 
 
 def _artifacts_server_gateway_enabled() -> bool:
-    return os.environ.get("ARTIFACTS_SERVER_GATEWAY", "").strip().lower() in (
+    if os.environ.get("ARTIFACTS_SERVER_GATEWAY", "").strip().lower() in (
         "true",
         "1",
         "yes",
-    )
+    ):
+        return True
+    # test-run.sh sets ARTIFACTS_SERVER_GATEWAY when the cluster uses the gateway
+    # artifacts path; probe here so we do not prepend FORCE_PORT_FORWARD in bash -c.
+    try:
+        from install.dsc_install import uses_aigateway_models_as_a_service
+
+        return uses_aigateway_models_as_a_service()
+    except Exception:
+        return False
 
 
 def _use_force_port_forward() -> bool:
