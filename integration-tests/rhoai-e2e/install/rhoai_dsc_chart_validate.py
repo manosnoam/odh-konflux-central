@@ -19,23 +19,53 @@ from suite.errors import AppError
 _FETCH_USER_AGENT = "rhoai-e2e-dsc-chart-validate"
 _DEFAULT_CONNECT_TIMEOUT_SEC = 30
 _DEFAULT_READ_TIMEOUT_SEC = 120
+MANAGEMENT_STATES = frozenset({"Managed", "Unmanaged", "Removed"})
 
 RHOAI_OPERATOR_GITHUB = "red-hat-data-services/rhods-operator"
 RHOAI_BUILD_CONFIG_GITHUB = "red-hat-data-services/RHOAI-Build-Config"
 MANIFESTS_CONFIG_PATHS = ("manifests-config.yaml", "build/manifests-config.yaml")
 CHART_VALUES_PATH = "to-be-processed/helm/rhai-on-openshift-chart/values.yaml"
+OPENSHIFT_VALUES_PATCH_PATH = "helm/openshift-values-patch.yaml"
 
-# Jenkins GateJobParams.GATE_DSC_CR_COMPONENT_ALIASES — chart inventory may use CR names.
+# Jenkins GateJobParams.GATE_DSC_SUMMARY_COMPONENT_KEYS (promotion-gate catalog).
+GATE_DSC_SUMMARY_COMPONENT_KEYS: tuple[str, ...] = (
+    "dashboard",
+    "workbenches",
+    "aipipelines",
+    "kserve",
+    "kueue",
+    "ray",
+    "trustyai",
+    "trainingoperator",
+    "trainer",
+    "modelregistry",
+    "feastoperator",
+    "llamastackoperator",
+    "ogx",
+    "mlflowoperator",
+    "modelsasservice",
+    "sparkoperator",
+    "aigateway",
+    "batchgateway",
+    "mcplifecycleoperator",
+)
+
 CHART_COMPONENT_KEY_ALIASES: dict[str, str] = {
-    # Legacy chart inventories used datasciencepipelines; 3.6+ values.yaml uses aipipelines.
     "aipipelines": "datasciencepipelines",
-    "codeflare": "ray",
 }
 
-# Policy summary keys that live under components.<parent>.dsc.<nested> in chart values.
 NESTED_CHART_DSC_PATHS: dict[str, tuple[str, str]] = {
     "modelsasservice": ("aigateway", "modelsAsAService"),
     "batchgateway": ("aigateway", "batchGateway"),
+}
+
+# Promotion-gate policy key → DSC spec.components key (when they differ).
+POLICY_KEY_TO_DSC_SPEC: dict[str, str] = {
+    "aipipelines": "aipipelines",
+    "datasciencepipelines": "aipipelines",
+    "trainingoperator": "trainingoperator",
+    "trainer": "trainer",
+    "modelregistry": "modelregistry",
 }
 
 
@@ -72,7 +102,6 @@ def raw_github_content_url(owner_repo: str, git_ref: str, repo_relative_path: st
 
 
 def _urlopen_timeout_sec(connect_timeout_sec: int, read_timeout_sec: int) -> float:
-    """urllib accepts (connect, read) tuples only on Python 3.11+ (Tekton install uses 3.9)."""
     if sys.version_info >= (3, 11):
         return (float(connect_timeout_sec), float(read_timeout_sec))  # type: ignore[return-value]
     return float(connect_timeout_sec) + float(read_timeout_sec)
@@ -119,7 +148,6 @@ def fetch_manifests_config(
 
 
 def _ensure_chart_validate_yaml_loader() -> None:
-    """install-rhoai image often has neither PyYAML nor yq; bootstrap like component pytest."""
     try:
         import yaml  # type: ignore[import-untyped, unused-ignore]  # noqa: F401
         return
@@ -200,11 +228,149 @@ def _load_yaml_document_from_string(yaml_text: str) -> Any:
     )
 
 
+def _deep_merge_maps(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    if not overlay:
+        return dict(base or {})
+    result: dict[str, Any] = dict(base or {})
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge_maps(result[key], value)
+        elif value is not None:
+            result[key] = value
+    return result
+
+
+def _chart_profile(values_doc: dict[str, Any]) -> str:
+    return str(values_doc.get("profile") or "default").strip() or "default"
+
+
+def _chart_profiles_path(profile: str) -> str:
+    chart_dir = CHART_VALUES_PATH.replace("/values.yaml", "")
+    return f"{chart_dir}/profiles/{profile}.yaml"
+
+
+def _fetch_optional_yaml(
+    fetch_text_fn: Callable[[str], str],
+    build_config_fetch_ref: str,
+    repo_relative_path: str,
+) -> dict[str, Any]:
+    try:
+        url = raw_github_content_url(RHOAI_BUILD_CONFIG_GITHUB, build_config_fetch_ref, repo_relative_path)
+        yaml_text = fetch_text_fn(url).strip()
+        return _load_yaml_document_from_text(yaml_text) if yaml_text else {}
+    except AppError:
+        return {}
+
+
+def enrich_chart_values(
+    values_doc: dict[str, Any],
+    build_config_fetch_ref: str,
+    fetch_text_fn: Callable[[str], str],
+) -> dict[str, Any]:
+    merged = _deep_merge_maps(
+        values_doc or {},
+        _fetch_optional_yaml(fetch_text_fn, build_config_fetch_ref, OPENSHIFT_VALUES_PATCH_PATH),
+    )
+    profile = _chart_profile(merged)
+    profile_doc = _fetch_optional_yaml(fetch_text_fn, build_config_fetch_ref, _chart_profiles_path(profile))
+    profile_components = profile_doc.get("components") if isinstance(profile_doc.get("components"), dict) else {}
+    merged["_profileComponents"] = profile_components
+    return merged
+
+
+def _resolve_explicit_state(chart_state: Any, profile_state: Any) -> str | None:
+    chart_explicit = str(chart_state or "").strip()
+    if chart_explicit in MANAGEMENT_STATES:
+        return chart_explicit
+    profile_explicit = str(profile_state or "").strip()
+    if profile_explicit in MANAGEMENT_STATES:
+        return profile_explicit
+    return None
+
+
+def release_policy_state_for_key(
+    dsc_key: str,
+    chart_components: dict[str, Any],
+    profile_components: dict[str, Any],
+) -> str:
+    if dsc_key in NESTED_CHART_DSC_PATHS:
+        parent, nested = NESTED_CHART_DSC_PATHS[dsc_key]
+        chart_dsc = (chart_components.get(parent) or {}).get("dsc") if isinstance(chart_components.get(parent), dict) else {}
+        profile_dsc = (
+            (profile_components.get(parent) or {}).get("dsc")
+            if isinstance(profile_components.get(parent), dict)
+            else {}
+        )
+        chart_dsc = chart_dsc if isinstance(chart_dsc, dict) else {}
+        profile_dsc = profile_dsc if isinstance(profile_dsc, dict) else {}
+        if nested not in chart_dsc and nested not in profile_dsc:
+            return "Removed"
+        explicit = _resolve_explicit_state(
+            (chart_dsc.get(nested) or {}).get("managementState")
+            if isinstance(chart_dsc.get(nested), dict)
+            else chart_dsc.get(nested),
+            (profile_dsc.get(nested) or {}).get("managementState")
+            if isinstance(profile_dsc.get(nested), dict)
+            else profile_dsc.get(nested),
+        )
+        return explicit or "Managed"
+
+    chart_entry = chart_components.get(dsc_key) if isinstance(chart_components.get(dsc_key), dict) else {}
+    profile_entry = profile_components.get(dsc_key) if isinstance(profile_components.get(dsc_key), dict) else {}
+    chart_entry = chart_entry or {}
+    profile_entry = profile_entry or {}
+    if "dsc" not in chart_entry and "dsc" not in profile_entry:
+        alias = CHART_COMPONENT_KEY_ALIASES.get(dsc_key, dsc_key)
+        if alias != dsc_key:
+            return release_policy_state_for_key(alias, chart_components, profile_components)
+        return "Removed"
+    chart_dsc = chart_entry.get("dsc") if isinstance(chart_entry.get("dsc"), dict) else {}
+    profile_dsc = profile_entry.get("dsc") if isinstance(profile_entry.get("dsc"), dict) else {}
+    explicit = _resolve_explicit_state(
+        chart_dsc.get("managementState"),
+        profile_dsc.get("managementState"),
+    )
+    return explicit or "Managed"
+
+
+def build_release_eligible_policy_from_chart(
+    values_doc: dict[str, Any],
+    profile_components: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    chart_components = values_doc.get("components")
+    if not isinstance(chart_components, dict):
+        chart_components = {}
+    profile = profile_components if profile_components is not None else values_doc.get("_profileComponents")
+    if not isinstance(profile, dict):
+        profile = {}
+    policy: dict[str, str] = {}
+    for dsc_key in GATE_DSC_SUMMARY_COMPONENT_KEYS:
+        policy[dsc_key] = release_policy_state_for_key(dsc_key, chart_components, profile)
+    return policy
+
+
+def apply_component_policy_overrides(
+    base_policy: dict[str, str],
+    override_string: str,
+) -> dict[str, str]:
+    if not (override_string or "").strip():
+        return dict(base_policy)
+    result = dict(base_policy)
+    for key, state in parse_component_names_policy(override_string).items():
+        result[key] = state
+    return result
+
+
+def component_names_to_string(policy: dict[str, str]) -> str:
+    return ",".join(f"{key}:{state}" for key, state in sorted(policy.items()))
+
+
 def resolve_pinned_chart_context(
     operator_version: str,
     *,
     operator_git_ref: str = "",
     fetch_text_fn: Callable[[str], str] = fetch_text,
+    enrich: bool = True,
 ) -> PinnedChartContext:
     _ensure_chart_validate_yaml_loader()
     op_ref = (operator_git_ref or infer_operator_git_ref(operator_version)).strip()
@@ -217,6 +383,8 @@ def resolve_pinned_chart_context(
     values_doc = _load_yaml_document_from_text(values_yaml)
     if not values_doc:
         raise AppError(f"Pinned chart values empty or unreadable: {values_url}", 2)
+    if enrich:
+        values_doc = enrich_chart_values(values_doc, fetch_ref, fetch_text_fn)
     return PinnedChartContext(
         operator_git_ref=op_ref,
         build_config_display_ref=display_ref,
@@ -226,11 +394,37 @@ def resolve_pinned_chart_context(
     )
 
 
+def resolve_chart_dsc_policy_for_version(
+    operator_version: str,
+    *,
+    components_override: str = "",
+    operator_git_ref: str = "",
+    fetch_text_fn: Callable[[str], str] | None = None,
+) -> dict[str, str]:
+    if fetch_text_fn is not None:
+        ctx = resolve_pinned_chart_context(
+            operator_version,
+            operator_git_ref=operator_git_ref,
+            fetch_text_fn=fetch_text_fn,
+        )
+    else:
+        ctx = _cached_pinned_chart(operator_version.strip(), (operator_git_ref or "").strip())
+    profile_components = ctx.values_doc.get("_profileComponents")
+    if not isinstance(profile_components, dict):
+        profile_components = {}
+    policy = build_release_eligible_policy_from_chart(ctx.values_doc, profile_components)
+    override = (components_override or os.environ.get("PROMOTION_GATE_COMPONENTS_OVERRIDE", "")).strip()
+    return apply_component_policy_overrides(policy, override)
+
+
 def _chart_has_component(chart_components: dict[str, Any], dsc_key: str) -> bool:
     key = dsc_key.strip().lower()
     if key in NESTED_CHART_DSC_PATHS:
         parent, nested = NESTED_CHART_DSC_PATHS[key]
-        dsc = (chart_components.get(parent) or {}).get("dsc") if isinstance(chart_components.get(parent), dict) else None
+        parent_doc = chart_components.get(parent)
+        if not isinstance(parent_doc, dict):
+            return False
+        dsc = parent_doc.get("dsc")
         return isinstance(dsc, dict) and nested in dsc
     if key in chart_components:
         return True
@@ -238,26 +432,37 @@ def _chart_has_component(chart_components: dict[str, Any], dsc_key: str) -> bool
     return alias in chart_components
 
 
+def _dsc_spec_key_allowed_by_policy(dsc_spec_key: str, policy: dict[str, str], values_doc: dict[str, Any]) -> bool:
+    key = dsc_spec_key.strip().lower()
+    if key in policy:
+        return policy[key] in ("Managed", "Unmanaged")
+    for policy_key, spec_key in POLICY_KEY_TO_DSC_SPEC.items():
+        if spec_key == key and policy_key in policy:
+            return policy[policy_key] in ("Managed", "Unmanaged")
+    chart_components = values_doc.get("components")
+    if isinstance(chart_components, dict) and _chart_has_component(chart_components, key):
+        return True
+    return False
+
+
 def validate_dsc_keys_supported_by_chart(
     dsc_keys: set[str],
     values_doc: dict[str, Any],
+    *,
+    components_override: str = "",
 ) -> None:
-    chart_components = values_doc.get("components")
-    if not isinstance(chart_components, dict):
-        raise AppError("Pinned chart values.yaml has no components mapping", 2)
+    profile_components = values_doc.get("_profileComponents")
+    if not isinstance(profile_components, dict):
+        profile_components = {}
+    policy = build_release_eligible_policy_from_chart(values_doc, profile_components)
+    policy = apply_component_policy_overrides(policy, components_override)
     errors: list[str] = []
     for key in sorted(dsc_keys):
-        if not _chart_has_component(chart_components, key):
-            alias = CHART_COMPONENT_KEY_ALIASES.get(key, key)
-            if key in NESTED_CHART_DSC_PATHS:
-                parent, nested = NESTED_CHART_DSC_PATHS[key]
-                errors.append(
-                    f"smoke DSC key '{key}' requires components.{parent}.dsc.{nested} in pinned values.yaml"
-                )
-            else:
-                errors.append(
-                    f"smoke DSC key '{key}' requires components.{alias} in pinned values.yaml"
-                )
+        if not _dsc_spec_key_allowed_by_policy(key, policy, values_doc):
+            errors.append(
+                f"smoke DSC key '{key}' is Removed or missing in pinned chart policy "
+                f"(profile={_chart_profile(values_doc)})"
+            )
     if errors:
         raise AppError(
             f"Pinned chart validation failed ({len(errors)}): {'; '.join(errors)}",
@@ -275,9 +480,9 @@ def validate_smoke_managed_keys_for_operator_version(
     operator_version: str,
     *,
     operator_git_ref: str = "",
+    components_override: str = "",
     fetch_text_fn: Callable[[str], str] | None = None,
 ) -> list[str]:
-    """Return configuration report lines; raise AppError when validation fails."""
     if not managed_keys or not (operator_version or "").strip():
         return []
     if fetch_text_fn is not None:
@@ -288,18 +493,22 @@ def validate_smoke_managed_keys_for_operator_version(
         )
     else:
         ctx = _cached_pinned_chart(operator_version.strip(), (operator_git_ref or "").strip())
-    validate_dsc_keys_supported_by_chart(managed_keys, ctx.values_doc)
+    validate_dsc_keys_supported_by_chart(
+        managed_keys,
+        ctx.values_doc,
+        components_override=components_override,
+    )
     return [
         f"operatorGitRef={ctx.operator_git_ref}",
         f"buildConfigRef={ctx.build_config_display_ref or '(none)'}",
         f"buildConfigFetchRef={ctx.build_config_fetch_ref}",
         f"valuesYamlUrl={ctx.values_yaml_url}",
+        f"chartProfile={_chart_profile(ctx.values_doc)}",
         f"validatedSmokeDscKeys={len(managed_keys)}",
     ]
 
 
 def parse_component_names_policy(policy_string: str) -> dict[str, str]:
-    """Parse Jenkins COMPONENT_NAMES (key:Managed|Unmanaged|Removed, comma-separated)."""
     out: dict[str, str] = {}
     for entry in (policy_string or "").split(","):
         part = entry.strip()
@@ -309,8 +518,19 @@ def parse_component_names_policy(policy_string: str) -> dict[str, str]:
         name = key.strip().lower()
         if not name:
             continue
-        out[name] = (mode.strip() or "Managed")
+        out[name] = mode.strip() or "Managed"
     return out
+
+
+def install_removed_dsc_keys_from_policy_map(policy: dict[str, str]) -> frozenset[str]:
+    removed: set[str] = set()
+    for key, state in policy.items():
+        if state != "Removed":
+            continue
+        if key in NESTED_CHART_DSC_PATHS:
+            continue
+        removed.add(POLICY_KEY_TO_DSC_SPEC.get(key, key))
+    return frozenset(removed)
 
 
 def install_removed_keys_from_promotion_policy(
@@ -318,20 +538,6 @@ def install_removed_keys_from_promotion_policy(
     *,
     dsc_cr_key: bool = True,
 ) -> frozenset[str]:
-    """DSC spec keys that promotion-gate policy marks Removed (for install-time deferral)."""
-    removed: set[str] = set()
-    cr_to_dsc = {
-        "aipipelines": "aipipelines",
-        "datasciencepipelines": "aipipelines",
-        "trainer": "trainer",
-        "trainingoperator": "trainingoperator",
-        "modelregistry": "modelregistry",
-    }
-    for key, state in parse_component_names_policy(policy_string).items():
-        if state != "Removed":
-            continue
-        if key in NESTED_CHART_DSC_PATHS:
-            continue
-        spec_key = cr_to_dsc.get(key, key) if dsc_cr_key else key
-        removed.add(spec_key)
-    return frozenset(removed)
+    if not dsc_cr_key:
+        return install_removed_dsc_keys_from_policy_map(parse_component_names_policy(policy_string))
+    return install_removed_dsc_keys_from_policy_map(parse_component_names_policy(policy_string))

@@ -34,7 +34,7 @@ class DscInstallVersionBand:
 class DscInstallPolicyDocument:
     smoke_components: dict[str, SmokeDscMapping]
     version_bands: tuple[DscInstallVersionBand, ...]
-    promotion_gate_dsc_policy: str = ""
+    promotion_gate_components_override: str = ""
 
 
 def default_dsc_install_policy_path() -> Path:
@@ -142,11 +142,11 @@ def load_dsc_install_policy(path: Path | None = None) -> DscInstallPolicyDocumen
     if ver != 1:
         raise AppError(f"Unsupported DSC install policy schemaVersion {ver!r} in {policy_path} (expected 1).", 2)
     install_policy = doc.get("installPolicy") if isinstance(doc.get("installPolicy"), dict) else {}
-    promotion_policy = str(install_policy.get("promotionGateDscPolicy") or "").strip()
+    components_override = str(install_policy.get("promotionGateComponentsOverride") or "").strip()
     return DscInstallPolicyDocument(
         smoke_components=_parse_smoke_components(doc.get("smokeComponents"), policy_path),
         version_bands=_parse_version_bands(doc.get("installPolicy"), policy_path),
-        promotion_gate_dsc_policy=promotion_policy,
+        promotion_gate_components_override=components_override,
     )
 
 
@@ -178,11 +178,34 @@ def _install_removed_for_version(operator_version: str, policy: DscInstallPolicy
         if _version_band_matches(compare_ver, band):
             matched_band = True
             removed.update(band.install_removed)
-    if matched_band and policy.promotion_gate_dsc_policy:
-        from install.rhoai_dsc_chart_validate import install_removed_keys_from_promotion_policy
-
-        removed.update(install_removed_keys_from_promotion_policy(policy.promotion_gate_dsc_policy))
+    if matched_band:
+        removed.update(
+            _chart_policy_install_removed(
+                operator_version,
+                policy.promotion_gate_components_override,
+            )
+        )
     return frozenset(removed)
+
+
+def _chart_policy_install_removed(operator_version: str, components_override: str) -> frozenset[str]:
+    from install.rhoai_dsc_chart_validate import (
+        chart_validation_enabled,
+        install_removed_dsc_keys_from_policy_map,
+        resolve_chart_dsc_policy_for_version,
+    )
+
+    if not chart_validation_enabled():
+        return frozenset()
+    try:
+        chart_policy = resolve_chart_dsc_policy_for_version(
+            operator_version,
+            components_override=components_override,
+        )
+    except (AppError, OSError) as exc:
+        print(f"NOTE: DSC chart install deferrals skipped (chart policy): {exc}", flush=True)
+        return frozenset()
+    return install_removed_dsc_keys_from_policy_map(chart_policy)
 
 
 def _version_gated_smoke_ids(operator_version: str) -> frozenset[str]:
@@ -247,8 +270,13 @@ def _maybe_validate_managed_keys_against_chart(managed: set[str], operator_versi
 
     if not chart_validation_enabled():
         return
+    policy = _active_policy()
     try:
-        report = validate_smoke_managed_keys_for_operator_version(managed, operator_version)
+        report = validate_smoke_managed_keys_for_operator_version(
+            managed,
+            operator_version,
+            components_override=policy.promotion_gate_components_override,
+        )
     except AppError:
         raise
     except OSError as exc:

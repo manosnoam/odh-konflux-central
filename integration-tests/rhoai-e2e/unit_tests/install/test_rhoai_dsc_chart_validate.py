@@ -7,8 +7,11 @@ from unittest import mock
 
 from install.rhoai_dsc_chart_validate import (
     _urlopen_timeout_sec,
+    apply_component_policy_overrides,
+    build_release_eligible_policy_from_chart,
     fetch_manifests_config,
     infer_operator_git_ref,
+    install_removed_dsc_keys_from_policy_map,
     install_removed_keys_from_promotion_policy,
     parse_build_config_pin,
     parse_component_names_policy,
@@ -37,9 +40,19 @@ components:
   kserve:
     dsc:
       managementState: Managed
+  kueue:
+    dsc:
+      managementState: Managed
   trainer:
     dsc:
       managementState: Managed
+  aigateway:
+    dsc:
+      managementState: Managed
+      modelsAsAService:
+        managementState: Managed
+      batchGateway:
+        managementState: Removed
   sparkoperator:
     dsc:
       managementState: Removed
@@ -71,6 +84,26 @@ class RhoaiDscChartValidateTest(unittest.TestCase):
         self.assertIn("/build/manifests-config.yaml", url)
         self.assertIn("buildConfig", yaml_text)
 
+    def test_build_release_eligible_policy_from_chart(self) -> None:
+        import yaml
+
+        doc = yaml.safe_load(CHART_VALUES)
+        derived = build_release_eligible_policy_from_chart(doc)
+        self.assertEqual(derived["dashboard"], "Managed")
+        self.assertEqual(derived["kserve"], "Managed")
+        self.assertEqual(derived["modelsasservice"], "Managed")
+        self.assertEqual(derived["batchgateway"], "Removed")
+        self.assertEqual(derived["sparkoperator"], "Removed")
+        self.assertEqual(derived["trainer"], "Managed")
+
+    def test_apply_component_policy_overrides_replaces_by_key(self) -> None:
+        import yaml
+
+        base = build_release_eligible_policy_from_chart(yaml.safe_load(CHART_VALUES))
+        merged = apply_component_policy_overrides(base, "kueue:Unmanaged")
+        self.assertEqual(merged["kueue"], "Unmanaged")
+        self.assertEqual(merged["dashboard"], "Managed")
+
     def test_validate_chart_supports_keys(self) -> None:
         import yaml
 
@@ -79,17 +112,29 @@ class RhoaiDscChartValidateTest(unittest.TestCase):
         with self.assertRaises(AppError):
             validate_dsc_keys_supported_by_chart({"ogx"}, doc)
 
-    def test_validate_chart_accepts_aipipelines_and_codeflare_aliases(self) -> None:
+    def test_validate_chart_accepts_aipipelines_alias(self) -> None:
         import yaml
 
         doc = yaml.safe_load(
             """
 components:
-  aipipelines: {}
-  ray: {}
+  datasciencepipelines:
+    dsc: {}
 """
         )
-        validate_dsc_keys_supported_by_chart({"aipipelines", "codeflare"}, doc)
+        validate_dsc_keys_supported_by_chart({"aipipelines"}, doc)
+
+    def test_validate_chart_accepts_codeflare_when_in_chart(self) -> None:
+        import yaml
+
+        doc = yaml.safe_load(
+            """
+components:
+  codeflare:
+    dsc: {}
+"""
+        )
+        validate_dsc_keys_supported_by_chart({"codeflare"}, doc)
 
     def test_resolve_pinned_chart_context_with_mock_fetch(self) -> None:
         def fetch(url: str) -> str:
@@ -97,7 +142,7 @@ components:
                 return MANIFESTS_CONFIG
             return CHART_VALUES
 
-        ctx = resolve_pinned_chart_context("3.5.1", fetch_text_fn=fetch)
+        ctx = resolve_pinned_chart_context("3.5.1", fetch_text_fn=fetch, enrich=False)
         self.assertEqual(ctx.operator_git_ref, "rhoai-3.5")
         self.assertEqual(ctx.build_config_fetch_ref, "abc123def")
         self.assertIn("/abc123def/", ctx.values_yaml_url)
@@ -120,13 +165,19 @@ components:
         self.assertEqual(policy["trainer"], "Managed")
         self.assertEqual(policy["sparkoperator"], "Removed")
 
-    def test_install_removed_from_promotion_policy(self) -> None:
-        removed = install_removed_keys_from_promotion_policy(
-            "trainer:Managed,sparkoperator:Removed,trainingoperator:Removed"
+    def test_install_removed_from_policy_map(self) -> None:
+        removed = install_removed_dsc_keys_from_policy_map(
+            {"trainer": "Managed", "sparkoperator": "Removed", "trainingoperator": "Removed"}
         )
         self.assertIn("sparkoperator", removed)
         self.assertIn("trainingoperator", removed)
         self.assertNotIn("trainer", removed)
+
+    def test_install_removed_from_promotion_policy_string(self) -> None:
+        removed = install_removed_keys_from_promotion_policy(
+            "trainer:Managed,sparkoperator:Removed,trainingoperator:Removed"
+        )
+        self.assertIn("sparkoperator", removed)
 
     @mock.patch("install.dsc_install_policy._maybe_validate_managed_keys_against_chart")
     def test_resolve_managed_dsc_keys_skips_validate_without_version(self, _validate: object) -> None:

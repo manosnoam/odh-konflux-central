@@ -22,11 +22,17 @@ class DscInstallPolicyTest(unittest.TestCase):
         cls._chart_validate = patch(
             "install.dsc_install_policy._maybe_validate_managed_keys_against_chart"
         )
+        cls._chart_install_removed = patch(
+            "install.dsc_install_policy._chart_policy_install_removed",
+            return_value=frozenset(),
+        )
         cls._chart_validate.start()
+        cls._chart_install_removed.start()
 
     @classmethod
     def tearDownClass(cls) -> None:
         cls._chart_validate.stop()
+        cls._chart_install_removed.stop()
 
     def test_policy_loads_smoke_mappings(self) -> None:
         self.assertIn("ogx", self.doc.smoke_components)

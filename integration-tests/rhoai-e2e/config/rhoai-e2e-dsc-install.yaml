@@ -55,10 +55,8 @@ smokeComponents:
 
 # Install-time overrides by installed RHOAI version (first matching band wins).
 installPolicy:
-  # Jenkins rhoai-releases COMPONENT_NAMES_PROMOTION_GATE (ods/jenkins resolve_prom_comp / MR 2370).
-  # installRemoved keys are also derived from Removed entries here when version bands match.
-  promotionGateDscPolicy: >-
-    dashboard:Managed,aipipelines:Managed,ray:Managed,workbenches:Managed,kserve:Managed,kueue:Unmanaged,trustyai:Managed,trainingoperator:Removed,trainer:Managed,modelregistry:Managed,feastoperator:Managed,llamastackoperator:Removed,ogx:Managed,mlflowoperator:Managed,modelsasservice:Managed,sparkoperator:Removed,aigateway:Managed,batchgateway:Removed,mcplifecycleoperator:Removed
+  # Jenkins rhoai-releases PROMOTION_GATE_COMPONENTS_OVERRIDE (chart-derived policy + key overrides).
+  promotionGateComponentsOverride: kueue:Unmanaged
   versionBands:
     - minRhoai: "3.5"
       comment: >
