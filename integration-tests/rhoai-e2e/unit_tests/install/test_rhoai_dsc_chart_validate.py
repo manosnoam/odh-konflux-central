@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 from install.rhoai_dsc_chart_validate import (
+    _urlopen_timeout_sec,
     fetch_manifests_config,
     infer_operator_git_ref,
     install_removed_keys_from_promotion_policy,
@@ -46,6 +47,10 @@ components:
 
 
 class RhoaiDscChartValidateTest(unittest.TestCase):
+    def test_urlopen_timeout_py39_uses_single_float(self) -> None:
+        with mock.patch("install.rhoai_dsc_chart_validate.sys.version_info", (3, 9, 18)):
+            self.assertEqual(_urlopen_timeout_sec(30, 120), 150.0)
+
     def test_infer_operator_git_ref(self) -> None:
         self.assertEqual(infer_operator_git_ref("3.5.1"), "rhoai-3.5")
         self.assertEqual(infer_operator_git_ref("v3.5.2"), "rhoai-3.5")

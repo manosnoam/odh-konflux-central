@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -66,13 +67,22 @@ def raw_github_content_url(owner_repo: str, git_ref: str, repo_relative_path: st
     return f"https://raw.githubusercontent.com/{owner_repo}/{ref}/{path}"
 
 
+def _urlopen_timeout_sec(connect_timeout_sec: int, read_timeout_sec: int) -> float:
+    """urllib accepts (connect, read) tuples only on Python 3.11+ (Tekton install uses 3.9)."""
+    if sys.version_info >= (3, 11):
+        return (float(connect_timeout_sec), float(read_timeout_sec))  # type: ignore[return-value]
+    return float(connect_timeout_sec) + float(read_timeout_sec)
+
+
 def fetch_text(url: str, *, connect_timeout_sec: int = _DEFAULT_CONNECT_TIMEOUT_SEC) -> str:
     read_timeout = int(
         os.environ.get("DSC_CHART_VALIDATE_READ_TIMEOUT_SEC", str(_DEFAULT_READ_TIMEOUT_SEC))
     )
     req = urllib.request.Request(url, headers={"User-Agent": _FETCH_USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=(connect_timeout_sec, read_timeout)) as resp:
+        with urllib.request.urlopen(
+            req, timeout=_urlopen_timeout_sec(connect_timeout_sec, read_timeout)
+        ) as resp:
             return resp.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:500]
