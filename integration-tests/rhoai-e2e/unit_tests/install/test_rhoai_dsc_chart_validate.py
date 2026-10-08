@@ -136,6 +136,18 @@ components:
         )
         validate_dsc_keys_supported_by_chart({"codeflare"}, doc)
 
+    def test_validate_chart_accepts_codeflare_via_ray_alias(self) -> None:
+        import yaml
+
+        doc = yaml.safe_load(
+            """
+components:
+  ray:
+    dsc: {}
+"""
+        )
+        validate_dsc_keys_supported_by_chart({"codeflare"}, doc)
+
     def test_resolve_pinned_chart_context_with_mock_fetch(self) -> None:
         def fetch(url: str) -> str:
             if "manifests-config" in url or "build/manifests-config" in url:

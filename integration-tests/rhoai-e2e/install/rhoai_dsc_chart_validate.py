@@ -52,6 +52,7 @@ GATE_DSC_SUMMARY_COMPONENT_KEYS: tuple[str, ...] = (
 
 CHART_COMPONENT_KEY_ALIASES: dict[str, str] = {
     "aipipelines": "datasciencepipelines",
+    "codeflare": "ray",
 }
 
 NESTED_CHART_DSC_PATHS: dict[str, tuple[str, str]] = {
@@ -434,14 +435,19 @@ def _chart_has_component(chart_components: dict[str, Any], dsc_key: str) -> bool
 
 def _dsc_spec_key_allowed_by_policy(dsc_spec_key: str, policy: dict[str, str], values_doc: dict[str, Any]) -> bool:
     key = dsc_spec_key.strip().lower()
+    chart_components = values_doc.get("components")
+    if isinstance(chart_components, dict) and _chart_has_component(chart_components, key):
+        if key in policy and policy[key] == "Removed":
+            return False
+        return True
     if key in policy:
         return policy[key] in ("Managed", "Unmanaged")
+    alias = CHART_COMPONENT_KEY_ALIASES.get(key, key)
+    if alias != key and alias in policy:
+        return policy[alias] in ("Managed", "Unmanaged")
     for policy_key, spec_key in POLICY_KEY_TO_DSC_SPEC.items():
         if spec_key == key and policy_key in policy:
             return policy[policy_key] in ("Managed", "Unmanaged")
-    chart_components = values_doc.get("components")
-    if isinstance(chart_components, dict) and _chart_has_component(chart_components, key):
-        return True
     return False
 
 
