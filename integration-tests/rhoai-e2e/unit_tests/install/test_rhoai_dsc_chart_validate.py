@@ -79,6 +79,18 @@ class RhoaiDscChartValidateTest(unittest.TestCase):
         with self.assertRaises(AppError):
             validate_dsc_keys_supported_by_chart({"ogx"}, doc)
 
+    def test_validate_chart_accepts_aipipelines_and_codeflare_aliases(self) -> None:
+        import yaml
+
+        doc = yaml.safe_load(
+            """
+components:
+  aipipelines: {}
+  ray: {}
+"""
+        )
+        validate_dsc_keys_supported_by_chart({"aipipelines", "codeflare"}, doc)
+
     def test_resolve_pinned_chart_context_with_mock_fetch(self) -> None:
         def fetch(url: str) -> str:
             if "manifests-config" in url or "build/manifests-config" in url:

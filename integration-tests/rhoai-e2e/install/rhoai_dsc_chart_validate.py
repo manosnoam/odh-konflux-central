@@ -27,7 +27,9 @@ CHART_VALUES_PATH = "to-be-processed/helm/rhai-on-openshift-chart/values.yaml"
 
 # Jenkins GateJobParams.GATE_DSC_CR_COMPONENT_ALIASES — chart inventory may use CR names.
 CHART_COMPONENT_KEY_ALIASES: dict[str, str] = {
+    # Legacy chart inventories used datasciencepipelines; 3.6+ values.yaml uses aipipelines.
     "aipipelines": "datasciencepipelines",
+    "codeflare": "ray",
 }
 
 # Policy summary keys that live under components.<parent>.dsc.<nested> in chart values.
@@ -230,6 +232,8 @@ def _chart_has_component(chart_components: dict[str, Any], dsc_key: str) -> bool
         parent, nested = NESTED_CHART_DSC_PATHS[key]
         dsc = (chart_components.get(parent) or {}).get("dsc") if isinstance(chart_components.get(parent), dict) else None
         return isinstance(dsc, dict) and nested in dsc
+    if key in chart_components:
+        return True
     alias = CHART_COMPONENT_KEY_ALIASES.get(key, key)
     return alias in chart_components
 
