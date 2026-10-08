@@ -116,6 +116,22 @@ def _operator_workload_image_pull_errors() -> str | None:
     return None
 
 
+def _reconcile_authorino_tls_after_verify() -> None:
+    """Apply inline Authorino TLS when verify repair could not run olminstall post-install."""
+    component_ids = _selected_component_ids()
+    if component_ids and "dashboard_cypress" not in component_ids:
+        return
+    from components.maas_billing.auth import authorino_workload_tls_ready, recover_authorino_tls_inline
+
+    if authorino_workload_tls_ready():
+        return
+    print(
+        "verify-operator-ready: reconciling Authorino TLS for dashboard/Cypress gateway...",
+        flush=True,
+    )
+    recover_authorino_tls_inline()
+
+
 def _artifacts_dir() -> Path | None:
     tests_shared = os.environ.get("TESTS_SHARED", "").strip()
     if tests_shared:
@@ -149,6 +165,7 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     log_gateway_auth_stack_warnings()
+    _reconcile_authorino_tls_after_verify()
     if tests_shared and url:
         url_file = resolve_tests_payload_root(Path(tests_shared)) / "odh-dashboard-url.txt"
         url_file.parent.mkdir(parents=True, exist_ok=True)

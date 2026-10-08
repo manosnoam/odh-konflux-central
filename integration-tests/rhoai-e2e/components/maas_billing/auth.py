@@ -218,6 +218,25 @@ def _wait_authorino_workload_ready(*, timeout_sec: int) -> str:
     raise RuntimeError(f"Authorino service not ready after {timeout_sec}s")
 
 
+def recover_authorino_tls_inline() -> bool:
+    """Configure Authorino listener TLS via oc when olminstall post-install is unavailable."""
+    if authorino_workload_tls_ready():
+        return True
+    print("Recovering Authorino TLS inline (no post-install-rhcl-operator.sh)...", flush=True)
+    _prepare_authorino_tls_via_gitops()
+    ensure_authorino_tls()
+    ready = authorino_workload_tls_ready()
+    if ready:
+        print("✓ Authorino TLS ready after inline recovery", flush=True)
+    else:
+        print(
+            "WARN: Authorino TLS still not ready after inline recovery",
+            file=sys.stderr,
+            flush=True,
+        )
+    return ready
+
+
 def _prepare_authorino_tls_via_gitops() -> bool:
     try:
         olm_dir = resolve_olminstall_dir()
@@ -349,6 +368,7 @@ def recover_kuadrant_after_gateway_api_provider(*, timeout_sec: int | None = Non
                     clear_gateway_stack_incomplete_marker()
                     print("✓ Kuadrant Ready after post-install-rhcl-operator.sh", flush=True)
                     return True
+            recover_authorino_tls_inline()
 
     remaining = max(0, int(deadline - time.time()))
     print(
@@ -595,8 +615,7 @@ def ensure_maas_authorino_ready() -> str:
         except FileNotFoundError as exc:
             print(f"WARN: {exc}; falling back to inline Authorino TLS setup", file=sys.stderr, flush=True)
     if not rhcl_ok:
-        _prepare_authorino_tls_via_gitops()
-        ensure_authorino_tls()
+        recover_authorino_tls_inline()
     return authorino_ns
 
 

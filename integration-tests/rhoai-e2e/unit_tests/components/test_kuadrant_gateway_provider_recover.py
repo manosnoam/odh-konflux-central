@@ -24,6 +24,8 @@ class KuadrantGatewayProviderRecoverTest(unittest.TestCase):
         restart.assert_not_called()
 
     @patch("helpers.gateway_stack_marker.clear_gateway_stack_incomplete_marker")
+    @patch("components.maas_billing.auth.recover_authorino_tls_inline", return_value=False)
+    @patch("components.maas_billing.auth.run_post_install_rhcl_operator", return_value=False)
     @patch("components.maas_billing.auth._sleep")
     @patch("components.maas_billing.auth._restart_kuadrant_operator_pods")
     @patch("components.maas_billing.auth._gateway_api_provider_present", return_value=True)
@@ -39,12 +41,15 @@ class KuadrantGatewayProviderRecoverTest(unittest.TestCase):
         _provider,
         restart,
         _sleep,
+        _post_install,
+        _inline_tls,
         clear_marker,
     ) -> None:
         self.assertTrue(recover_kuadrant_after_gateway_api_provider(timeout_sec=30))
         restart.assert_called_once()
         clear_marker.assert_called_once()
 
+    @patch("components.maas_billing.auth.recover_authorino_tls_inline", return_value=False)
     @patch("components.maas_billing.auth.run_post_install_rhcl_operator", return_value=False)
     @patch("components.maas_billing.auth._sleep")
     @patch("components.maas_billing.auth._restart_kuadrant_operator_pods")
@@ -62,6 +67,7 @@ class KuadrantGatewayProviderRecoverTest(unittest.TestCase):
         restart,
         sleep,
         _post_install,
+        _inline_tls,
     ) -> None:
         clock_t = {"t": 1_000.0}
 

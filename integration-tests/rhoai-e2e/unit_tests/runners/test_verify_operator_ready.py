@@ -21,6 +21,7 @@ class VerifyOperatorReadyTest(unittest.TestCase):
             ):
                 self.assertEqual(verify_operator_ready.main(), 0)
 
+    @mock.patch("runners.verify_operator_ready._reconcile_authorino_tls_after_verify")
     @mock.patch("runners.verify_operator_ready._publish_installed_operator_versions", return_value="3.5.0-ea.2")
     @mock.patch("runners.verify_operator_ready.log_gateway_auth_stack_warnings")
     @mock.patch("runners.verify_operator_ready.verify_dashboard_route_for_prepare", return_value="https://dash.example")
@@ -29,6 +30,7 @@ class VerifyOperatorReadyTest(unittest.TestCase):
         verify_mock: mock.MagicMock,
         _auth_warn: mock.MagicMock,
         publish_mock: mock.MagicMock,
+        _tls: mock.MagicMock,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.dict(
@@ -41,9 +43,10 @@ class VerifyOperatorReadyTest(unittest.TestCase):
         verify_mock.assert_called_once()
         _auth_warn.assert_called_once()
 
+    @mock.patch("runners.verify_operator_ready._reconcile_authorino_tls_after_verify")
     @mock.patch("runners.verify_operator_ready.log_gateway_auth_stack_warnings")
     @mock.patch("runners.verify_operator_ready.verify_dashboard_route_for_prepare", return_value="https://dash.example")
-    def test_writes_dashboard_url_file(self, verify_mock: mock.MagicMock, _auth_warn: mock.MagicMock) -> None:
+    def test_writes_dashboard_url_file(self, verify_mock: mock.MagicMock, _auth_warn: mock.MagicMock, _tls: mock.MagicMock) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tests_shared = Path(tmp)
             with mock.patch.dict(
@@ -125,4 +128,34 @@ class VerifyOperatorReadyTest(unittest.TestCase):
         ):
             self.assertEqual(verify_operator_ready.main(), 0)
         verify_mock.assert_not_called()
+
+    @mock.patch("components.maas_billing.auth.recover_authorino_tls_inline", return_value=True)
+    @mock.patch("components.maas_billing.auth.authorino_workload_tls_ready", return_value=False)
+    def test_reconcile_authorino_tls_when_dashboard_cypress_selected(
+        self,
+        _ready: mock.MagicMock,
+        recover: mock.MagicMock,
+    ) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {"COMPONENTS_CSV": "dashboard_cypress,platform"},
+            clear=False,
+        ):
+            verify_operator_ready._reconcile_authorino_tls_after_verify()
+        recover.assert_called_once()
+
+    @mock.patch("components.maas_billing.auth.recover_authorino_tls_inline")
+    @mock.patch("components.maas_billing.auth.authorino_workload_tls_ready", return_value=True)
+    def test_reconcile_skips_when_tls_already_ready(
+        self,
+        _ready: mock.MagicMock,
+        recover: mock.MagicMock,
+    ) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {"COMPONENTS_CSV": "dashboard_cypress"},
+            clear=False,
+        ):
+            verify_operator_ready._reconcile_authorino_tls_after_verify()
+        recover.assert_not_called()
 
