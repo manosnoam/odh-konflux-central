@@ -116,6 +116,26 @@ def fetch_manifests_config(
     )
 
 
+def _ensure_chart_validate_yaml_loader() -> None:
+    """install-rhoai image often has neither PyYAML nor yq; bootstrap like component pytest."""
+    try:
+        import yaml  # type: ignore[import-untyped, unused-ignore]  # noqa: F401
+        return
+    except ImportError:
+        pass
+    if shutil.which("yq"):
+        return
+    from helpers.pip_bootstrap import pip_install_to_target, prepend_pythonpath
+    from steps.tests_payload import resolve_tests_payload_root, tests_payload_tools_python_dir
+
+    artifacts = os.environ.get("ARTIFACTS_DIR", "").strip() or "/workspace/tests-shared"
+    target = tests_payload_tools_python_dir(resolve_tests_payload_root(artifacts))
+    print(f"Installing PyYAML to {target} (DSC chart validation)...", flush=True)
+    pip_install_to_target("pyyaml", target)
+    prepend_pythonpath(str(target))
+    import yaml  # type: ignore[import-untyped, unused-ignore]  # noqa: F401
+
+
 def parse_build_config_pin(manifests_yaml: str) -> tuple[str, str]:
     doc = _load_yaml_document_from_text(manifests_yaml)
     ref = str((doc.get("buildConfig") or {}).get("rhoai", {}).get("ref") or "").strip()
@@ -184,6 +204,7 @@ def resolve_pinned_chart_context(
     operator_git_ref: str = "",
     fetch_text_fn: Callable[[str], str] = fetch_text,
 ) -> PinnedChartContext:
+    _ensure_chart_validate_yaml_loader()
     op_ref = (operator_git_ref or infer_operator_git_ref(operator_version)).strip()
     manifests_yaml, _manifests_url = fetch_manifests_config(op_ref, fetch_text_fn)
     display_ref, fetch_ref = parse_build_config_pin(manifests_yaml)
