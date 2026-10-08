@@ -148,6 +148,7 @@ class RunnerItsAdminMixin:
             target_type=target_type,
             tests_csv=self.args.tests,
             components_csv=components_csv,
+            enabled_catalog_count=len(self._components_catalog().enabled_component_ids),
             run_owner=self.run_owner,
         )
 

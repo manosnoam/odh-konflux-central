@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
+from suite.component_plan import components_csv_means_all
 from suite.constants import product_installs_operator
 from suite.its_trigger_params import (
     CLUSTER_SOURCE_EPHC,
@@ -226,14 +227,58 @@ def compact_version_for_name(version: str) -> str:
     return f"{base}{suffix}"[:16] if suffix else base
 
 
-def gates_segment_for_name(tests_csv: str) -> str:
+def _enabled_smoke_catalog_count(enabled_catalog_count: int) -> int:
+    if enabled_catalog_count > 0:
+        return enabled_catalog_count
+    from suite.component_catalog import default_components_smoke_config_path, load_components_smoke_catalog
+
+    cat = load_components_smoke_catalog(default_components_smoke_config_path())
+    return len(cat.enabled_component_ids)
+
+
+def smoke_subset_count_suffix_for_name(
+    components_csv: str,
+    *,
+    enabled_catalog_count: int = 0,
+) -> str:
+    """
+    When smoke runs a strict subset of the catalog (2 ≤ N < enabled), return ``{N}c`` for the gates segment.
+
+    Single-component runs use ``component_segment_for_name`` instead; full catalog omits the suffix.
+    """
+    if components_csv_means_all(components_csv):
+        return ""
+    parts = [p.strip().lower() for p in (components_csv or "").split(",") if p.strip()]
+    if len(parts) <= 1:
+        return ""
+    catalog_n = _enabled_smoke_catalog_count(enabled_catalog_count)
+    if catalog_n <= 0 or len(parts) >= catalog_n:
+        return ""
+    return f"{len(parts)}c"
+
+
+def gates_segment_for_name(
+    tests_csv: str,
+    *,
+    components_csv: str = "",
+    enabled_catalog_count: int = 0,
+) -> str:
     """Join gate ids with hyphens; omit ``bvt`` unless it is the only gate."""
     parts = [p.strip().lower() for p in (tests_csv or "").split(",") if p.strip()]
     if not parts:
         return ""
     if parts == ["bvt"]:
         return "bvt"
-    return "-".join(p for p in parts if p != "bvt")
+    base = "-".join(p for p in parts if p != "bvt")
+    if "smoke" not in parts:
+        return base
+    suffix = smoke_subset_count_suffix_for_name(
+        components_csv,
+        enabled_catalog_count=enabled_catalog_count,
+    )
+    if not suffix:
+        return base
+    return f"{base}-{suffix}"
 
 
 def component_segment_for_name(components_csv: str) -> str:
@@ -325,6 +370,7 @@ def build_rhoai_e2e_generate_prefix(
     target_type: str = "",
     tests_csv: str = "",
     components_csv: str = "",
+    enabled_catalog_count: int = 0,
     run_owner: str = "",
     its_profile: str = "",
 ) -> str:
@@ -336,6 +382,7 @@ def build_rhoai_e2e_generate_prefix(
 
     ``existing`` product is omitted; unknown version/cluster segments are dropped.
     A component token is added only when ``components_csv`` is a single id (not ``all``).
+    When smoke selects 2..N-1 enabled catalog ids, the gates segment includes ``smoke-{N}c`` (e.g. ``smoke-3c``).
     Cluster (and middle/tail) tokens that repeat user, product, gates, component, or ``e2e`` are
     trimmed when the cluster label already carries the same word.
     For Integration Service runs, prefer ``build_rhoai_e2e_its_generate_prefix`` or
@@ -353,7 +400,11 @@ def build_rhoai_e2e_generate_prefix(
         product_seg = _sanitize_segment(prod, max_len=8)
         version_seg = _version_name_segment(compact_version_for_name(version))
 
-    gates_seg = gates_segment_for_name(tests_csv)
+    gates_seg = gates_segment_for_name(
+        tests_csv,
+        components_csv=components_csv,
+        enabled_catalog_count=enabled_catalog_count,
+    )
     sanitized_gates_seg = _sanitize_segment(gates_seg, max_len=24)
     component_seg = component_segment_for_name(components_csv)
 
@@ -413,6 +464,7 @@ def build_rhoai_e2e_its_generate_prefix(
     version: str = "",
     tests_csv: str = "",
     components_csv: str = "",
+    enabled_catalog_count: int = 0,
 ) -> str:
     """
     Integration Service ``generateName`` prefix (no ``cli-{user}`` or per-run cluster token).
@@ -426,6 +478,7 @@ def build_rhoai_e2e_its_generate_prefix(
         version=version,
         tests_csv=tests_csv,
         components_csv=components_csv,
+        enabled_catalog_count=enabled_catalog_count,
         run_owner="",
     )
 
@@ -441,6 +494,7 @@ def build_its_generate_prefix_for_snapshot(
     product: str = "rhoai",
     tests_csv: str = "",
     components_csv: str = "",
+    enabled_catalog_count: int = 0,
     rhoai_version_param: str = "",
 ) -> str:
     """
@@ -466,6 +520,7 @@ def build_its_generate_prefix_for_snapshot(
         version=version,
         tests_csv=tests_csv,
         components_csv=components_csv,
+        enabled_catalog_count=enabled_catalog_count,
     )
 
 

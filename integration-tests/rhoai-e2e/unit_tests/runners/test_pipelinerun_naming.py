@@ -16,6 +16,7 @@ from suite.pipelinerun_naming import (
     is_rhoai_e2e_pipelinerun_name,
     its_profile_from_pipelinerun_template,
     its_profile_from_scenario_name,
+    smoke_subset_count_suffix_for_name,
 )
 
 class TestPipelinerunNaming(unittest.TestCase):
@@ -37,6 +38,25 @@ class TestPipelinerunNaming(unittest.TestCase):
         self.assertEqual(gates_segment_for_name("smoke"), "smoke")
         self.assertEqual(gates_segment_for_name("bvt,smoke,tier1"), "smoke-tier1")
 
+    def test_gates_segment_smoke_subset_component_count(self) -> None:
+        self.assertEqual(
+            gates_segment_for_name(
+                "bvt,smoke",
+                components_csv="maas_billing,platform",
+                enabled_catalog_count=10,
+            ),
+            "smoke-2c",
+        )
+        self.assertEqual(
+            gates_segment_for_name("smoke", components_csv="all", enabled_catalog_count=10),
+            "smoke",
+        )
+        self.assertEqual(
+            gates_segment_for_name("bvt", components_csv="a,b", enabled_catalog_count=10),
+            "bvt",
+        )
+        self.assertEqual(smoke_subset_count_suffix_for_name("maas_billing", enabled_catalog_count=10), "")
+
     def test_single_component_after_gates(self) -> None:
         prefix = build_rhoai_e2e_generate_prefix(
             product="rhoai",
@@ -55,9 +75,10 @@ class TestPipelinerunNaming(unittest.TestCase):
             target_type="ephc",
             tests_csv="bvt,smoke",
             components_csv="maas_billing,platform",
+            enabled_catalog_count=10,
             run_owner="nmanos",
         )
-        self.assertEqual(multi, "e2e-cli-nmanos-ephc-rhoai-smoke-")
+        self.assertEqual(multi, "e2e-cli-nmanos-ephc-rhoai-smoke-2c-")
         all_ids = build_rhoai_e2e_generate_prefix(
             product="rhoai",
             cluster_source="EPHC",

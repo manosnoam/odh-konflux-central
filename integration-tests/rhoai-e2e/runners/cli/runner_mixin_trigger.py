@@ -769,6 +769,7 @@ class RunnerTriggerMixin:
             target_type=self._target_type_for_naming(cluster_source),
             tests_csv=self.args.tests,
             components_csv=getattr(self.args, "components", "") or "",
+            enabled_catalog_count=len(self._components_catalog().enabled_component_ids),
             run_owner=self.run_owner,
         )
         self._pipelinerun_generate_prefix = generate_prefix
