@@ -135,6 +135,7 @@ class RestoreFromBaselineTest(unittest.TestCase):
                     "install.dsc_install.dsc_resource_kind",
                     return_value="datascienceclusters",
                 ),
+                mock.patch("install.dsc_install._cr_exists", return_value=True),
                 mock.patch("install.dsc_install.run_oc", return_value=fake_result) as mock_oc,
             ):
                 result = restore_dsc_from_baseline(root)
@@ -169,6 +170,7 @@ class RestoreFromBaselineTest(unittest.TestCase):
                     side_effect=lambda **kwargs: next(kind_calls),
                 ),
                 mock.patch("install.dsc_install.reset_dsc_resource_kind_cache"),
+                mock.patch("install.dsc_install._cr_exists", return_value=True),
                 mock.patch("install.dsc_install.run_oc", side_effect=[fail, ok]) as mock_oc,
             ):
                 result = restore_dsc_from_baseline(root)
@@ -176,6 +178,28 @@ class RestoreFromBaselineTest(unittest.TestCase):
             self.assertEqual(mock_oc.call_count, 2)
             retry_args = mock_oc.call_args_list[1][0][0]
             self.assertIn("datascienceclusters", retry_args)
+
+    def test_restore_skips_when_default_dsc_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            baseline = {"dashboard": {"managementState": "Managed"}}
+            (root / ".dsc-baseline.json").write_text(
+                json.dumps(baseline), encoding="utf-8"
+            )
+            import unittest.mock as mock
+
+            with (
+                mock.patch("install.dsc_install._cr_exists", return_value=False),
+                mock.patch("install.dsc_install.run_oc") as mock_oc,
+            ):
+                result = restore_dsc_from_baseline(root)
+            self.assertFalse(result)
+            patch_calls = [
+                c
+                for c in mock_oc.call_args_list
+                if c[0] and c[0][0] and c[0][0][0] == "patch"
+            ]
+            self.assertEqual(patch_calls, [])
 
 class DscResourceKindCacheTest(unittest.TestCase):
     def test_does_not_cache_kind_on_failed_api_resources_probe(self) -> None:

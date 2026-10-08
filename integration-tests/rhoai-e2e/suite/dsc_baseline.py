@@ -192,7 +192,7 @@ def _patch_dsc_components(kind: str, patch_doc: str):
 
 
 def _dsc_patch_kind_candidates() -> list[str]:
-    from install.dsc_install import dsc_resource_kind, reset_dsc_resource_kind_cache
+    from install.dsc_install import _cr_exists, dsc_resource_kind, reset_dsc_resource_kind_cache
 
     reset_dsc_resource_kind_cache()
     kinds: list[str] = []
@@ -204,7 +204,11 @@ def _dsc_patch_kind_candidates() -> list[str]:
     ):
         if candidate not in kinds:
             kinds.append(candidate)
-    return kinds
+    return [kind for kind in kinds if _cr_exists(kind, "default-dsc")]
+
+
+def _dsc_patch_error_is_unknown_resource_type(err: str) -> bool:
+    return 'doesn\'t have a resource type "' in err or "doesn't have a resource type \"" in err
 
 
 def restore_dsc_from_baseline(artifacts_dir: Path) -> bool:
@@ -213,14 +217,28 @@ def restore_dsc_from_baseline(artifacts_dir: Path) -> bool:
     if baseline is None:
         return False
 
+    kinds = _dsc_patch_kind_candidates()
+    if not kinds:
+        print(
+            "NOTE: skip DSC restore from baseline (default-dsc not found with a known resource kind)",
+            flush=True,
+        )
+        return False
+
     patch_doc = json.dumps({"spec": {"components": baseline}})
     r = None
-    for kind in _dsc_patch_kind_candidates():
+    last_err = ""
+    for kind in kinds:
         r = _patch_dsc_components(kind, patch_doc)
         if r.returncode == 0:
             print("\u2713 DSC restored to baseline", flush=True)
             return True
-    err = ((r.stderr or r.stdout) if r is not None else "").strip()
+        err = ((r.stderr or r.stdout) if r is not None else "").strip()
+        if err and not _dsc_patch_error_is_unknown_resource_type(err):
+            last_err = err
+        elif err and not last_err:
+            last_err = err
+    err = last_err or ((r.stderr or r.stdout) if r is not None else "").strip()
     print(f"WARN: DSC restore from baseline failed: {err}", file=sys.stderr, flush=True)
     return False
 
