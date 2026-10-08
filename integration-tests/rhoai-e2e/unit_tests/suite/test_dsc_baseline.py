@@ -142,7 +142,7 @@ class RestoreFromBaselineTest(unittest.TestCase):
             call_args = mock_oc.call_args
             args_list = call_args[0][0] if call_args[0] else call_args[1].get("args", [])
             self.assertIn("patch", args_list)
-            self.assertIn("datascienceclusters", args_list)
+            self.assertIn("datasciencecluster", args_list)
 
     def test_restore_retries_after_kind_cache_refresh(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -204,13 +204,17 @@ class DscResourceKindCacheTest(unittest.TestCase):
         ok = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="datascienceclusters\n", stderr=""
         )
+
+        def cr_exists(kind: str, name: str) -> bool:
+            return kind == "datasciencecluster" and name == "default-dsc"
+
         with (
-            mock.patch("install.dsc_install._cr_exists", return_value=False),
+            mock.patch("install.dsc_install._cr_exists", side_effect=cr_exists),
             mock.patch("install.dsc_install.oc_run", return_value=ok) as mock_oc,
         ):
-            self.assertEqual(dsc_install.dsc_resource_kind(), "datascienceclusters")
-            self.assertEqual(dsc_install.dsc_resource_kind(), "datascienceclusters")
-            self.assertEqual(mock_oc.call_count, 1)
+            self.assertEqual(dsc_install.dsc_resource_kind(), "datasciencecluster")
+            self.assertEqual(dsc_install.dsc_resource_kind(), "datasciencecluster")
+            mock_oc.assert_not_called()
 
     def test_prefers_existing_default_dsc_singular_over_crd_substring(self) -> None:
         import subprocess

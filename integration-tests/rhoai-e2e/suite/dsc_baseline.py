@@ -197,10 +197,10 @@ def _dsc_patch_kind_candidates() -> list[str]:
     reset_dsc_resource_kind_cache()
     kinds: list[str] = []
     for candidate in (
-        dsc_resource_kind(),
-        dsc_resource_kind(force_refresh=True),
         "datasciencecluster",
         "datascienceclusters",
+        dsc_resource_kind(),
+        dsc_resource_kind(force_refresh=True),
     ):
         if candidate not in kinds:
             kinds.append(candidate)

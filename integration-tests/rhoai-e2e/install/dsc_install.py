@@ -108,13 +108,10 @@ def _probe_dsc_resource_kind() -> tuple[str, bool]:
     )
     if proc.returncode != 0:
         return "datasciencecluster", False
-    for line in (proc.stdout or "").lower().splitlines():
-        token = line.strip().split()[-1] if line.strip() else ""
-        base = token.split("/")[-1].split(".")[0]
-        if base == "datascienceclusters":
-            return "datascienceclusters", True
-        if base == "datasciencecluster":
-            return "datasciencecluster", True
+    # api-resources lists CRD names; oc get/patch uses a singular or plural resource type.
+    for kind in ("datasciencecluster", "datascienceclusters"):
+        if _cr_exists(kind, "default-dsc"):
+            return kind, True
     return "datasciencecluster", False
 
 
