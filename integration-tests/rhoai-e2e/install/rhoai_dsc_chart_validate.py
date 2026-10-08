@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -134,13 +136,46 @@ def _load_yaml_document_from_text(yaml_text: str) -> dict[str, Any]:
 
 
 def _load_yaml_document_from_string(yaml_text: str) -> Any:
+    text = yaml_text.strip()
+    if not text:
+        return {}
+    if text.startswith("{"):
+        return json.loads(text)
     try:
         import yaml  # type: ignore[import-untyped]
 
         loaded = yaml.safe_load(yaml_text)
         return loaded if loaded is not None else {}
     except ImportError:
-        return json.loads(yaml_text) if yaml_text.lstrip().startswith("{") else {}
+        pass
+    except Exception as exc:
+        raise AppError(f"Invalid YAML document: {exc}", 2) from exc
+
+    yq_bin = shutil.which("yq")
+    if yq_bin:
+        try:
+            proc = subprocess.run(
+                [yq_bin, "e", "-o=json", "."],
+                input=yaml_text,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise AppError(f"yq timed out parsing YAML (>{exc.timeout}s)", 2) from exc
+        if proc.returncode == 0 and proc.stdout.strip():
+            try:
+                return json.loads(proc.stdout)
+            except json.JSONDecodeError as exc:
+                raise AppError(f"Invalid JSON from yq: {exc}", 2) from exc
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise AppError(f"yq failed to parse YAML: {detail or proc.returncode}", 2)
+
+    raise AppError(
+        "DSC chart validation requires PyYAML or yq in the install-rhoai task image",
+        2,
+    )
 
 
 def resolve_pinned_chart_context(
