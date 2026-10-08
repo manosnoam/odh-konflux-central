@@ -19,6 +19,14 @@ class DscInstallPolicyTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.policy_path = default_dsc_install_policy_path()
         cls.doc = load_dsc_install_policy(cls.policy_path)
+        cls._chart_validate = patch(
+            "install.dsc_install_policy._maybe_validate_managed_keys_against_chart"
+        )
+        cls._chart_validate.start()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._chart_validate.stop()
 
     def test_policy_loads_smoke_mappings(self) -> None:
         self.assertIn("ogx", self.doc.smoke_components)

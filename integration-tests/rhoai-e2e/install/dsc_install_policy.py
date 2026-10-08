@@ -34,6 +34,7 @@ class DscInstallVersionBand:
 class DscInstallPolicyDocument:
     smoke_components: dict[str, SmokeDscMapping]
     version_bands: tuple[DscInstallVersionBand, ...]
+    promotion_gate_dsc_policy: str = ""
 
 
 def default_dsc_install_policy_path() -> Path:
@@ -140,9 +141,12 @@ def load_dsc_install_policy(path: Path | None = None) -> DscInstallPolicyDocumen
     ver = doc.get("schemaVersion")
     if ver != 1:
         raise AppError(f"Unsupported DSC install policy schemaVersion {ver!r} in {policy_path} (expected 1).", 2)
+    install_policy = doc.get("installPolicy") if isinstance(doc.get("installPolicy"), dict) else {}
+    promotion_policy = str(install_policy.get("promotionGateDscPolicy") or "").strip()
     return DscInstallPolicyDocument(
         smoke_components=_parse_smoke_components(doc.get("smokeComponents"), policy_path),
         version_bands=_parse_version_bands(doc.get("installPolicy"), policy_path),
+        promotion_gate_dsc_policy=promotion_policy,
     )
 
 
@@ -169,9 +173,15 @@ def _install_removed_for_version(operator_version: str, policy: DscInstallPolicy
     if not is_numeric:
         return frozenset()
     removed: set[str] = set()
+    matched_band = False
     for band in policy.version_bands:
         if _version_band_matches(compare_ver, band):
+            matched_band = True
             removed.update(band.install_removed)
+    if matched_band and policy.promotion_gate_dsc_policy:
+        from install.rhoai_dsc_chart_validate import install_removed_keys_from_promotion_policy
+
+        removed.update(install_removed_keys_from_promotion_policy(policy.promotion_gate_dsc_policy))
     return frozenset(removed)
 
 
@@ -224,7 +234,28 @@ def resolve_managed_dsc_keys(
         managed -= _install_removed_for_version(operator_version, policy)
     if "ogx" in ids and "llama_stack" not in ids:
         managed.discard("llamastackoperator")
+    if managed and operator_version.strip():
+        _maybe_validate_managed_keys_against_chart(managed, operator_version)
     return managed
+
+
+def _maybe_validate_managed_keys_against_chart(managed: set[str], operator_version: str) -> None:
+    from install.rhoai_dsc_chart_validate import (
+        chart_validation_enabled,
+        validate_smoke_managed_keys_for_operator_version,
+    )
+
+    if not chart_validation_enabled():
+        return
+    try:
+        report = validate_smoke_managed_keys_for_operator_version(managed, operator_version)
+    except AppError:
+        raise
+    except OSError as exc:
+        print(f"NOTE: DSC chart validation skipped (network): {exc}", flush=True)
+        return
+    for line in report:
+        print(f"DSC chart validation: {line}", flush=True)
 
 
 def stale_removed_dsc_keys_for_smoke(components_csv: str, operator_version: str = "") -> frozenset[str]:

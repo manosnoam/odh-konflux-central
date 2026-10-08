@@ -33,6 +33,7 @@
     "codeflare_sdk": {"keys": ["ray", "codeflare"]}
   },
   "installPolicy": {
+    "promotionGateDscPolicy": "dashboard:Managed,aipipelines:Managed,ray:Managed,workbenches:Managed,kserve:Managed,kueue:Unmanaged,trustyai:Managed,trainingoperator:Removed,trainer:Managed,modelregistry:Managed,feastoperator:Managed,llamastackoperator:Removed,ogx:Managed,mlflowoperator:Managed,modelsasservice:Managed,sparkoperator:Removed,aigateway:Managed,batchgateway:Removed,mcplifecycleoperator:Removed",
     "versionBands": [
       {
         "minRhoai": "3.5",
