@@ -5,7 +5,10 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from components.maas_billing.auth import recover_kuadrant_after_gateway_api_provider
+from components.maas_billing.auth import (
+    _prepare_authorino_tls_via_gitops,
+    recover_kuadrant_after_gateway_api_provider,
+)
 
 
 class KuadrantGatewayProviderRecoverTest(unittest.TestCase):
@@ -95,6 +98,16 @@ class KuadrantGatewayProviderRecoverTest(unittest.TestCase):
             ),
         ):
             self.assertTrue(auth_mod._gateway_api_provider_present())
+
+
+class PrepareAuthorinoTlsViaGitopsTest(unittest.TestCase):
+    def test_skips_resolve_when_olminstall_dir_unset(self) -> None:
+        with patch.dict("os.environ", {"OLMINSTALL_DIR": ""}, clear=False):
+            with patch(
+                "components.maas_billing.auth.resolve_olminstall_dir",
+            ) as resolve:
+                self.assertFalse(_prepare_authorino_tls_via_gitops())
+        resolve.assert_not_called()
 
 
 if __name__ == "__main__":

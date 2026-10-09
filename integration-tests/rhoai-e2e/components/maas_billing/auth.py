@@ -238,10 +238,24 @@ def recover_authorino_tls_inline() -> bool:
 
 
 def _prepare_authorino_tls_via_gitops() -> bool:
+    # Avoid resolve_olminstall_dir() clone on Konflux: git_clone may sys.exit on GitLab TLS.
+    if not os.environ.get("OLMINSTALL_DIR", "").strip():
+        print(
+            "WARN: OLMINSTALL_DIR unset; skipping odh-gitops prepare-authorino-tls "
+            "(use inline ensure_authorino_tls only)",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False
     try:
         olm_dir = resolve_olminstall_dir()
-    except FileNotFoundError as exc:
-        print(f"WARN: {exc}; skipping odh-gitops prepare-authorino-tls", file=sys.stderr, flush=True)
+    except (FileNotFoundError, OSError, RuntimeError) as exc:
+        print(
+            f"WARN: olminstall checkout unavailable ({exc}); "
+            "skipping odh-gitops prepare-authorino-tls",
+            file=sys.stderr,
+            flush=True,
+        )
         return False
     gitops = olm_dir / "odh-gitops"
     if not gitops.is_dir():
