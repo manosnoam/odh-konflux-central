@@ -277,7 +277,11 @@ def _maybe_validate_managed_keys_against_chart(managed: set[str], operator_versi
             operator_version,
             components_override=policy.promotion_gate_components_override,
         )
-    except AppError:
+    except AppError as exc:
+        msg = str(exc)
+        if "HTTP GET" in msg or "timed out" in msg.lower():
+            print(f"NOTE: DSC chart validation skipped (fetch): {exc}", flush=True)
+            return
         raise
     except OSError as exc:
         print(f"NOTE: DSC chart validation skipped (network): {exc}", flush=True)
