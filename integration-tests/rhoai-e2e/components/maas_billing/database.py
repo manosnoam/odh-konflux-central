@@ -773,6 +773,28 @@ def ensure_maas_database() -> None:
                 _restart_maas_api_after_db_config()
             else:
                 print(f"✓ MaaS database secret {_MAAS_APPS_NS}/{_MAAS_DB_SECRET} exists", flush=True)
+            if (
+                _namespace_exists(_RHOAI_GATEWAY_INFRA_NS)
+                and not _secret_exists(_RHOAI_GATEWAY_INFRA_NS, _MAAS_DB_SECRET)
+                and _operator_maas_postgres_active()
+            ):
+                timeout = int(os.environ.get("MAAS_POSTGRES_READY_TIMEOUT_SEC", "300"))
+                if timeout > 0 and not _postgres_deploy_ready(
+                    _RHOAI_GATEWAY_INFRA_NS, _OPERATOR_MAAS_POSTGRES_DEPLOY
+                ):
+                    print(
+                        f"Waiting up to {timeout}s for {_OPERATOR_MAAS_POSTGRES_DEPLOY} in "
+                        f"{_RHOAI_GATEWAY_INFRA_NS} (gateway {_MAAS_DB_SECRET} missing)...",
+                        flush=True,
+                    )
+                    _wait_operator_maas_postgres_ready(timeout)
+                if _ensure_operator_maas_db_config_secrets():
+                    print(
+                        f"✓ MaaS database secret {_RHOAI_GATEWAY_INFRA_NS}/{_MAAS_DB_SECRET} "
+                        "created for MaasTenantConfig",
+                        flush=True,
+                    )
+                    _restart_maas_api_after_db_config()
             return
 
     external_url = os.environ.get("MAAS_DB_CONNECTION_URL", "").strip()

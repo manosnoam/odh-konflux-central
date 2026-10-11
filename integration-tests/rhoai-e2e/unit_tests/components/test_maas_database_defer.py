@@ -148,6 +148,38 @@ class MaasDatabasePromoteTest(unittest.TestCase):
 
     @patch("components.maas_billing.database._needs_maas_postgres_reset", return_value=False)
     @patch("components.maas_billing.database._restart_maas_api_after_db_config")
+    @patch("components.maas_billing.database._ensure_operator_maas_db_config_secrets", return_value=True)
+    @patch("components.maas_billing.database._postgres_deploy_ready", return_value=True)
+    @patch("components.maas_billing.database._operator_maas_postgres_active", return_value=True)
+    @patch("components.maas_billing.database._namespace_exists", return_value=True)
+    @patch("components.maas_billing.database._repair_apps_maas_db_connection_url_if_needed", return_value=False)
+    @patch("components.maas_billing.database._secret_exists")
+    @patch("components.maas_billing.database._apps_namespace_ready_for_secrets", return_value=True)
+    def test_existing_apps_secret_creates_gateway_infra_maas_db_config(
+        self,
+        _apps_ready,
+        secret_exists,
+        _repair,
+        _ns_exists,
+        _operator_active,
+        _postgres_ready,
+        ensure_gateway,
+        restart_api,
+        _reset,
+    ) -> None:
+        def exists(ns: str, name: str) -> bool:
+            return ns == "redhat-ods-applications" and name == "maas-db-config"
+
+        secret_exists.side_effect = exists
+        ensure_maas_database()
+        ensure_gateway.assert_called_once()
+        restart_api.assert_called_once()
+
+    @patch("components.maas_billing.database._needs_maas_postgres_reset", return_value=False)
+    @patch("components.maas_billing.database._restart_maas_api_after_db_config")
+    @patch("components.maas_billing.database._ensure_operator_maas_db_config_secrets")
+    @patch("components.maas_billing.database._operator_maas_postgres_active", return_value=True)
+    @patch("components.maas_billing.database._namespace_exists")
     @patch("components.maas_billing.database._repair_apps_maas_db_connection_url_if_needed", return_value=False)
     @patch("components.maas_billing.database._secret_exists", return_value=True)
     @patch("components.maas_billing.database._apps_namespace_ready_for_secrets", return_value=True)
@@ -156,15 +188,23 @@ class MaasDatabasePromoteTest(unittest.TestCase):
         _apps_ready,
         _secret_exists,
         _repair,
+        _ns_exists,
+        _operator_active,
+        ensure_gateway,
         restart_api,
         _reset,
     ) -> None:
+        _ns_exists.side_effect = lambda ns: ns == "redhat-ai-gateway-infra"
         ensure_maas_database()
         _repair.assert_called_once()
+        ensure_gateway.assert_not_called()
         restart_api.assert_not_called()
 
     @patch("components.maas_billing.database._needs_maas_postgres_reset", return_value=False)
     @patch("components.maas_billing.database._restart_maas_api_after_db_config")
+    @patch("components.maas_billing.database._ensure_operator_maas_db_config_secrets")
+    @patch("components.maas_billing.database._operator_maas_postgres_active", return_value=True)
+    @patch("components.maas_billing.database._namespace_exists")
     @patch("components.maas_billing.database._repair_apps_maas_db_connection_url_if_needed", return_value=True)
     @patch("components.maas_billing.database._secret_exists", return_value=True)
     @patch("components.maas_billing.database._apps_namespace_ready_for_secrets", return_value=True)
@@ -173,11 +213,16 @@ class MaasDatabasePromoteTest(unittest.TestCase):
         _apps_ready,
         _secret_exists,
         _repair,
+        _ns_exists,
+        _operator_active,
+        ensure_gateway,
         restart_api,
         _reset,
     ) -> None:
+        _ns_exists.side_effect = lambda ns: ns == "redhat-ai-gateway-infra"
         ensure_maas_database()
         _repair.assert_called_once()
+        ensure_gateway.assert_not_called()
         restart_api.assert_called_once()
 
     @patch("components.maas_billing.database._operator_maas_postgres_active", return_value=False)
