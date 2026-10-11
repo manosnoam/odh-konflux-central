@@ -77,6 +77,27 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
         runner._apply_run_its_manifest_defaults(_RH_NIGHTLY_ITS)
         self.assertEqual(runner.external_kubeconfig_secret, "")
 
+    def test_run_its_keeps_test_only_product_for_external_rerun_flags(self) -> None:
+        parser = make_parser()
+        args = parse_cli_args(
+            parser,
+            [
+                "--run-its",
+                "rhoai-e2e-konflux-rhoai1-ocp422",
+                "--install-data-cluster",
+                "konflux-rhoai1",
+                "--cleanup",
+                "false",
+                "--tests",
+                "smoke",
+                "--components",
+                "model_server",
+            ],
+        )
+        runner = RhoaiE2ERunner(args)
+        runner._apply_run_its_manifest_defaults(_RH_NIGHTLY_ITS)
+        self.assertEqual(runner.args.product, "")
+
 
 class RunItsComponentsParamTest(unittest.TestCase):
     def test_run_its_preserves_slice_b_components_after_cli_override_clear(self) -> None:

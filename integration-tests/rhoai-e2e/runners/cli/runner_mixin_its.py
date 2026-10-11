@@ -21,7 +21,20 @@ from suite.its_trigger_params import (
     ocp_install_prefix,
     ocp_version_from_rhoai_fbc_name,
 )
+from suite.constants import is_test_only_product
 from suite.pipelinerun_naming import build_rhoai_e2e_generate_prefix
+
+
+def _run_its_keep_test_only_product(args: object) -> bool:
+    """True when CLI omitted --product but passed explicit external rerun flags."""
+    if not is_test_only_product(getattr(args, "product", "") or ""):
+        return False
+    return bool(
+        getattr(args, "cleanup_opt_out", False)
+        or getattr(args, "install_dependencies", False)
+        or getattr(args, "tests_explicit", False)
+        or getattr(args, "components_explicit", False)
+    )
 
 
 class RunnerItsAdminMixin:
@@ -67,7 +80,9 @@ class RunnerItsAdminMixin:
         return 0
 
     def _apply_run_its_manifest_defaults(self, manifest: Path) -> None:
-        if not getattr(self.args, "product_explicit", False):
+        if not getattr(self.args, "product_explicit", False) and not _run_its_keep_test_only_product(
+            self.args
+        ):
             product = its_manifest_param(manifest, "PRODUCT")
             if product:
                 self.args.product = product
