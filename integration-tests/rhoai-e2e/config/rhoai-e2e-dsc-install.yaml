@@ -55,7 +55,7 @@ smokeComponents:
 
 # Install-time overrides by installed RHOAI version (first matching band wins).
 installPolicy:
-  # Jenkins rhoai-releases PROMOTION_GATE_COMPONENTS_OVERRIDE (chart-derived policy + key overrides).
+  # Jenkins rhoai-releases PROMOTION_GATE_COMPONENTS_OVERRIDE (operator DSC sample policy + key overrides).
   promotionGateComponentsOverride: kueue:Unmanaged
   versionBands:
     - minRhoai: "3.5"

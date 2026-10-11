@@ -192,20 +192,20 @@ def _chart_policy_install_removed(operator_version: str, components_override: st
     from install.rhoai_dsc_chart_validate import (
         chart_validation_enabled,
         install_removed_dsc_keys_from_policy_map,
-        resolve_chart_dsc_policy_for_version,
+        resolve_operator_dsc_policy_for_version,
     )
 
     if not chart_validation_enabled():
         return frozenset()
     try:
-        chart_policy = resolve_chart_dsc_policy_for_version(
+        sample_policy = resolve_operator_dsc_policy_for_version(
             operator_version,
             components_override=components_override,
         )
     except (AppError, OSError) as exc:
-        print(f"NOTE: DSC chart install deferrals skipped (chart policy): {exc}", flush=True)
+        print(f"NOTE: DSC install deferrals skipped (operator sample policy): {exc}", flush=True)
         return frozenset()
-    return install_removed_dsc_keys_from_policy_map(chart_policy)
+    return install_removed_dsc_keys_from_policy_map(sample_policy)
 
 
 def _version_gated_smoke_ids(operator_version: str) -> frozenset[str]:
