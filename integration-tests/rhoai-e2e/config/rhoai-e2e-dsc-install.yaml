@@ -67,3 +67,4 @@ installPolicy:
         - ogx
         - sparkoperator
         - trainingoperator
+        - codeflare

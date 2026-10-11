@@ -64,6 +64,15 @@ class DscInstallPolicyTest(unittest.TestCase):
             )
         self.assertEqual(managed, set())
 
+    def test_36_install_defers_codeflare_for_codeflare_sdk(self) -> None:
+        managed = resolve_managed_dsc_keys(
+            "codeflare_sdk",
+            "3.6.0-ea.2",
+            for_install=True,
+        )
+        self.assertIn("ray", managed)
+        self.assertNotIn("codeflare", managed)
+
     def test_runtime_prep_enables_ogx(self) -> None:
         managed = resolve_managed_dsc_keys("ogx", for_install=False)
         self.assertEqual(managed, {"ogx"})

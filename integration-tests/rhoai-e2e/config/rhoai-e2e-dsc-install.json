@@ -37,7 +37,7 @@
     "versionBands": [
       {
         "minRhoai": "3.5",
-        "installRemoved": ["llamastackoperator", "ogx", "sparkoperator", "trainingoperator"]
+        "installRemoved": ["llamastackoperator", "ogx", "sparkoperator", "trainingoperator", "codeflare"]
       }
     ]
   }
