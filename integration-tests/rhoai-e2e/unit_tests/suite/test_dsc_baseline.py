@@ -264,6 +264,46 @@ class DscResourceKindCacheTest(unittest.TestCase):
             self.assertEqual(dsc_install.dsc_resource_kind(), "datasciencecluster")
             mock_oc.assert_not_called()
 
+
+class DscCrdAvailableTest(unittest.TestCase):
+    def test_true_when_default_dsc_resolves_via_singular_kind(self) -> None:
+        import unittest.mock as mock
+
+        import install.dsc_install as dsc_install
+
+        def cr_exists(kind: str, name: str) -> bool:
+            return kind == "datasciencecluster" and name == "default-dsc"
+
+        with mock.patch("install.dsc_install._cr_exists", side_effect=cr_exists):
+            self.assertTrue(dsc_install.dsc_crd_available())
+
+    def test_true_when_only_crd_registered(self) -> None:
+        import subprocess
+        import unittest.mock as mock
+
+        import install.dsc_install as dsc_install
+
+        crd_ok = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        with (
+            mock.patch("install.dsc_install._cr_exists", return_value=False),
+            mock.patch("install.dsc_install.oc_run", return_value=crd_ok),
+        ):
+            self.assertTrue(dsc_install.dsc_crd_available())
+
+    def test_false_when_no_crd_and_no_default_dsc(self) -> None:
+        import subprocess
+        import unittest.mock as mock
+
+        import install.dsc_install as dsc_install
+
+        fail = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="not found")
+        with (
+            mock.patch("install.dsc_install._cr_exists", return_value=False),
+            mock.patch("install.dsc_install.oc_run", return_value=fail),
+        ):
+            self.assertFalse(dsc_install.dsc_crd_available())
+
+
 class FilterDriftsForComponentTest(unittest.TestCase):
     def test_filters_to_managed_keys(self) -> None:
         import unittest.mock as mock

@@ -116,11 +116,17 @@ def _probe_dsc_resource_kind() -> tuple[str, bool]:
 
 
 def dsc_crd_available() -> bool:
-    """True when the cluster exposes the DataScienceCluster CRD."""
-    kind, probe_ok = _probe_dsc_resource_kind()
-    if not probe_ok:
-        return False
-    return kind == "datascienceclusters"
+    """True when the cluster exposes the DataScienceCluster API (CRD or default-dsc)."""
+    _, probe_ok = _probe_dsc_resource_kind()
+    if probe_ok:
+        return True
+    proc = oc_run(
+        ["get", "crd", _DSC_CRD],
+        check=False,
+        capture_output=True,
+        timeout=30,
+    )
+    return proc.returncode == 0
 
 
 _dsc_resource_kind: str | None = None
