@@ -103,8 +103,7 @@ def raw_github_content_url(owner_repo: str, git_ref: str, repo_relative_path: st
 
 
 def _urlopen_timeout_sec(connect_timeout_sec: int, read_timeout_sec: int) -> float:
-    if sys.version_info >= (3, 11):
-        return (float(connect_timeout_sec), float(read_timeout_sec))  # type: ignore[return-value]
+    # Single total timeout: urllib tuple (connect, read) is not portable (e.g. Python 3.14+).
     return float(connect_timeout_sec) + float(read_timeout_sec)
 
 
