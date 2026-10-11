@@ -211,6 +211,18 @@ def _resync_maas_smoke_after_global_prep(smoke_id: str) -> bool:
                 flush=True,
             )
     try:
+        from components.maas_billing.database import ensure_maas_database
+
+        ensure_maas_database()
+    except Exception as exc:
+        ok = False
+        print(
+            f"WARN: MaaS DB resync for {smoke_id} failed ({exc}); "
+            "model/MaaS smokes may hollow-skip",
+            file=sys.stderr,
+            flush=True,
+        )
+    try:
         from components.maas_billing.timeouts import maas_resync_timeout_sec
         from components.maas_billing.wait import _wait_for_maas_smoke_ready
 

@@ -533,6 +533,19 @@ def cleanup_maas_database_infra(*, wait: bool = True) -> None:
     cleanup_maas_tenant_namespace(wait=wait)
 
 
+def _wait_operator_maas_postgres_ready(timeout_sec: int) -> bool:
+    """Poll operator maas-postgres until readyReplicas >= 1."""
+    if timeout_sec <= 0:
+        return _postgres_deploy_ready(_RHOAI_GATEWAY_INFRA_NS, _OPERATOR_MAAS_POSTGRES_DEPLOY)
+    deadline = time.monotonic() + timeout_sec
+    poll = max(5, int(os.environ.get("MAAS_POSTGRES_READY_POLL_SEC", "15")))
+    while time.monotonic() < deadline:
+        if _postgres_deploy_ready(_RHOAI_GATEWAY_INFRA_NS, _OPERATOR_MAAS_POSTGRES_DEPLOY):
+            return True
+        time.sleep(poll)
+    return _postgres_deploy_ready(_RHOAI_GATEWAY_INFRA_NS, _OPERATOR_MAAS_POSTGRES_DEPLOY)
+
+
 def _postgres_deploy_ready(infra_ns: str, deploy: str | None = None) -> bool:
     deploy_name = deploy or _maas_postgres_service()
     r = oc_run(
@@ -771,6 +784,15 @@ def ensure_maas_database() -> None:
         return
 
     if _operator_maas_postgres_active():
+        timeout = int(os.environ.get("MAAS_POSTGRES_READY_TIMEOUT_SEC", "300"))
+        if not _secret_exists(_RHOAI_GATEWAY_INFRA_NS, _MAAS_DB_SECRET) and timeout > 0:
+            if not _postgres_deploy_ready(_RHOAI_GATEWAY_INFRA_NS, _OPERATOR_MAAS_POSTGRES_DEPLOY):
+                print(
+                    f"Waiting up to {timeout}s for {_OPERATOR_MAAS_POSTGRES_DEPLOY} in "
+                    f"{_RHOAI_GATEWAY_INFRA_NS}...",
+                    flush=True,
+                )
+                _wait_operator_maas_postgres_ready(timeout)
         if _ensure_operator_maas_db_config_secrets():
             print(
                 f"✓ MaaS database ready (operator {_OPERATOR_MAAS_POSTGRES_DEPLOY} "

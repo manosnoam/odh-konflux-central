@@ -146,6 +146,7 @@ class MaasDatabasePromoteTest(unittest.TestCase):
             "postgresql://maas@postgres.odh-ai-gateway-infra.svc.cluster.local:5432/maas",
         )
 
+    @patch("components.maas_billing.database._needs_maas_postgres_reset", return_value=False)
     @patch("components.maas_billing.database._restart_maas_api_after_db_config")
     @patch("components.maas_billing.database._repair_apps_maas_db_connection_url_if_needed", return_value=False)
     @patch("components.maas_billing.database._secret_exists", return_value=True)
@@ -156,11 +157,13 @@ class MaasDatabasePromoteTest(unittest.TestCase):
         _secret_exists,
         _repair,
         restart_api,
+        _reset,
     ) -> None:
         ensure_maas_database()
         _repair.assert_called_once()
         restart_api.assert_not_called()
 
+    @patch("components.maas_billing.database._needs_maas_postgres_reset", return_value=False)
     @patch("components.maas_billing.database._restart_maas_api_after_db_config")
     @patch("components.maas_billing.database._repair_apps_maas_db_connection_url_if_needed", return_value=True)
     @patch("components.maas_billing.database._secret_exists", return_value=True)
@@ -171,6 +174,7 @@ class MaasDatabasePromoteTest(unittest.TestCase):
         _secret_exists,
         _repair,
         restart_api,
+        _reset,
     ) -> None:
         ensure_maas_database()
         _repair.assert_called_once()

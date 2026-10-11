@@ -166,6 +166,7 @@ def test_maas_resync_when_global_cluster_prep_done(tmp_path, monkeypatch) -> Non
 
     with (
         patch("runners.component_prereqs._ensure_dsc_managed_for_component") as dsc,
+        patch("components.maas_billing.database.ensure_maas_database"),
         patch("components.maas_billing.wait._wait_for_maas_smoke_ready") as wait_maas,
         patch("install.dsc_install.ensure_dsc_models_as_service") as models_as_service,
     ):
