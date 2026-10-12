@@ -516,6 +516,21 @@ class FinalizeComponentDscHygieneTest(unittest.TestCase):
             mock_restore.assert_called_once()
             mock_ready.assert_not_called()
 
+class BaselineDriftsForRestoreTest(unittest.TestCase):
+    def test_maas_smoke_keeps_aigateway_managed_drift(self) -> None:
+        from suite.dsc_baseline import _baseline_drifts_for_restore
+
+        drifts = ["aigateway: Removed\u2192Managed", "dashboard: Managed\u2192Removed"]
+        out = _baseline_drifts_for_restore("maas_billing", drifts)
+        self.assertEqual(out, ["dashboard: Managed\u2192Removed"])
+
+    def test_non_maas_component_keeps_all_drifts(self) -> None:
+        from suite.dsc_baseline import _baseline_drifts_for_restore
+
+        drifts = ["aigateway: Removed\u2192Managed"]
+        self.assertEqual(_baseline_drifts_for_restore("mlflow", drifts), drifts)
+
+
 class ReconcileBeforeComponentTest(unittest.TestCase):
     def test_skips_when_cluster_api_already_unreachable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -138,6 +138,25 @@ def filter_drifts_for_component(component_id: str, drifts: list[str]) -> list[st
     return [line for line in drifts if _drift_dsc_key(line) in managed]
 
 
+def _baseline_drifts_for_restore(component_id: str, all_drifts: list[str]) -> list[str]:
+    """Drop drifts that must not be reverted before MaaS/model smoke (aigateway → Managed)."""
+    from install.dsc_install import components_need_models_as_service
+
+    if not all_drifts or not components_need_models_as_service({component_id}):
+        return all_drifts
+    kept: list[str] = []
+    for line in all_drifts:
+        if _drift_dsc_key(line) == "aigateway" and "\u2192Managed" in line:
+            print(
+                f"NOTE: keep aigateway Managed for {component_id} smoke "
+                "(skip baseline restore of modelsAsAService enablement)",
+                flush=True,
+            )
+            continue
+        kept.append(line)
+    return kept
+
+
 def _drift_marker_path(artifacts_dir: Path, component_id: str) -> Path:
     return artifacts_dir / f"{_DRIFT_PREFIX}{component_id}.json"
 
@@ -409,6 +428,26 @@ def reconcile_baseline_dsc_before_component(
             file=sys.stderr,
             flush=True,
         )
+        return
+    raw_drifts = list(all_drifts)
+    all_drifts = _baseline_drifts_for_restore(component_id, all_drifts)
+    maas_enable_only = bool(raw_drifts) and not all_drifts
+    if maas_enable_only and not stale_keys:
+        return
+    if maas_enable_only and stale_keys:
+        print(
+            f"NOTE: DSC Ready stale before {component_id} (spec Managed): "
+            f"{', '.join(sorted(stale_keys))}",
+            flush=True,
+        )
+        try:
+            wait_for_ready_reconcile(stale_keys)
+        except Exception as exc:
+            print(
+                f"WARN: DSC Ready wait before {component_id} failed ({exc})",
+                file=sys.stderr,
+                flush=True,
+            )
         return
     if not all_drifts and not stale_keys:
         return
