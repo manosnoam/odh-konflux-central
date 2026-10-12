@@ -275,12 +275,13 @@ def test_pooled_external_smoke_prep_runs_when_cluster_prep_done(
         mock.patch("runners.orchestrator.stage_git_for_prereqs"),
         mock.patch("runners.run_component_pytest.run_pooled_external_smoke_prep") as pooled,
         mock.patch("runners.run_component_pytest.prepare_component_for_smoke") as full_prep,
+        mock.patch("runners.run_component_pytest.reconcile_baseline_dsc_before_component"),
         mock.patch("runners.run_component_pytest.run_single_pytest", return_value=0),
     ):
         assert run_component_pytest.main() == 0
 
     pooled.assert_called_once_with("kuberay")
-    full_prep.assert_not_called()
+    full_prep.assert_called_once_with("kuberay")
 
 
 def test_maas_billing_passes_htpasswd_overlay_to_pytest(

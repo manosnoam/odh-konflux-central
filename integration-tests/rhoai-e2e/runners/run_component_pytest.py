@@ -783,8 +783,8 @@ def _run_one_component(
         pytest_extra_env = apply_maas_billing_htpasswd_test_user_overrides()
     if not collect_only:
         run_pooled_external_smoke_prep(cid)
-        if not cluster_prep_already_done(artifacts_dir):
-            prepare_component_for_smoke(cid)
+        # Always call: after global prepare, maas_billing still needs _resync_maas_smoke_after_global_prep.
+        prepare_component_for_smoke(cid)
         # Heal baseline-Managed Ready flaps (DeploymentsNotReady, Removed, …) before pytest.
         reconcile_baseline_dsc_before_component(cid, artifacts_dir)
         api_reason = cluster_smoke_infra_blocked_reason()
