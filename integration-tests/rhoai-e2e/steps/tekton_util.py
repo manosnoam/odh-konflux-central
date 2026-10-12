@@ -1018,29 +1018,39 @@ def _ensure_yaml_for_kubeconfig() -> Any:
 
         return yaml
     except ImportError:
-        pip = run(
-            [sys.executable, "-m", "pip", "install", "--no-cache-dir", "-q", "pyyaml"],
-            capture=True,
-            check=False,
-        )
-        if pip.returncode != 0:
-            print(
-                "WARN: PyYAML unavailable; cannot materialize bearer token into kubeconfig",
-                file=sys.stderr,
-                flush=True,
-            )
-            return None
-        try:
+        pass
+    try:
+        from components.dashboard_cypress.runtime import prepend_staged_python_deps
+
+        if prepend_staged_python_deps():
             import yaml
 
             return yaml
-        except ImportError:
-            print(
-                "WARN: PyYAML still unavailable after pip install; cannot materialize bearer token",
-                file=sys.stderr,
-                flush=True,
-            )
-            return None
+    except ImportError:
+        pass
+    pip = run(
+        [sys.executable, "-m", "pip", "install", "--no-cache-dir", "-q", "pyyaml"],
+        capture=True,
+        check=False,
+    )
+    if pip.returncode != 0:
+        print(
+            "WARN: PyYAML unavailable; cannot materialize bearer token into kubeconfig",
+            file=sys.stderr,
+            flush=True,
+        )
+        return None
+    try:
+        import yaml
+
+        return yaml
+    except ImportError:
+        print(
+            "WARN: PyYAML still unavailable after pip install; cannot materialize bearer token",
+            file=sys.stderr,
+            flush=True,
+        )
+        return None
 
 
 def _oc_authenticated(oc: str, env: dict[str, str]) -> bool:
@@ -1273,9 +1283,10 @@ def prepare_kubeconfig_auth_for_tests(
     env = os.environ if environ is None else environ
     artifacts = env.get("ARTIFACTS_DIR", "/artifacts").strip() or "/artifacts"
     env.setdefault("ARTIFACTS_DIR", artifacts)
-    from runners.orchestrator import stage_oc_for_pytest
+    from runners.orchestrator import stage_oc_for_pytest, stage_pyyaml_for_pytest
     from steps.tests_payload import resolve_tests_payload_root, tests_payload_tools_bin_dir
 
+    stage_pyyaml_for_pytest()
     stage_oc_for_pytest()
     tools_bin = tests_payload_tools_bin_dir(resolve_tests_payload_root(Path(artifacts)))
     if tools_bin.is_dir():

@@ -107,9 +107,9 @@ def _install_identity_providers_body() -> None:
             flush=True,
         )
         return
-    if _cluster_is_rosa_hcp() and not cluster_has_ldap_identity():
+    if _guest_oauth_idp_patches_blocked() and not cluster_has_ldap_identity():
         print(
-            "✓ ROSA HCP — skipping LDAP OAuth install "
+            "✓ HyperShift hosted control plane — skipping LDAP OAuth install "
             "(HostedCluster policy blocks identityProvider patches; use htpasswd pytest overlay)",
             flush=True,
         )
@@ -117,9 +117,9 @@ def _install_identity_providers_body() -> None:
     if cluster_has_ldap_identity():
         print("✓ LDAP identity provider already configured on cluster login", flush=True)
         return
-    if _openldap_secret_ready() and _cluster_is_rosa_hcp():
+    if _openldap_secret_ready() and _guest_oauth_idp_patches_blocked():
         print(
-            f"✓ {_OPENLDAP_NS}/{_OPENLDAP_SECRET} present on ROSA HCP — skipping createIDP rerun "
+            f"✓ {_OPENLDAP_NS}/{_OPENLDAP_SECRET} present on HyperShift — skipping createIDP rerun "
             "(OAuth identityProvider patches blocked; use htpasswd pytest overlay)",
             flush=True,
         )
@@ -181,7 +181,7 @@ def ensure_htpasswd_openldap_secret_for_unprivileged_tests(
         return False
     if _cluster_is_byoidc() or cluster_has_ldap_identity():
         return False
-    if not (_cluster_is_rosa_hcp() or cluster_has_htpasswd_identity()):
+    if not (_guest_oauth_idp_patches_blocked() or cluster_has_htpasswd_identity()):
         return False
 
     oc_run(["create", "namespace", _OPENLDAP_NS], check=False, capture_output=True, timeout=30)
@@ -253,6 +253,15 @@ def cluster_has_ldap_identity() -> bool:
             names.extend((r.stdout or "").split())
     idp_blob = " ".join(names).lower()
     return "ldap" in idp_blob or "openldap" in idp_blob
+
+
+def _guest_oauth_idp_patches_blocked() -> bool:
+    """True when guest OAuth/cluster IdP patches are denied (ROSA HCP / HyperShift EPHC)."""
+    if _cluster_is_rosa_hcp():
+        return True
+    from install.rosa_hcp_pull_setup import is_hypershift_managed_cluster
+
+    return is_hypershift_managed_cluster()
 
 
 def _cluster_is_rosa_hcp() -> bool:

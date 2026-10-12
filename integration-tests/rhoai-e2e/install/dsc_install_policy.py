@@ -271,9 +271,13 @@ def _maybe_validate_managed_keys_against_chart(managed: set[str], operator_versi
     if not chart_validation_enabled():
         return
     policy = _active_policy()
+    deferred_at_install = _install_removed_for_version(operator_version, policy)
+    keys_to_validate = managed - deferred_at_install
+    if not keys_to_validate:
+        return
     try:
         report = validate_smoke_managed_keys_for_operator_version(
-            managed,
+            keys_to_validate,
             operator_version,
             components_override=policy.promotion_gate_components_override,
         )

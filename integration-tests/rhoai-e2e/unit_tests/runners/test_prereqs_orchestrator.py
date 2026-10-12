@@ -50,6 +50,7 @@ def test_prepare_skips_when_no_components_selected() -> None:
             with patch("runners.orchestrator.prepare_components_for_smoke") as prep:
                 with (
                     patch("runners.orchestrator.stage_git_for_prereqs"),
+                    patch("runners.orchestrator.stage_pyyaml_for_pytest"),
                     patch("runners.orchestrator.stage_oc_for_pytest"),
                     patch("runners.orchestrator.mark_cluster_prep_done") as mark,
                 ):
@@ -67,6 +68,7 @@ def test_prepare_marks_cluster_prep_done(tmp_path, monkeypatch) -> None:
             patch("runners.orchestrator.prepare_components_for_smoke") as prep,
             patch("runners.orchestrator.load_shift_left_env_from_mount"),
             patch("runners.orchestrator.stage_git_for_prereqs"),
+            patch("runners.orchestrator.stage_pyyaml_for_pytest"),
             patch("runners.orchestrator.stage_oc_for_pytest"),
         ):
             prepare_cluster_for_components(collect_only=False)
@@ -110,6 +112,23 @@ def test_remove_staged_pyyaml_binaries_drops_directory(tmp_path) -> None:
     assert not stale_dir.exists()
     assert not stale_file.exists()
     assert (target / "yaml" / "__init__.py").is_file()
+
+
+def test_stage_oc_for_pytest_stages_kubectl_when_oc_missing(tmp_path, monkeypatch) -> None:
+    kubectl = tmp_path / "kubectl-bin"
+    kubectl.write_text("#!/bin/sh\nexec echo Client Version: fake\n", encoding="utf-8")
+    kubectl.chmod(0o755)
+    artifacts = tmp_path / "artifacts"
+    monkeypatch.setenv("ARTIFACTS_DIR", str(artifacts))
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.delenv("OC_BINARY_PATH", raising=False)
+
+    from runners.orchestrator import stage_oc_for_pytest
+    from steps.tests_payload import resolve_tests_payload_root, tests_payload_tools_bin_dir
+
+    stage_oc_for_pytest()
+    staged = tests_payload_tools_bin_dir(resolve_tests_payload_root(artifacts)) / "oc"
+    assert staged.is_file()
 
 
 def test_prepare_oc_binary_path_for_pytest_sets_oc_binary_path(tmp_path, monkeypatch) -> None:

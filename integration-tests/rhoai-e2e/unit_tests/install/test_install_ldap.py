@@ -44,6 +44,21 @@ class TestInstallIdentityProviders(unittest.TestCase):
             install_identity_providers()
         clone.assert_not_called()
 
+    def test_skips_ldap_install_on_hypershift_managed_ephc(self) -> None:
+        with (
+            mock.patch("install.ldap._cluster_is_byoidc", return_value=False),
+            mock.patch("install.ldap.cluster_has_htpasswd_identity", return_value=False),
+            mock.patch("install.ldap._cluster_is_rosa_hcp", return_value=False),
+            mock.patch(
+                "install.rosa_hcp_pull_setup.is_hypershift_managed_cluster",
+                return_value=True,
+            ),
+            mock.patch("install.ldap.cluster_has_ldap_identity", return_value=False),
+            mock.patch("install.ldap._clone_ods_install") as clone,
+        ):
+            install_identity_providers()
+        clone.assert_not_called()
+
     def test_skips_createidp_rerun_when_openldap_on_rosa_hcp(self) -> None:
         with (
             mock.patch("install.ldap._cluster_is_byoidc", return_value=False),
@@ -89,6 +104,10 @@ class TestInstallIdentityProviders(unittest.TestCase):
             mock.patch("install.ldap._cluster_is_byoidc", return_value=False),
             mock.patch("install.ldap.cluster_has_htpasswd_identity", return_value=False),
             mock.patch("install.ldap._cluster_is_rosa_hcp", return_value=False),
+            mock.patch(
+                "install.rosa_hcp_pull_setup.is_hypershift_managed_cluster",
+                return_value=False,
+            ),
             mock.patch("install.ldap.cluster_has_ldap_identity", side_effect=[False, False]),
             mock.patch("install.ldap._openldap_secret_ready", return_value=True),
             mock.patch("install.ldap.shutil.which", return_value="/usr/bin/git"),

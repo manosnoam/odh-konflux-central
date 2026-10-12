@@ -150,6 +150,24 @@ def _stage_static_oc(bindir: Path) -> bool:
     return _tool_binary_runs(dest)
 
 
+def _oc_staging_source_paths() -> tuple[str, ...]:
+    """Paths to copy as staged ``oc`` (konflux-test often has only ``kubectl`` off FHS paths)."""
+    paths: list[str] = []
+    for binary in ("oc", "kubectl"):
+        found = shutil.which(binary)
+        if found:
+            paths.append(found)
+    paths.extend(
+        (
+            "/usr/bin/oc",
+            "/usr/local/bin/oc",
+            "/usr/bin/kubectl",
+            "/usr/local/bin/kubectl",
+        )
+    )
+    return tuple(dict.fromkeys(p for p in paths if p))
+
+
 def stage_oc_for_pytest() -> None:
     """Stage ``oc`` under tests-payload/.tools/bin (not uploaded with JUnit/logs)."""
     artifacts = Path(os.environ.get("ARTIFACTS_DIR", "/artifacts").strip() or "/artifacts")
@@ -166,12 +184,7 @@ def stage_oc_for_pytest() -> None:
     _stage_tool_binary(
         bindir,
         "oc",
-        sources=(
-            "/usr/bin/oc",
-            "/usr/local/bin/oc",
-            "/usr/bin/kubectl",
-            "/usr/local/bin/kubectl",
-        ),
+        sources=_oc_staging_source_paths(),
     )
     if _tool_binary_runs(dest):
         print(f"✓ Staged oc for pytest at {dest}", flush=True)
@@ -335,8 +348,8 @@ def _remove_staged_pyyaml_binaries(target: Path) -> None:
             entry.unlink(missing_ok=True)
 
 
-def stage_cypress_python_tools() -> None:
-    """Stage PyYAML under tests-payload for the Cypress image (no pip / dnf as non-root)."""
+def stage_pyyaml_for_pytest() -> None:
+    """Stage pure-Python PyYAML under tests-payload for pytest/Cypress images (no pip)."""
     artifacts = Path(os.environ.get("ARTIFACTS_DIR", "/artifacts").strip() or "/artifacts")
     from steps.tests_payload import (resolve_tests_payload_root,
                                      tests_payload_tools_python_dir)
@@ -348,21 +361,31 @@ def stage_cypress_python_tools() -> None:
     try:
         import yaml  # noqa: F401
     except ImportError:
-        print(
-            "WARN: PyYAML not available to stage for Cypress; "
-            "run-cypress may fail in images without pip",
-            file=sys.stderr,
-            flush=True,
-        )
         return
     import yaml as yaml_mod
 
     target.mkdir(parents=True, exist_ok=True)
     yaml_pkg = Path(yaml_mod.__file__).resolve().parent
     shutil.copytree(yaml_pkg, target / "yaml", dirs_exist_ok=True)
-    # Do not copy _yaml.so: orchestrate and Cypress images often differ in Python ABI.
+    # Do not copy _yaml.so: orchestrate and pytest images often differ in Python ABI.
     _remove_staged_pyyaml_binaries(target)
-    print(f"✓ Staged PyYAML for Cypress at {target}", flush=True)
+    print(f"✓ Staged PyYAML for pytest at {target}", flush=True)
+
+
+def stage_cypress_python_tools() -> None:
+    """Stage PyYAML under tests-payload for the Cypress image (no pip / dnf as non-root)."""
+    stage_pyyaml_for_pytest()
+    artifacts = Path(os.environ.get("ARTIFACTS_DIR", "/artifacts").strip() or "/artifacts")
+    from steps.tests_payload import resolve_tests_payload_root, tests_payload_tools_python_dir
+
+    target = tests_payload_tools_python_dir(resolve_tests_payload_root(artifacts))
+    if not _pyyaml_staged(target):
+        print(
+            "WARN: PyYAML not available to stage for Cypress; "
+            "run-cypress may fail in images without pip",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 def stage_cypress_cli_tools() -> None:
@@ -406,6 +429,7 @@ def prepare_cluster_for_components(*, collect_only: bool = False) -> None:
                 flush=True,
             )
     stage_git_for_prereqs()
+    stage_pyyaml_for_pytest()
     stage_oc_for_pytest()
 
 
