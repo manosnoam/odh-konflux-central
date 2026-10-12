@@ -87,6 +87,8 @@ spec:
           value: $(params.PRODUCT)
         - name: SCRIPTS_REPO_ROOT
           value: $(workspaces.tests-shared.path)/scripts-repo/integration-tests/rhoai-e2e
+        - name: OLMINSTALL_ALLOW_GIT_SSLVERIFY_FALSE
+          value: "1"
       script: |
         #!/usr/bin/env python3
         import os, sys
@@ -118,6 +120,8 @@ spec:
           value: $(params.PRODUCT)
         - name: SCRIPTS_REPO_ROOT
           value: $(workspaces.tests-shared.path)/scripts-repo/integration-tests/rhoai-e2e
+        - name: OLMINSTALL_ALLOW_GIT_SSLVERIFY_FALSE
+          value: "1"
       script: |
         #!/usr/bin/env python3
         import os, sys
