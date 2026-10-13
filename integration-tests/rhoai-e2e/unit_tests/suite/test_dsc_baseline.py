@@ -493,7 +493,7 @@ class FinalizeComponentDscHygieneTest(unittest.TestCase):
             mock_restore.assert_called_once()
             mock_ready.assert_called_once_with({"dashboard", "mlflowoperator"})
 
-    def test_finalize_skips_ready_wait_when_restore_failed(self) -> None:
+    def test_finalize_waits_ready_when_restore_failed_but_stale_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             import unittest.mock as mock
@@ -503,6 +503,29 @@ class FinalizeComponentDscHygieneTest(unittest.TestCase):
                 mock.patch(
                     "suite.dsc_baseline.check_baseline_managed_ready_stale",
                     return_value={"dashboard"},
+                ),
+                mock.patch(
+                    "suite.dsc_baseline.restore_dsc_from_baseline", return_value=False
+                ) as mock_restore,
+                mock.patch(
+                    "suite.dsc_baseline.wait_for_ready_reconcile", return_value=True
+                ) as mock_ready,
+            ):
+                out = finalize_component_dsc_hygiene("model_server", root)
+            self.assertEqual(out, [])
+            mock_restore.assert_called_once()
+            mock_ready.assert_called_once_with({"dashboard"})
+
+    def test_finalize_skips_ready_wait_when_restore_failed_and_no_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            import unittest.mock as mock
+
+            with (
+                mock.patch("suite.dsc_baseline.check_dsc_drift", return_value=["x: a→b"]),
+                mock.patch(
+                    "suite.dsc_baseline.check_baseline_managed_ready_stale",
+                    return_value=set(),
                 ),
                 mock.patch(
                     "suite.dsc_baseline.restore_dsc_from_baseline", return_value=False
