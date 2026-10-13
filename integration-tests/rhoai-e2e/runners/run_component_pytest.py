@@ -593,6 +593,23 @@ def _materialize_ogx_ea_conftest(artifacts_dir: Path) -> None:
 
 
 _MODEL_SERVING_COMPONENT_IDS = frozenset({"model_server", "model_runtime", "maas_billing"})
+
+
+def _ephc_operator_webhook_block_reason_before_maas() -> str:
+    """On EPHC guests, block MaaS pytest until rhods-operator admission webhook has endpoints."""
+    source = os.environ.get("CLUSTER_SOURCE", "").strip()
+    if not is_ephemeral_hosted_cluster_source(source):
+        return ""
+    from install.dsc_install import wait_operator_admission_webhook
+
+    try:
+        wait_operator_admission_webhook(timeout_sec=600)
+    except SystemExit:
+        return (
+            "cluster API unreachable: rhods-operator-service webhook has no endpoints "
+            "in redhat-ods-operator"
+        )
+    return ""
 # Pytest cluster sanity is only ~120s; these suites exit with 0 tests when DSC is Not Ready
 # (MaaSPrerequisites / dashboard lag after install). Wait like BVT before invoking pytest.
 _FULL_DSC_READY_COMPONENT_IDS = frozenset(
@@ -801,6 +818,21 @@ def _run_one_component(
                 message=api_reason,
                 refresh_test_output=refresh_test_output,
             )
+        if cid == "maas_billing":
+            webhook_reason = _ephc_operator_webhook_block_reason_before_maas()
+            if webhook_reason:
+                print(
+                    f"FAIL component tests {cid}: {webhook_reason} — skipping pytest",
+                    flush=True,
+                )
+                return _return_infra_junit_failure(
+                    comp,
+                    artifacts_dir=artifacts_dir,
+                    prefix_by_id=prefix_by_id,
+                    testcase_name="cluster_smoke_infra_blocked",
+                    message=webhook_reason,
+                    refresh_test_output=refresh_test_output,
+                )
     if not collect_only and _needs_full_dsc_ready_before_pytest(cid):
         from components.maas_billing.timeouts import bvt_dsc_ready_timeout_sec
         from components.maas_billing.wait import require_dsc_ready_for_bvt

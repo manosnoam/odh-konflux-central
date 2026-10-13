@@ -12,6 +12,19 @@ import pytest
 
 from runners import run_component_pytest
 
+def test_ephc_maas_waits_operator_webhook() -> None:
+    with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": "EPHC"}, clear=False):
+        with mock.patch(
+            "install.dsc_install.wait_operator_admission_webhook",
+        ) as wait_webhook:
+            assert run_component_pytest._ephc_operator_webhook_block_reason_before_maas() == ""
+            wait_webhook.assert_called_once_with(timeout_sec=600)
+    with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": "rhoai-e2e-s3-konflux-rhoai1"}, clear=False):
+        with mock.patch("install.dsc_install.wait_operator_admission_webhook") as wait_webhook:
+            assert run_component_pytest._ephc_operator_webhook_block_reason_before_maas() == ""
+            wait_webhook.assert_not_called()
+
+
 def test_ephc_pytest_extra_args_skip_image_validation() -> None:
     with mock.patch.dict(os.environ, {"CLUSTER_SOURCE": "EPHC"}, clear=False):
         assert (
