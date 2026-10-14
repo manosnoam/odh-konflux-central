@@ -29,8 +29,8 @@ _KONFLUX_RHOAI1_NAME = "rhoai-e2e-konflux-rhoai1-ocp422"
 
 
 def test_validate_integration_test_scenario_name_ok() -> None:
-    assert validate_integration_test_scenario_name("rhoai-e2e-ephc-ocp420") == (
-        "rhoai-e2e-ephc-ocp420"
+    assert validate_integration_test_scenario_name("rhoai-e2e-ephc-ocp420-core") == (
+        "rhoai-e2e-ephc-ocp420-core"
     )
 
 
@@ -106,7 +106,7 @@ def test_konflux_rhoai1_default_konflux_app() -> None:
         integration_test_scenario_default_konflux_app(_KONFLUX_RHOAI1_NAME)
         == "rhoai-fbc-fragment-ocp-422"
     )
-    assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp420") == (
+    assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp420-core") == (
         "rhoai-fbc-fragment-ocp-420"
     )
 
@@ -119,7 +119,7 @@ def test_resolve_run_its_snapshot_konflux_rhoai1() -> None:
 
 def test_resolve_run_its_snapshot_unsupported_returns_none() -> None:
     assert (
-        resolve_integration_test_scenario_run_its_snapshot(_ROOT, "rhoai-e2e-ephc-ocp420")
+        resolve_integration_test_scenario_run_its_snapshot(_ROOT, "rhoai-e2e-ephc-ocp420-core")
         is None
     )
 
@@ -174,11 +174,12 @@ def test_resolve_unknown_manifest() -> None:
 
 def test_list_manifests_includes_ephc_slice_its() -> None:
     names = list_integration_test_scenario_manifests(_ROOT)
-    assert "rhoai-e2e-ephc-ocp420" in names
+    assert "rhoai-e2e-ephc-ocp420-core" in names
+    assert "rhoai-e2e-ephc-ocp420-mlops" in names
+    assert "rhoai-e2e-ephc-ocp420-tail" in names
     assert "rhoai-e2e-ephc-ocp421" in names
     assert _KONFLUX_RHOAI1_NAME in names
-    assert "rhoai-e2e-ephc-ocp420-a" not in names
-    assert "rhoai-e2e-ephc-ocp420-b" not in names
+    assert "rhoai-e2e-ephc-ocp420" not in names
     assert "rhoai-e2e-ephc-ocp422-a" not in names
     assert "rhoai-e2e-ephc-ocp422-b" not in names
 
@@ -186,18 +187,27 @@ def test_list_manifests_includes_ephc_slice_its() -> None:
 def test_resolve_ephc_fbc_slice_a_on_420_b_on_421() -> None:
     from suite.its_registry import its_manifest_param
 
-    path_a = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp420")
+    path_core = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp420-core")
+    path_mlop = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp420-mlops")
+    path_tail = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp420-tail")
     path_b = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp421")
-    assert integration_test_scenario_application(path_a) == "rhoai-fbc-fragment-ocp-420"
+    assert integration_test_scenario_application(path_core) == "rhoai-fbc-fragment-ocp-420"
     assert integration_test_scenario_application(path_b) == "rhoai-fbc-fragment-ocp-421"
-    assert its_manifest_param(path_a, "RHOAI_FBC_NAME") == "rhoai-fbc-fragment-ocp-420"
-    assert its_manifest_param(path_b, "RHOAI_FBC_NAME") == "rhoai-fbc-fragment-ocp-421"
+    core_comps = set(its_manifest_param(path_core, "COMPONENTS").split(","))
+    mlops_comps = set(its_manifest_param(path_mlop, "COMPONENTS").split(","))
+    tail_comps = set(its_manifest_param(path_tail, "COMPONENTS").split(","))
+    assert core_comps == {
+        "workbenches",
+        "model_registry",
+        "model_server",
+        "model_runtime",
+        "maas_billing",
+    }
+    assert mlops_comps == {"ai_pipelines", "kuberay", "mlflow", "ogx"}
+    assert "trainer" in tail_comps
+    assert "dashboard_cypress" not in core_comps | mlops_comps | tail_comps
     assert its_manifest_param(path_b, "COMPONENTS") == "dashboard_cypress,platform"
-    assert "ogx" in its_manifest_param(path_a, "COMPONENTS").split(",")
-    assert "dashboard_cypress" in its_manifest_param(path_b, "COMPONENTS").split(",")
-    assert "dashboard_cypress" not in its_manifest_param(path_a, "COMPONENTS").split(",")
-    assert "platform" not in its_manifest_param(path_a, "COMPONENTS").split(",")
-    assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp420") == (
+    assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp420-core") == (
         "rhoai-fbc-fragment-ocp-420"
     )
     assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp421") == (

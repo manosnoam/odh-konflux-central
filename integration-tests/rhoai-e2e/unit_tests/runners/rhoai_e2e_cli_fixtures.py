@@ -166,14 +166,14 @@ def ok_cases() -> list[OkCase]:
         OkCase(
             [
                 "--run-its",
-                "rhoai-e2e-ephc-ocp420",
+                "rhoai-e2e-ephc-ocp420-core",
                 "--tests",
                 "smoke",
                 "--components",
                 "all",
             ],
             check=lambda a: _checks(
-                a.run_its == "rhoai-e2e-ephc-ocp420",
+                a.run_its == "rhoai-e2e-ephc-ocp420-core",
                 a.tests == "smoke",
                 a.components == ALL_COMPONENTS_CSV,
                 a.components_explicit,

@@ -99,7 +99,7 @@ class RhoaiE2ERunner(
         self.args = args
         self.script_dir = Path(__file__).resolve().parent.parent.parent
         self.snapshot_file = self.script_dir / "config" / "test-snapshot.yaml"
-        self.its_file = self.script_dir / "tekton" / "its" / "its-rhoai-e2e-ephc-ocp420.yaml"
+        self.its_file = self.script_dir / "tekton" / "its" / "its-rhoai-e2e-ephc-ocp420-core.yaml"
         self.konflux_ui = args.konflux_ui or ""
         self.ka_host = args.ka_host or ""
         self.konflux_server = args.konflux_server or ""

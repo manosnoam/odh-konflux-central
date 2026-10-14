@@ -1,19 +1,17 @@
 ---
-# EPHC smoke slice A: auto on rhoai-fbc-fragment-ocp-420 (pairs with ocp421 = B: cypress+platform).
-# Slice A COMPONENTS (all smoke except dashboard_cypress + platform).
-# Debug: --run-its rhoai-e2e-ephc-ocp420 --konflux-app testops-playpen
-# Re-apply on FBC only after upstream merge.
+# EPHC smoke slice 420-tail: AI safety, llama_stack, trainer / CodeFlare tail.
+# Debug: --run-its rhoai-e2e-ephc-ocp420-tail --konflux-app testops-playpen
 apiVersion: appstudio.redhat.com/v1beta2
 kind: IntegrationTestScenario
 metadata:
   labels:
     test.appstudio.openshift.io/optional: "true"
-  name: rhoai-e2e-ephc-ocp420
+  name: rhoai-e2e-ephc-ocp420-tail
   namespace: rhoai-tenant
 spec:
   application: rhoai-fbc-fragment-ocp-420
   contexts:
-    - description: RHOAI EPHC smoke slice A when rhoai-fbc-fragment-ocp-420 builds
+    - description: EPHC 420 tail smoke when rhoai-fbc-fragment-ocp-420 builds
       name: component_rhoai-fbc-fragment-ocp-420
   params:
     - name: CLUSTER_SOURCE
@@ -37,7 +35,7 @@ spec:
     - name: TEST_GATES
       value: "bvt,smoke"
     - name: COMPONENTS
-      value: "workbenches,model_registry,model_server,model_runtime,maas_billing,ai_pipelines,kuberay,mlflow,ogx,ai_safety,ai_safety_evalhub,ai_safety_guardrails,ai_safety_lmeval,ai_safety_trustyai_operator,ai_safety_trustyai_service,llama_stack,trainer,distributed_workloads,spark_operator,workbench_images,codeflare_sdk"
+      value: "ai_safety,ai_safety_evalhub,ai_safety_guardrails,ai_safety_lmeval,ai_safety_trustyai_operator,ai_safety_trustyai_service,llama_stack,trainer,distributed_workloads,spark_operator,workbench_images,codeflare_sdk"
     - name: QUAY_PULL_SECRET_NAME
       value: "rhoai-external-quay-secret"
     - name: SCRIPTS_REPO_URL

@@ -22,7 +22,9 @@ _ITS_RUN_ITS_SNAPSHOT_BY_NAME: dict[str, str] = {
 # metadata.name -> Konflux Application when ``--konflux-app`` differs from DEFAULT_APP
 _ITS_DEFAULT_KONFLUX_APP_BY_NAME: dict[str, str] = {
     "rhoai-e2e-konflux-rhoai1-ocp422": "rhoai-fbc-fragment-ocp-422",
-    "rhoai-e2e-ephc-ocp420": "rhoai-fbc-fragment-ocp-420",
+    "rhoai-e2e-ephc-ocp420-core": "rhoai-fbc-fragment-ocp-420",
+    "rhoai-e2e-ephc-ocp420-mlops": "rhoai-fbc-fragment-ocp-420",
+    "rhoai-e2e-ephc-ocp420-tail": "rhoai-fbc-fragment-ocp-420",
     "rhoai-e2e-ephc-ocp421": "rhoai-fbc-fragment-ocp-421",
 }
 

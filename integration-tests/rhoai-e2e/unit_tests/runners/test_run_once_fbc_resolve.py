@@ -14,7 +14,7 @@ from runners.cli.runner import RhoaiE2ERunner
 _ROOT = Path(__file__).resolve().parents[2]
 _RH_NIGHTLY_SNAP = _ROOT / "config" / "test-snapshot-rh-nightly.yaml"
 _RH_NIGHTLY_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
-_EPHC_SLICE_A_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-ephc-ocp420.yaml"
+_EPHC_SLICE_A_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-ephc-ocp420-core.yaml"
 _EPHC_SLICE_B_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-ephc-ocp421.yaml"
 _PINNED_420 = (
     "quay.io/rhoai/rhoai-fbc-fragment@sha256:"
@@ -48,7 +48,7 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
 
     def test_run_its_ephc_slice_a_sets_minor_from_manifest(self) -> None:
         parser = make_parser()
-        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp420"])
+        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp420-core"])
         runner = RhoaiE2ERunner(args)
         runner._apply_run_its_manifest_defaults(_EPHC_SLICE_A_ITS)
         self.assertEqual(runner.args.ocp_version, "4.20")
@@ -104,7 +104,7 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
             parser,
             [
                 "--run-its",
-                "rhoai-e2e-ephc-ocp420",
+                "rhoai-e2e-ephc-ocp420-core",
                 "--components",
                 "maas_billing,ai_pipelines",
             ],
@@ -128,7 +128,7 @@ class RunItsComponentsParamTest(unittest.TestCase):
 
     def test_run_its_preserves_slice_a_components_after_cli_override_clear(self) -> None:
         parser = make_parser()
-        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp420"])
+        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp420-core"])
         runner = RhoaiE2ERunner(args)
         runner.its_file = _EPHC_SLICE_A_ITS
         runner._stage_its_manifest_tmp(_EPHC_SLICE_A_ITS, push_context=False)
@@ -137,6 +137,8 @@ class RunItsComponentsParamTest(unittest.TestCase):
         params = runner._read_its_params_from_tmp()
         components = params.get("COMPONENTS", "")
         self.assertIn("workbenches", components)
+        self.assertIn("maas_billing", components)
+        self.assertNotIn("ai_pipelines", components)
         self.assertNotIn("dashboard_cypress", components)
         self.assertNotIn("platform", components)
 
@@ -150,7 +152,7 @@ class RunItsComponentsParamTest(unittest.TestCase):
 
 
 class ResolveRhoaiFbcForItsApplicationTest(unittest.TestCase):
-    def _runner(self, *, run_its: str = "rhoai-e2e-ephc-ocp420") -> RhoaiE2ERunner:
+    def _runner(self, *, run_its: str = "rhoai-e2e-ephc-ocp420-core") -> RhoaiE2ERunner:
         parser = make_parser()
         args = parse_cli_args(parser, ["--run-its", run_its])
         runner = RhoaiE2ERunner(args)

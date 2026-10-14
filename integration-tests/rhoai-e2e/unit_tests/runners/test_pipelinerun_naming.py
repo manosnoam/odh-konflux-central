@@ -282,7 +282,10 @@ class TestPipelinerunNaming(unittest.TestCase):
         self.assertEqual(diagnostic_version_segment("rhoai-v3-5-ea-2"), "3.5ea2")
 
     def test_its_profile_from_scenario_name(self) -> None:
-        self.assertEqual(its_profile_from_scenario_name("rhoai-e2e-ephc-ocp420"), "ephc-ocp420")
+        self.assertEqual(
+            its_profile_from_scenario_name("rhoai-e2e-ephc-ocp420-core"),
+            "ephc-ocp420-core",
+        )
         self.assertEqual(its_profile_from_scenario_name("rhoai-e2e-ephc-ocp421"), "ephc-ocp421")
         self.assertEqual(
             its_profile_from_scenario_name("rhoai-e2e-konflux-rhoai1-ocp422"),

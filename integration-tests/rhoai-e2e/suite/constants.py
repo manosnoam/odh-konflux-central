@@ -6,8 +6,14 @@ DEFAULT_NAMESPACE = "rhoai-tenant"
 DEFAULT_APP = "testops-playpen"
 # provision-ephemeral-cluster creates TestPlatformCluster (konflux-integration-runner SA).
 KONFLUX_INTEGRATION_SERVICE_ACCOUNT = "konflux-integration-runner"
-# Canonical EPHC ITS slice A (its-rhoai-e2e-ephc-ocp420.yaml).
-RHOAI_E2E_EPHC_ITS_NAME = "rhoai-e2e-ephc-ocp420"
+# Canonical EPHC ITS (420 core leg; see RHOAI_E2E_EPHC_PLAYPEN_ITS_NAMES for full playpen batch).
+RHOAI_E2E_EPHC_ITS_NAME = "rhoai-e2e-ephc-ocp420-core"
+RHOAI_E2E_EPHC_PLAYPEN_ITS_NAMES: tuple[str, ...] = (
+    "rhoai-e2e-ephc-ocp420-core",
+    "rhoai-e2e-ephc-ocp420-mlops",
+    "rhoai-e2e-ephc-ocp420-tail",
+    "rhoai-e2e-ephc-ocp421",
+)
 # External FBC ocp-422 ITS (its-rhoai-e2e-konflux-rhoai1-ocp422.yaml; konflux-rhoai1 S3 install-data).
 RHOAI_E2E_KONFLUX_RHOAI1_ITS_NAME = "rhoai-e2e-konflux-rhoai1-ocp422"
 # Obsolete IntegrationTestScenario names on testops-playpen; Konflux starts one PipelineRun per ITS

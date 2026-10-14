@@ -47,7 +47,7 @@ Examples:
   %(prog)s --delete-pending-pipelines          # stop stuck/incomplete live runs
   %(prog)s --delete-pending-pipelines --dry-run
   %(prog)s --enable-its rhoai-e2e-konflux-rhoai1-ocp422
-  %(prog)s --run-its rhoai-e2e-ephc-ocp420 --konflux-app testops-playpen
+  %(prog)s --run-its rhoai-e2e-ephc-ocp420-core --konflux-app testops-playpen
   %(prog)s --run-its rhoai-e2e-ephc-ocp421 --konflux-app testops-playpen
   %(prog)s --enable-its rhoai-e2e-ephc-ocp420
   %(prog)s --disable-its rhoai-e2e-konflux-rhoai1-ocp422
