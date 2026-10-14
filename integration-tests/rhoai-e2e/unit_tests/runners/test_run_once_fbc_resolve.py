@@ -98,6 +98,21 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
         runner._apply_run_its_manifest_defaults(_RH_NIGHTLY_ITS)
         self.assertEqual(runner.args.product, "")
 
+    def test_run_its_ephc_components_override_still_applies_manifest_product(self) -> None:
+        parser = make_parser()
+        args = parse_cli_args(
+            parser,
+            [
+                "--run-its",
+                "rhoai-e2e-ephc-ocp420",
+                "--components",
+                "maas_billing,ai_pipelines",
+            ],
+        )
+        runner = RhoaiE2ERunner(args)
+        runner._apply_run_its_manifest_defaults(_EPHC_SLICE_A_ITS)
+        self.assertEqual(runner.args.product, "rhoai")
+
 
 class RunItsComponentsParamTest(unittest.TestCase):
     def test_run_its_preserves_slice_b_components_after_cli_override_clear(self) -> None:

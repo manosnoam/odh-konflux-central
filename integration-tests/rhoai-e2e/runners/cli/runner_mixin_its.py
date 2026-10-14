@@ -29,10 +29,21 @@ def _run_its_keep_test_only_product(args: object) -> bool:
     """True when CLI omitted --product but passed explicit external rerun flags."""
     if not is_test_only_product(getattr(args, "product", "") or ""):
         return False
-    return bool(
+    external_rerun = bool(
         getattr(args, "cleanup_opt_out", False)
         or getattr(args, "install_dependencies", False)
-        or getattr(args, "tests_explicit", False)
+        or (getattr(args, "install_data_cluster", "") or "").strip()
+        or getattr(args, "external_kubeconfig", "")
+    )
+    if external_rerun:
+        return bool(
+            getattr(args, "tests_explicit", False)
+            or getattr(args, "components_explicit", False)
+        )
+    if (getattr(args, "run_its", "") or "").strip():
+        return False
+    return bool(
+        getattr(args, "tests_explicit", False)
         or getattr(args, "components_explicit", False)
     )
 
