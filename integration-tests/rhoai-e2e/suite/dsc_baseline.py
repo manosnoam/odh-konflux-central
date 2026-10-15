@@ -401,7 +401,7 @@ def _restore_and_reconcile_dsc(
     if not reconcile_keys:
         return
     if skip_reconcile_if_restore_failed and not restore_ok:
-        if stale_keys:
+        if stale_keys and _dsc_patch_kind_candidates():
             print(
                 "NOTE: DSC baseline restore failed; still waiting for Ready on "
                 f"stale Managed keys: {', '.join(sorted(stale_keys))}",
@@ -411,7 +411,8 @@ def _restore_and_reconcile_dsc(
             return
         print(
             "NOTE: skip DSC Ready reconcile wait after finalize "
-            "(baseline restore failed; reconcile-before-pytest unchanged)",
+            "(baseline restore failed or default-dsc not patchable; "
+            "reconcile-before-pytest unchanged)",
             flush=True,
         )
         return

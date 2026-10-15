@@ -508,6 +508,10 @@ class FinalizeComponentDscHygieneTest(unittest.TestCase):
                     "suite.dsc_baseline.restore_dsc_from_baseline", return_value=False
                 ) as mock_restore,
                 mock.patch(
+                    "suite.dsc_baseline._dsc_patch_kind_candidates",
+                    return_value=["datasciencecluster"],
+                ),
+                mock.patch(
                     "suite.dsc_baseline.wait_for_ready_reconcile", return_value=True
                 ) as mock_ready,
             ):
@@ -515,6 +519,34 @@ class FinalizeComponentDscHygieneTest(unittest.TestCase):
             self.assertEqual(out, [])
             mock_restore.assert_called_once()
             mock_ready.assert_called_once_with({"dashboard"})
+
+    def test_finalize_skips_ready_when_restore_failed_and_default_dsc_not_patchable(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            import unittest.mock as mock
+
+            with (
+                mock.patch("suite.dsc_baseline.check_dsc_drift", return_value=[]),
+                mock.patch(
+                    "suite.dsc_baseline.check_baseline_managed_ready_stale",
+                    return_value={"dashboard"},
+                ),
+                mock.patch(
+                    "suite.dsc_baseline.restore_dsc_from_baseline", return_value=False
+                ) as mock_restore,
+                mock.patch(
+                    "suite.dsc_baseline._dsc_patch_kind_candidates", return_value=[]
+                ),
+                mock.patch(
+                    "suite.dsc_baseline.wait_for_ready_reconcile", return_value=True
+                ) as mock_ready,
+            ):
+                out = finalize_component_dsc_hygiene("model_server", root)
+            self.assertEqual(out, [])
+            mock_restore.assert_called_once()
+            mock_ready.assert_not_called()
 
     def test_finalize_skips_ready_wait_when_restore_failed_and_no_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
