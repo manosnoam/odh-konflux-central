@@ -546,7 +546,7 @@ components:
         enable: true
         odh-stable: true
         minRhoai: 2.25
-        maxRhoai: 3.4
+        maxRhoai: 3.6
       merge:
         metadata:
           name: llama_stack
@@ -667,7 +667,7 @@ components:
       enablement:
         enable: true
         odh-stable: true
-        maxRhoai: 3.5
+        maxRhoai: 3.6
       merge:
         metadata:
           name: distributed-workloads
