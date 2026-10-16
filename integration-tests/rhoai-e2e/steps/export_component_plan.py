@@ -103,6 +103,8 @@ def main() -> int:
     for cid in ordered:
         comp = catalog.components[cid]
         entry = _component_to_dict(comp)
+        # Jenkins getComponentsEnablementPerVersion parity (catalog minRhoai/maxRhoai).
+        # resolve-component-run-flags sets RUN_SMOKE_<id>=false → Tekton grey-skips test-*.
         gate = component_enabled_for_version(comp, operator_version, product=product)
         if not gate.enabled:
             entry["version_skip_reason"] = gate.reason

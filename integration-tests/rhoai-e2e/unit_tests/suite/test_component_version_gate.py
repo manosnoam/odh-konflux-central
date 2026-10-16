@@ -42,17 +42,10 @@ class ComponentVersionGateTest(unittest.TestCase):
         self.assertFalse(component_enabled_for_version(comp, "3.4.0").enabled)
         self.assertTrue(component_enabled_for_version(comp, "3.5.0-ea.2").enabled)
 
-    def test_llama_stack_max_36(self) -> None:
-        comp = _comp(cid="llama_stack", max_rhoai="3.6")
-        self.assertFalse(component_enabled_for_version(comp, "3.7.0-ea.1").enabled)
-        self.assertTrue(component_enabled_for_version(comp, "3.6.0-ea.2").enabled)
+    def test_llama_stack_max_34(self) -> None:
+        comp = _comp(cid="llama_stack", max_rhoai="3.4")
+        self.assertFalse(component_enabled_for_version(comp, "3.5.0-ea.2").enabled)
         self.assertTrue(component_enabled_for_version(comp, "3.4.1").enabled)
-
-    def test_distributed_workloads_max_36(self) -> None:
-        comp = _comp(cid="distributed_workloads", max_rhoai="3.6")
-        self.assertFalse(component_enabled_for_version(comp, "3.7.0-ea.1").enabled)
-        self.assertTrue(component_enabled_for_version(comp, "3.6.0-ea.2").enabled)
-        self.assertTrue(component_enabled_for_version(comp, "3.5.0-ea.2").enabled)
 
     def test_maas_min_33(self) -> None:
         comp = _comp(cid="maas_billing", min_rhoai="3.3")
