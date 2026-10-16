@@ -196,7 +196,7 @@ class RunnerListMixin(RunnerOcpMixin):
         print(
             f"{head}"
             "  With no ``--konflux-repo`` / ``--konflux-branch`` on the CLI, the ITS keeps the committed default: "
-            "**opendatahub-io/odh-konflux-central** @ **main** (see its-rhoai-e2e-*.yaml). That ref may not have this path.\n"
+            "**opendatahub-io/odh-konflux-central** @ **main** (see tekton/its/its-e2e-*.yaml). That ref may not have this path.\n"
             "  Re-apply the ITS with a fork + branch, then trigger again, e.g.\n"
             "    python3 rhoai_e2e.py --tests bvt \\\n"
             "      --konflux-repo https://github.com/<you>/odh-konflux-central.git \\\n"

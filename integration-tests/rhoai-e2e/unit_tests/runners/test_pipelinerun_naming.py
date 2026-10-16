@@ -283,12 +283,15 @@ class TestPipelinerunNaming(unittest.TestCase):
 
     def test_its_profile_from_scenario_name(self) -> None:
         self.assertEqual(
-            its_profile_from_scenario_name("rhoai-e2e-ephc-ocp420-core"),
-            "ephc-ocp420-core",
+            its_profile_from_scenario_name("e2e-ephc-ocp420-wb-mr-msrv-mrt-maas"),
+            "ephc-ocp420-wb-mr-ms",
         )
-        self.assertEqual(its_profile_from_scenario_name("rhoai-e2e-ephc-ocp421"), "ephc-ocp421")
         self.assertEqual(
-            its_profile_from_scenario_name("rhoai-e2e-konflux-rhoai1-ocp422"),
+            its_profile_from_scenario_name("e2e-ephc-ocp421-dcy-plat"),
+            "ephc-ocp421-dcy-plat",
+        )
+        self.assertEqual(
+            its_profile_from_scenario_name("e2e-konflux-rhoai1-ocp422"),
             "konflux-rhoai1-ocp42",
         )
         self.assertEqual(its_profile_from_scenario_name(""), "")
@@ -330,9 +333,9 @@ class TestPipelinerunNaming(unittest.TestCase):
 
     def test_its_generate_prefix_for_snapshot_metadata(self) -> None:
         prefix = build_its_generate_prefix_for_snapshot(
-            its_profile=its_profile_from_scenario_name("rhoai-e2e-ephc-ocp421"),
+            its_profile=its_profile_from_scenario_name("e2e-ephc-ocp421-dcy-plat"),
             konflux_application="rhoai-v3-5-ea-2",
             tests_csv="bvt,smoke",
         )
-        self.assertEqual(prefix, "e2e-its-ephc-ocp421-rhoai-3.5ea2-smoke-")
+        self.assertEqual(prefix, "e2e-its-ephc-ocp421-dcy-plat-rhoai-3.5ea2-smoke-")
 

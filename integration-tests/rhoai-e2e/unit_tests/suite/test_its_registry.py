@@ -22,15 +22,15 @@ from suite.its_registry import (
 
 _ROOT = Path(__file__).resolve().parents[2]
 _KONFLUX_RHOAI1_REL = (
-    "integration-tests/rhoai-e2e/tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
+    "integration-tests/rhoai-e2e/tekton/its/its-e2e-konflux-rhoai1-ocp422.yaml"
 )
-_KONFLUX_RHOAI1_SHORT = "tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
-_KONFLUX_RHOAI1_NAME = "rhoai-e2e-konflux-rhoai1-ocp422"
+_KONFLUX_RHOAI1_SHORT = "tekton/its/its-e2e-konflux-rhoai1-ocp422.yaml"
+_KONFLUX_RHOAI1_NAME = "e2e-konflux-rhoai1-ocp422"
 
 
 def test_validate_integration_test_scenario_name_ok() -> None:
-    assert validate_integration_test_scenario_name("rhoai-e2e-ephc-ocp420-core") == (
-        "rhoai-e2e-ephc-ocp420-core"
+    assert validate_integration_test_scenario_name("e2e-ephc-ocp420-wb-mr-msrv-mrt-maas") == (
+        "e2e-ephc-ocp420-wb-mr-msrv-mrt-maas"
     )
 
 
@@ -46,14 +46,14 @@ def test_looks_like_its_manifest_path() -> None:
 
 
 def test_resolve_ephc_manifest_slice_b() -> None:
-    path = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp421")
-    assert path.name == "its-rhoai-e2e-ephc-ocp421.yaml"
+    path = resolve_integration_test_scenario_manifest(_ROOT, "e2e-ephc-ocp421-dcy-plat")
+    assert path.name == "its-e2e-ephc-ocp421-dcy-plat.yaml"
     assert integration_test_scenario_application(path) == "rhoai-fbc-fragment-ocp-421"
 
 
 def test_resolve_konflux_rhoai1_manifest() -> None:
     path = resolve_integration_test_scenario_manifest(_ROOT, _KONFLUX_RHOAI1_NAME)
-    assert path.name == "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
+    assert path.name == "its-e2e-konflux-rhoai1-ocp422.yaml"
     assert integration_test_scenario_application(path) == "rhoai-fbc-fragment-ocp-422"
     from suite.its_registry import its_manifest_param
 
@@ -68,7 +68,7 @@ def test_resolve_manifest_path_repo_relative(monkeypatch: pytest.MonkeyPatch) ->
     repo_root = _ROOT.resolve().parent.parent
     monkeypatch.chdir(repo_root)
     path = resolve_integration_test_scenario_manifest_path(_ROOT, _KONFLUX_RHOAI1_REL)
-    assert path.name == "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
+    assert path.name == "its-e2e-konflux-rhoai1-ocp422.yaml"
 
 
 def test_resolve_manifest_path_explicit_wrong_cwd_fails(
@@ -78,18 +78,18 @@ def test_resolve_manifest_path_explicit_wrong_cwd_fails(
     with pytest.raises(AppError, match="ITS manifest not found"):
         resolve_integration_test_scenario_manifest_path(
             _ROOT,
-            "./integration-tests/rhoai-e2e/tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp422.yaml",
+            "./integration-tests/rhoai-e2e/tekton/its/its-e2e-konflux-rhoai1-ocp422.yaml",
         )
 
 
 def test_resolve_manifest_path_rhoai_e2e_relative() -> None:
     path = resolve_integration_test_scenario_manifest_path(_ROOT, _KONFLUX_RHOAI1_SHORT)
-    assert path.name == "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
+    assert path.name == "its-e2e-konflux-rhoai1-ocp422.yaml"
 
 
 def test_resolve_ref_from_path_returns_metadata_name() -> None:
     manifest, name = resolve_integration_test_scenario_ref(_ROOT, _KONFLUX_RHOAI1_SHORT)
-    assert manifest.name == "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
+    assert manifest.name == "its-e2e-konflux-rhoai1-ocp422.yaml"
     assert name == _KONFLUX_RHOAI1_NAME
 
 
@@ -106,7 +106,7 @@ def test_konflux_rhoai1_default_konflux_app() -> None:
         integration_test_scenario_default_konflux_app(_KONFLUX_RHOAI1_NAME)
         == "rhoai-fbc-fragment-ocp-422"
     )
-    assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp420-core") == (
+    assert integration_test_scenario_default_konflux_app("e2e-ephc-ocp420-wb-mr-msrv-mrt-maas") == (
         "rhoai-fbc-fragment-ocp-420"
     )
 
@@ -119,26 +119,26 @@ def test_resolve_run_its_snapshot_konflux_rhoai1() -> None:
 
 def test_resolve_run_its_snapshot_unsupported_returns_none() -> None:
     assert (
-        resolve_integration_test_scenario_run_its_snapshot(_ROOT, "rhoai-e2e-ephc-ocp420-core")
+        resolve_integration_test_scenario_run_its_snapshot(_ROOT, "e2e-ephc-ocp420-wb-mr-msrv-mrt-maas")
         is None
     )
 
 
 def test_its_manifest_param_reads_product() -> None:
-    path = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
+    path = _ROOT / "tekton" / "its" / "its-e2e-konflux-rhoai1-ocp422.yaml"
     from suite.its_registry import its_manifest_param
 
     assert its_manifest_param(path, "PRODUCT") == "rhoai"
 
 
 def test_resolve_manifest_path_absolute_under_repo() -> None:
-    abs_path = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
+    abs_path = _ROOT / "tekton" / "its" / "its-e2e-konflux-rhoai1-ocp422.yaml"
     path = resolve_integration_test_scenario_manifest_path(_ROOT, str(abs_path))
     assert path == abs_path.resolve()
 
 
 def test_resolve_manifest_path_cwd_relative(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    source = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
+    source = _ROOT / "tekton" / "its" / "its-e2e-konflux-rhoai1-ocp422.yaml"
     copy = tmp_path / "my-its.yaml"
     copy.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
@@ -147,7 +147,7 @@ def test_resolve_manifest_path_cwd_relative(tmp_path: Path, monkeypatch: pytest.
 
 
 def test_resolve_manifest_path_absolute_outside_repo(tmp_path: Path) -> None:
-    source = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
+    source = _ROOT / "tekton" / "its" / "its-e2e-konflux-rhoai1-ocp422.yaml"
     copy = tmp_path / "its-copy.yaml"
     copy.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     path = resolve_integration_test_scenario_manifest_path(_ROOT, str(copy))
@@ -174,10 +174,13 @@ def test_resolve_unknown_manifest() -> None:
 
 def test_list_manifests_includes_ephc_slice_its() -> None:
     names = list_integration_test_scenario_manifests(_ROOT)
-    assert "rhoai-e2e-ephc-ocp420-core" in names
-    assert "rhoai-e2e-ephc-ocp420-mlops" in names
-    assert "rhoai-e2e-ephc-ocp420-tail" in names
-    assert "rhoai-e2e-ephc-ocp421" in names
+    assert "e2e-ephc-ocp420-wb-mr-msrv-mrt-maas" in names
+    assert (
+        "e2e-ephc-ocp420-aip-ray-mlf-ogx-ais-tr-sprk-cf"
+        in names
+    )
+    assert "e2e-ephc-ocp420-llam-dsw-wbi" in names
+    assert "e2e-ephc-ocp421-dcy-plat" in names
     assert _KONFLUX_RHOAI1_NAME in names
     assert "rhoai-e2e-ephc-ocp420" not in names
     assert "rhoai-e2e-ephc-ocp422-a" not in names
@@ -187,10 +190,13 @@ def test_list_manifests_includes_ephc_slice_its() -> None:
 def test_resolve_ephc_fbc_slice_a_on_420_b_on_421() -> None:
     from suite.its_registry import its_manifest_param
 
-    path_core = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp420-core")
-    path_mlop = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp420-mlops")
-    path_tail = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp420-tail")
-    path_b = resolve_integration_test_scenario_manifest(_ROOT, "rhoai-e2e-ephc-ocp421")
+    path_core = resolve_integration_test_scenario_manifest(_ROOT, "e2e-ephc-ocp420-wb-mr-msrv-mrt-maas")
+    path_mlop = resolve_integration_test_scenario_manifest(
+        _ROOT,
+        "e2e-ephc-ocp420-aip-ray-mlf-ogx-ais-tr-sprk-cf",
+    )
+    path_tail = resolve_integration_test_scenario_manifest(_ROOT, "e2e-ephc-ocp420-llam-dsw-wbi")
+    path_b = resolve_integration_test_scenario_manifest(_ROOT, "e2e-ephc-ocp421-dcy-plat")
     assert integration_test_scenario_application(path_core) == "rhoai-fbc-fragment-ocp-420"
     assert integration_test_scenario_application(path_b) == "rhoai-fbc-fragment-ocp-421"
     core_comps = set(its_manifest_param(path_core, "COMPONENTS").split(","))
@@ -203,14 +209,28 @@ def test_resolve_ephc_fbc_slice_a_on_420_b_on_421() -> None:
         "model_runtime",
         "maas_billing",
     }
-    assert mlops_comps == {"ai_pipelines", "kuberay", "mlflow", "ogx"}
-    assert "trainer" in tail_comps
+    assert mlops_comps == {
+        "ai_pipelines",
+        "kuberay",
+        "mlflow",
+        "ogx",
+        "ai_safety",
+        "ai_safety_evalhub",
+        "ai_safety_guardrails",
+        "ai_safety_lmeval",
+        "ai_safety_trustyai_operator",
+        "ai_safety_trustyai_service",
+        "trainer",
+        "spark_operator",
+        "codeflare_sdk",
+    }
+    assert tail_comps == {"llama_stack", "distributed_workloads", "workbench_images"}
     assert "dashboard_cypress" not in core_comps | mlops_comps | tail_comps
     assert its_manifest_param(path_b, "COMPONENTS") == "dashboard_cypress,platform"
-    assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp420-core") == (
+    assert integration_test_scenario_default_konflux_app("e2e-ephc-ocp420-wb-mr-msrv-mrt-maas") == (
         "rhoai-fbc-fragment-ocp-420"
     )
-    assert integration_test_scenario_default_konflux_app("rhoai-e2e-ephc-ocp421") == (
+    assert integration_test_scenario_default_konflux_app("e2e-ephc-ocp421-dcy-plat") == (
         "rhoai-fbc-fragment-ocp-421"
     )
 

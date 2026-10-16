@@ -138,8 +138,8 @@ Skipped nodes are normal: ephemeral vs external vs test-only `PRODUCT` (empty), 
 | [`install/patch_cluster_pull_secret.py`](install/patch_cluster_pull_secret.py)                                   | Tekton step: injects `quay.io/rhoai` credentials into the [EPHC](../../doc/contributing-konflux-testing-rhoai.md#ephc) cluster at all required levels                                                                                                                                                                                                                                                                                                                               |
 | [`tekton/its/`](tekton/its/)                                                                                     | In-tree [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) manifests (`rhoai-e2e-*`) for `rhoai-tenant` FBC applications                                                                                                                                                                                                                                                                                                                                                    |
 | [`tekton/its/its-rhoai-e2e-ephc-ocp420.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp420.yaml)                         | [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) `rhoai-e2e-ephc-ocp420` - EPHC **slice A** on **`rhoai-fbc-fragment-ocp-420`** (in-tree; enable after upstream merge)                                                                                                                                                                                                                                                                                                    |
-| [`tekton/its/its-rhoai-e2e-ephc-ocp421.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp421.yaml)                         | [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) `rhoai-e2e-ephc-ocp421` - EPHC **slice B** on **`rhoai-fbc-fragment-ocp-421`** (`dashboard_cypress` + `platform`; enable after upstream merge)                                                                                                                                                                                                                                                                                                    |
-| [`tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp422.yaml`](tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp422.yaml) | Auto [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) on **`rhoai-fbc-fragment-ocp-422`** for external **konflux-rhoai1** (S3 install-data; `optional: true`) |
+| [`tekton/its/its-e2e-ephc-ocp421-dcy-plat.yaml`](tekton/its/its-e2e-ephc-ocp421-dcy-plat.yaml)                         | [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) `e2e-ephc-ocp421-dcy-plat` - EPHC **slice B** on **`rhoai-fbc-fragment-ocp-421`** (`dashboard_cypress` + `platform`; enable after upstream merge)                                                                                                                                                                                                                                                                                                    |
+| [`tekton/its/its-e2e-konflux-rhoai1-ocp422.yaml`](tekton/its/its-e2e-konflux-rhoai1-ocp422.yaml) | Auto [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) on **`rhoai-fbc-fragment-ocp-422`** for external **konflux-rhoai1** (S3 install-data; `optional: true`) |
 | [`config/test-snapshot-rh-nightly.yaml`](config/test-snapshot-rh-nightly.yaml)                                   | Offline FBC pin for `--run-its` when Konflux lookup fails (rh-nightly ITS)                                                                                                                                                                                                                                                                                                                                                                                                          |
 | [`suite/its_registry.py`](suite/its_registry.py)                                                                 | Resolve in-tree ITS YAML by `metadata.name` for `--enable-its` / `--disable-its`                                                                                                                                                                                                                                                                                                                                                                                                    |
 | [`suite/tests_plan.py`](suite/tests_plan.py)                                                                     | Validates/normalizes `TESTS` strings using [`config/rhoai-e2e-tests-config.yaml`](config/rhoai-e2e-tests-config.yaml) (or `--tests-config`)                                                                                                                                                                                                                                                                                                                                         |
@@ -168,7 +168,7 @@ Konflux Tekton does **not** support nested `pipelineRef` pipelines. The runnable
 | `pipeline-run-summary-step`                               | Dispatch `steps.pipeline_run_summary_steps`                                                                                                                                                       |
 | `write-konflux-task-summary-finally`                      | Per-task `TASK_MESSAGE` via `tekton/scripts/run_write_task_message.sh` (standalone Tasks use `finally:`; inline pipeline `taskSpec`s use a last step - Konflux rejects nested `taskSpec.finally`) |
 
-ITS objects ([`its-rhoai-e2e-ephc-ocp420.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp420.yaml), [`its-rhoai-e2e-ephc-ocp421.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp421.yaml), [`its-rhoai-e2e-konflux-rhoai1-ocp422.yaml`](tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp422.yaml), [``](tekton/its/)) point at the monolithic pipeline via `resolverRef`, not at snippets.
+ITS objects ([`its-rhoai-e2e-ephc-ocp420.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp420.yaml), [`its-e2e-ephc-ocp421-dcy-plat.yaml`](tekton/its/its-e2e-ephc-ocp421-dcy-plat.yaml), [`its-e2e-konflux-rhoai1-ocp422.yaml`](tekton/its/its-e2e-konflux-rhoai1-ocp422.yaml), [``](tekton/its/)) point at the monolithic pipeline via `resolverRef`, not at snippets.
 
 ### Konflux UI (reading a PipelineRun)
 
@@ -179,7 +179,7 @@ The [Pipeline flow](#pipeline-flow) diagram is the expected DAG. In the UI:
 
 ## Tenant and application
 
-[`tekton/its/`](tekton/its/) [`its-rhoai-e2e-ephc-ocp420.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp420.yaml) targets **`rhoai-tenant`**, application **`rhoai-fbc-fragment-ocp-420`**, with EPHC **slice A** `COMPONENTS` (pairs with [`its-rhoai-e2e-ephc-ocp421.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp421.yaml) = slice B on ocp-421). Keep both in-tree until after upstream merge; debug with `--run-its rhoai-e2e-ephc-ocp420` or `ocp421` and `--konflux-app testops-playpen`. Re-applying `ocp420` on the FBC app cuts that app over from the previous full matrix to slice A.
+[`tekton/its/`](tekton/its/) [`its-rhoai-e2e-ephc-ocp420.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp420.yaml) targets **`rhoai-tenant`**, application **`rhoai-fbc-fragment-ocp-420`**, with EPHC **slice A** `COMPONENTS` (pairs with [`its-e2e-ephc-ocp421-dcy-plat.yaml`](tekton/its/its-e2e-ephc-ocp421-dcy-plat.yaml) = slice B on ocp-421). Keep both in-tree until after upstream merge; debug with `--run-its rhoai-e2e-ephc-ocp420` or `ocp421` and `--konflux-app testops-playpen`. Re-applying `ocp420` on the FBC app cuts that app over from the previous full matrix to slice A.
 
 **Why extra PipelineRuns appear:** A Konflux [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot) for an **Application** starts **one `PipelineRun` per `IntegrationTestScenario`** that matches that app. Old scenarios still **on the cluster** (for example `rhoai-test` → `testops-e2e-test`) are **not** removed when you update git; they keep firing until deleted. **`testops-playpen-enterprise-contract-*`** runs are **Enterprise Contract** policy checks - separate from rhoai-e2e; tune or disable them in Konflux application / release / EC settings for your tenant, not via `tekton/pipelines/rhoai-e2e-pipeline.yaml`.
 
@@ -214,13 +214,13 @@ This is the **official [HyperShift](../../doc/contributing-konflux-testing-rhoai
 
 ## Triggering
 
-- **Automatic (Konflux CI):** New [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot) → matching [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) → [PipelineRun](../../doc/contributing-konflux-testing-rhoai.md#pipelinerun). Example ITS: [`tekton/its/`](tekton/its/), [`its-rhoai-e2e-ephc-ocp421.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp421.yaml), [`its-rhoai-e2e-konflux-rhoai1-ocp422.yaml`](tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp422.yaml).
+- **Automatic (Konflux CI):** New [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot) → matching [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) → [PipelineRun](../../doc/contributing-konflux-testing-rhoai.md#pipelinerun). Example ITS: [`tekton/its/`](tekton/its/), [`its-e2e-ephc-ocp421-dcy-plat.yaml`](tekton/its/its-e2e-ephc-ocp421-dcy-plat.yaml), [`its-e2e-konflux-rhoai1-ocp422.yaml`](tekton/its/its-e2e-konflux-rhoai1-ocp422.yaml).
 - **Manual (CLI):** [`rhoai_e2e.py`](rhoai_e2e.py) applies or overrides the sandbox [ITS](../../doc/contributing-konflux-testing-rhoai.md#its), resolves an image when needed, creates a [PipelineRun](../../doc/contributing-konflux-testing-rhoai.md#pipelinerun) directly (or via Snapshot when using raw `oc create -f`), and streams logs.
 - **Manual (`oc` only):** After [logging in](../../doc/contributing-konflux-testing-rhoai.md#log-in-and-pick-a-namespace) to the tenant namespace, apply an [ITS](../../doc/contributing-konflux-testing-rhoai.md#its), then create a [Snapshot](../../doc/contributing-konflux-testing-rhoai.md#snapshot) (pinned file or latest image for your app label). Example for the [RHOAI](../../doc/contributing-konflux-testing-rhoai.md#rhoai) sandbox [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) and `rhoai-fbc-fragment-ocp-421`:
 
 ```bash
 # Prefer playpen debug until after upstream merge; applying ocp421 on FBC cuts over to slice A:
-# oc apply -n rhoai-tenant -f integration-tests/rhoai-e2e/tekton/its/its-rhoai-e2e-ephc-ocp421.yaml
+# oc apply -n rhoai-tenant -f integration-tests/rhoai-e2e/tekton/its/its-e2e-ephc-ocp421-dcy-plat.yaml
 oc create -n rhoai-tenant -f integration-tests/rhoai-e2e/config/test-snapshot.yaml
 # Or substitute the latest snapshot image (adjust -l / jsonpath for your application):
 LATEST=$(oc get snapshots -n rhoai-tenant \
@@ -241,11 +241,11 @@ Rh-nightly stays on **FBC ocp-422** (full matrix, external cluster). EPHC smoke 
 
 | ITS name                         | Konflux Application              | Cluster                  | `CLUSTER_SOURCE`                     | Auto-trigger context                   | Smoke       | ITS PipelineRun prefix          |
 | -------------------------------- | -------------------------------- | ------------------------ | ------------------------------------ | -------------------------------------- | ----------- | ------------------------------- |
-| `rhoai-e2e-konflux-rhoai1-ocp422` | **`rhoai-fbc-fragment-ocp-422`** | konflux-rhoai1 (external S3) | `rhoai-e2e-s3-konflux-rhoai1` | `component_rhoai-fbc-fragment-ocp-422` | full (23 components) | `e2e-its-konflux-rhoai1-smoke-*` |
+| `e2e-konflux-rhoai1-ocp422` | **`rhoai-fbc-fragment-ocp-422`** | konflux-rhoai1 (external S3) | `rhoai-e2e-s3-konflux-rhoai1` | `component_rhoai-fbc-fragment-ocp-422` | full (23 components) | `e2e-its-konflux-rhoai1-smoke-*` |
 | `rhoai-e2e-ephc-ocp420`          | **`rhoai-fbc-fragment-ocp-420`** | EPHC (ephemeral)         | `EPHC`                               | `component_rhoai-fbc-fragment-ocp-420` | **slice A** | `e2e-its-ephc-smoke-*`          |
-| `rhoai-e2e-ephc-ocp421`          | **`rhoai-fbc-fragment-ocp-421`** | EPHC (ephemeral)         | `EPHC`                               | `component_rhoai-fbc-fragment-ocp-421` | **slice B** | `e2e-its-ephc-smoke-*`          |
+| `e2e-ephc-ocp421-dcy-plat`          | **`rhoai-fbc-fragment-ocp-421`** | EPHC (ephemeral)         | `EPHC`                               | `component_rhoai-fbc-fragment-ocp-421` | **slice B** | `e2e-its-ephc-smoke-*`          |
 
-Use [`rhoai_e2e.py`](rhoai_e2e.py) to apply or remove in-tree [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) manifests by **`metadata.name`**, **rhoai-e2e-relative path** (preferred, e.g. `tekton/its/its-rhoai-e2e-konflux-rhoai1-ocp422.yaml`), **repo-relative path** (e.g. `integration-tests/rhoai-e2e/tekton/its/…`), or **absolute path** under the repository root. **`--enable-its`** applies the ITS only (launch-and-forget); only Konflux rollout flags are allowed (`--konflux-repo`, `--konflux-branch`, `--konflux-app`). **`--run-its`** creates a one-shot direct CLI PipelineRun (`e2e-cli-*`, Konflux **Incoming**) without applying ITS; cluster and test overrides (`--components`, `--tests`, `--external-kubeconfig`, etc.) are allowed.
+Use [`rhoai_e2e.py`](rhoai_e2e.py) to apply or remove in-tree [ITS](../../doc/contributing-konflux-testing-rhoai.md#its) manifests by **`metadata.name`**, **rhoai-e2e-relative path** (preferred, e.g. `tekton/its/its-e2e-konflux-rhoai1-ocp422.yaml`), **repo-relative path** (e.g. `integration-tests/rhoai-e2e/tekton/its/…`), or **absolute path** under the repository root. **`--enable-its`** applies the ITS only (launch-and-forget); only Konflux rollout flags are allowed (`--konflux-repo`, `--konflux-branch`, `--konflux-app`). **`--run-its`** creates a one-shot direct CLI PipelineRun (`e2e-cli-*`, Konflux **Incoming**) without applying ITS; cluster and test overrides (`--components`, `--tests`, `--external-kubeconfig`, etc.) are allowed.
 
 **Debug on playpen:** pass **`--konflux-app testops-playpen`** on `--enable-its` or `--run-its` to patch `spec.application` at apply time (does not auto-trigger on upstream FBC builds — playpen Snapshots only). Pass **`--external-kubeconfig PATH`** on **`--run-its`** to run on a pooled cluster instead of `rhoai-e2e-kubeconfig-rh-nightly-pm`. Omit both flags to use manifest defaults (`rhoai-fbc-fragment-ocp-422` + rh-nightly-pm secret for rh-nightly).
 
@@ -253,7 +253,7 @@ Use [`rhoai_e2e.py`](rhoai_e2e.py) to apply or remove in-tree [ITS](../../doc/co
 
 ```bash
 python3 integration-tests/rhoai-e2e/rhoai_e2e.py \
-  --enable-its rhoai-e2e-konflux-rhoai1-ocp422 \
+  --enable-its e2e-konflux-rhoai1-ocp422 \
   --konflux-repo https://github.com/<you>/odh-konflux-central.git \
   --konflux-branch <branch> \
   --konflux-namespace rhoai-tenant
@@ -268,7 +268,7 @@ python3 integration-tests/rhoai-e2e/rhoai_e2e.py \
   --konflux-branch main \
   --konflux-namespace rhoai-tenant
 python3 integration-tests/rhoai-e2e/rhoai_e2e.py \
-  --enable-its rhoai-e2e-ephc-ocp421 \
+  --enable-its e2e-ephc-ocp421-dcy-plat \
   --konflux-repo https://github.com/<you>/odh-konflux-central.git \
   --konflux-branch main \
   --konflux-namespace rhoai-tenant
@@ -282,15 +282,15 @@ Tenant secret **`rhoai-e2e-kubeconfig-rh-nightly-pm`** must exist before rh-nigh
 
 | Goal                                                     | Command                                                                                 |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Enable rh-nightly ITS (FBC app, auto on upstream builds) | `--enable-its rhoai-e2e-konflux-rhoai1-ocp422` (manifest app)                            |
-| Debug rh-nightly ITS on playpen (manual Snapshots only)  | `--enable-its rhoai-e2e-konflux-rhoai1-ocp422 --konflux-app testops-playpen`             |
+| Enable rh-nightly ITS (FBC app, auto on upstream builds) | `--enable-its e2e-konflux-rhoai1-ocp422` (manifest app)                            |
+| Debug rh-nightly ITS on playpen (manual Snapshots only)  | `--enable-its e2e-konflux-rhoai1-ocp422 --konflux-app testops-playpen`             |
 | Debug rh-nightly ITS cluster on playpen                  | add `--external-kubeconfig ~/.kube/<cluster>` to **`--run-its`**                        |
 | Enable EPHC slice A (420 FBC) after upstream merge       | `--enable-its rhoai-e2e-ephc-ocp420`                                                    |
-| Enable EPHC slice B (421 FBC) after upstream merge       | `--enable-its rhoai-e2e-ephc-ocp421`                                                    |
+| Enable EPHC slice B (421 FBC) after upstream merge       | `--enable-its e2e-ephc-ocp421-dcy-plat`                                                    |
 | Debug EPHC ITS on playpen (manual Snapshots only)        | `--enable-its rhoai-e2e-ephc-ocp420 --konflux-app testops-playpen` (slice B: `ocp421`) |
 | Run EPHC slice now on playpen                            | `--run-its rhoai-e2e-ephc-ocp420 --konflux-app testops-playpen` (slice B: `ocp421`)     |
-| Run rh-nightly now (direct CLI PR, streams logs)         | `--run-its rhoai-e2e-konflux-rhoai1-ocp422`                                              |
-| Scoped smoke debug                                       | `--run-its rhoai-e2e-konflux-rhoai1-ocp422 --tests smoke --components dashboard_cypress` |
+| Run rh-nightly now (direct CLI PR, streams logs)         | `--run-its e2e-konflux-rhoai1-ocp422`                                              |
+| Scoped smoke debug                                       | `--run-its e2e-konflux-rhoai1-ocp422 --tests smoke --components dashboard_cypress` |
 | Disable a profile                                        | `--disable-its NAME`                                                                    |
 
 **How to tell how a PipelineRun was started** (Konflux Activity **Trigger** is always **Push** for Snapshot-driven runs — use name + annotations instead):
@@ -330,7 +330,7 @@ Tenant secret **`rhoai-e2e-kubeconfig-rh-nightly-pm`** must exist before rh-nigh
 ```bash
 # One-shot verify via direct CLI PipelineRun (fork branch until merged to main)
 python3 integration-tests/rhoai-e2e/rhoai_e2e.py \
-  --run-its rhoai-e2e-konflux-rhoai1-ocp422 \
+  --run-its e2e-konflux-rhoai1-ocp422 \
   --konflux-namespace rhoai-tenant --konflux-app testops-playpen \
   --konflux-repo https://github.com/<you>/odh-konflux-central.git \
   --konflux-branch olminstall_smoke
@@ -380,7 +380,7 @@ python3 integration-tests/rhoai-e2e/rhoai_e2e.py -w --konflux-namespace rhoai-te
 | `COMPONENT_TEST_TIMEOUT`          | _(empty)_                                                                                                                                                                                                                | Per-component smoke timeout (for example `10m`, `90s`, `1h30m`). Set from CLI with `rhoai_e2e.py --test-timeout`. On timeout, that component is terminated and marked failed while preserving/importing xUnit output.                                                                                                                                                                                                                                                                                                            |
 | `FAIL_FAST_DISABLED_COMPONENT`    | `true`                                                                                                                                                                                                                   | When `true`, skip pytest for smoke components **Removed** in the cluster DSC and emit one failing JUnit test per such component (other components still run). Override via ITS param `FAIL_FAST_DISABLED_COMPONENT: "false"` to run full pytest instead.                                                                                                                                                                                                                                                                         |
 
-Sandbox development may override `SCRIPTS_*` / `OLMINSTALL_*` (and the ITS `resolverRef` URL/revision) so Konflux runs a pipeline revision that is not yet on `main`; see [`its-rhoai-e2e-ephc-ocp421.yaml`](tekton/its/its-rhoai-e2e-ephc-ocp421.yaml).
+Sandbox development may override `SCRIPTS_*` / `OLMINSTALL_*` (and the ITS `resolverRef` URL/revision) so Konflux runs a pipeline revision that is not yet on `main`; see [`its-e2e-ephc-ocp421-dcy-plat.yaml`](tekton/its/its-e2e-ephc-ocp421-dcy-plat.yaml).
 
 ## Local CLI: `rhoai_e2e.py`
 
@@ -418,13 +418,13 @@ python3 integration-tests/rhoai-e2e/rhoai_e2e.py -l 20
 
 # Apply, one-shot verify, or remove an in-tree IntegrationTestScenario
 python3 integration-tests/rhoai-e2e/rhoai_e2e.py \
-  --enable-its rhoai-e2e-konflux-rhoai1-ocp422 \
+  --enable-its e2e-konflux-rhoai1-ocp422 \
   --konflux-namespace rhoai-tenant --konflux-app testops-playpen
 python3 integration-tests/rhoai-e2e/rhoai_e2e.py \
-  --run-its rhoai-e2e-konflux-rhoai1-ocp422 \
+  --run-its e2e-konflux-rhoai1-ocp422 \
   --konflux-namespace rhoai-tenant --konflux-app testops-playpen
 python3 integration-tests/rhoai-e2e/rhoai_e2e.py \
-  --disable-its rhoai-e2e-konflux-rhoai1-ocp422 \
+  --disable-its e2e-konflux-rhoai1-ocp422 \
   --konflux-namespace rhoai-tenant --konflux-app testops-playpen
 
 # Show usage/help
@@ -463,7 +463,7 @@ python3 integration-tests/rhoai-e2e/rhoai_e2e.py --product rhoai --rhoai-channel
 
 # Ephemeral OCP 5.0 EC (keeps ITS RHOAI FBC; does not remap to ocp-500)
 python3 integration-tests/rhoai-e2e/rhoai_e2e.py \
-  --run-its rhoai-e2e-ephc-ocp421 --konflux-app testops-playpen \
+  --run-its e2e-ephc-ocp421-dcy-plat --konflux-app testops-playpen \
   --ocp-version 5.0 --ocp-channel candidate
 
 # OLM install + workbenches component smoke only (skip BVT and tier1)

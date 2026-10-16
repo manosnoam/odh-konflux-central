@@ -1,12 +1,12 @@
 ---
 # EPHC smoke slice 420-core: model path + MaaS (~2h guest budget after install).
-# Debug: --run-its rhoai-e2e-ephc-ocp420-core --konflux-app testops-playpen
+# Debug: --run-its e2e-ephc-ocp420-wb-mr-msrv-mrt-maas --konflux-app testops-playpen
 apiVersion: appstudio.redhat.com/v1beta2
 kind: IntegrationTestScenario
 metadata:
   labels:
     test.appstudio.openshift.io/optional: "true"
-  name: rhoai-e2e-ephc-ocp420-core
+  name: e2e-ephc-ocp420-wb-mr-msrv-mrt-maas
   namespace: rhoai-tenant
 spec:
   application: rhoai-fbc-fragment-ocp-420

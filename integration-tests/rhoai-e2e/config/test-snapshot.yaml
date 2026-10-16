@@ -13,7 +13,7 @@
 #
 # Prerequisites:
 #   1. The ITS CR must already be applied:
-#      oc apply -n rhoai-tenant -f integration-tests/rhoai-e2e/tekton/its/its-rhoai-e2e-ephc-ocp421.yaml
+#      oc apply -n rhoai-tenant -f integration-tests/rhoai-e2e/tekton/its/its-e2e-ephc-ocp421-dcy-plat.yaml
 #
 # Usage:
 #   oc create -n rhoai-tenant -f integration-tests/rhoai-e2e/config/test-snapshot.yaml

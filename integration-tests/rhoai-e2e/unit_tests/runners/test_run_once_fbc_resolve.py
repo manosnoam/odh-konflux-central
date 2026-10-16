@@ -13,9 +13,9 @@ from runners.cli.runner import RhoaiE2ERunner
 
 _ROOT = Path(__file__).resolve().parents[2]
 _RH_NIGHTLY_SNAP = _ROOT / "config" / "test-snapshot-rh-nightly.yaml"
-_RH_NIGHTLY_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-konflux-rhoai1-ocp422.yaml"
-_EPHC_SLICE_A_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-ephc-ocp420-core.yaml"
-_EPHC_SLICE_B_ITS = _ROOT / "tekton" / "its" / "its-rhoai-e2e-ephc-ocp421.yaml"
+_RH_NIGHTLY_ITS = _ROOT / "tekton" / "its" / "its-e2e-konflux-rhoai1-ocp422.yaml"
+_EPHC_SLICE_A_ITS = _ROOT / "tekton" / "its" / "its-e2e-ephc-ocp420-wb-mr-msrv-mrt-maas.yaml"
+_EPHC_SLICE_B_ITS = _ROOT / "tekton" / "its" / "its-e2e-ephc-ocp421-dcy-plat.yaml"
 _PINNED_420 = (
     "quay.io/rhoai/rhoai-fbc-fragment@sha256:"
     "d9f54f26a526be21e0806a5c36b7d929b5861cffa68bcca57825fb878ecb40a2"
@@ -31,7 +31,7 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
         parser = make_parser()
         args = parse_cli_args(
             parser,
-            ["--run-its", "rhoai-e2e-konflux-rhoai1-ocp422"],
+            ["--run-its", "e2e-konflux-rhoai1-ocp422"],
         )
         runner = RhoaiE2ERunner(args)
         runner.snapshot_file = _RH_NIGHTLY_SNAP
@@ -48,7 +48,7 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
 
     def test_run_its_ephc_slice_a_sets_minor_from_manifest(self) -> None:
         parser = make_parser()
-        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp420-core"])
+        args = parse_cli_args(parser, ["--run-its", "e2e-ephc-ocp420-wb-mr-msrv-mrt-maas"])
         runner = RhoaiE2ERunner(args)
         runner._apply_run_its_manifest_defaults(_EPHC_SLICE_A_ITS)
         self.assertEqual(runner.args.ocp_version, "4.20")
@@ -56,7 +56,7 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
 
     def test_run_its_ephc_slice_b_sets_minor_from_manifest(self) -> None:
         parser = make_parser()
-        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp421"])
+        args = parse_cli_args(parser, ["--run-its", "e2e-ephc-ocp421-dcy-plat"])
         runner = RhoaiE2ERunner(args)
         runner._apply_run_its_manifest_defaults(_EPHC_SLICE_B_ITS)
         self.assertEqual(runner.args.ocp_version, "4.21")
@@ -83,7 +83,7 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
             parser,
             [
                 "--run-its",
-                "rhoai-e2e-konflux-rhoai1-ocp422",
+                "e2e-konflux-rhoai1-ocp422",
                 "--install-data-cluster",
                 "konflux-rhoai1",
                 "--cleanup",
@@ -104,7 +104,7 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
             parser,
             [
                 "--run-its",
-                "rhoai-e2e-ephc-ocp420-core",
+                "e2e-ephc-ocp420-wb-mr-msrv-mrt-maas",
                 "--components",
                 "maas_billing,ai_pipelines",
             ],
@@ -117,7 +117,7 @@ class RunItsManifestDefaultsTest(unittest.TestCase):
 class RunItsComponentsParamTest(unittest.TestCase):
     def test_run_its_preserves_slice_b_components_after_cli_override_clear(self) -> None:
         parser = make_parser()
-        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp421"])
+        args = parse_cli_args(parser, ["--run-its", "e2e-ephc-ocp421-dcy-plat"])
         runner = RhoaiE2ERunner(args)
         runner.its_file = _EPHC_SLICE_B_ITS
         runner._stage_its_manifest_tmp(_EPHC_SLICE_B_ITS, push_context=False)
@@ -128,7 +128,7 @@ class RunItsComponentsParamTest(unittest.TestCase):
 
     def test_run_its_preserves_slice_a_components_after_cli_override_clear(self) -> None:
         parser = make_parser()
-        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp420-core"])
+        args = parse_cli_args(parser, ["--run-its", "e2e-ephc-ocp420-wb-mr-msrv-mrt-maas"])
         runner = RhoaiE2ERunner(args)
         runner.its_file = _EPHC_SLICE_A_ITS
         runner._stage_its_manifest_tmp(_EPHC_SLICE_A_ITS, push_context=False)
@@ -144,7 +144,7 @@ class RunItsComponentsParamTest(unittest.TestCase):
 
     def test_run_its_sets_args_components_from_manifest(self) -> None:
         parser = make_parser()
-        args = parse_cli_args(parser, ["--run-its", "rhoai-e2e-ephc-ocp421"])
+        args = parse_cli_args(parser, ["--run-its", "e2e-ephc-ocp421-dcy-plat"])
         runner = RhoaiE2ERunner(args)
         runner.its_file = _EPHC_SLICE_B_ITS
         runner._apply_run_its_manifest_defaults(_EPHC_SLICE_B_ITS)
@@ -152,7 +152,7 @@ class RunItsComponentsParamTest(unittest.TestCase):
 
 
 class ResolveRhoaiFbcForItsApplicationTest(unittest.TestCase):
-    def _runner(self, *, run_its: str = "rhoai-e2e-ephc-ocp420-core") -> RhoaiE2ERunner:
+    def _runner(self, *, run_its: str = "e2e-ephc-ocp420-wb-mr-msrv-mrt-maas") -> RhoaiE2ERunner:
         parser = make_parser()
         args = parse_cli_args(parser, ["--run-its", run_its])
         runner = RhoaiE2ERunner(args)
@@ -195,7 +195,7 @@ class ResolveRhoaiFbcForItsApplicationTest(unittest.TestCase):
             parser,
             [
                 "--run-its",
-                "rhoai-e2e-ephc-ocp421",
+                "e2e-ephc-ocp421-dcy-plat",
                 "--konflux-app",
                 "testops-playpen",
             ],
@@ -333,7 +333,7 @@ class ResolveRhoaiFbcVersionStreamTest(unittest.TestCase):
             parser,
             [
                 "--run-its",
-                "rhoai-e2e-konflux-rhoai1-ocp422",
+                "e2e-konflux-rhoai1-ocp422",
                 "--product",
                 "rhoai",
                 "--rhoai-version",
@@ -548,7 +548,7 @@ class RunItsPostTriggerWatchTest(unittest.TestCase):
         parser = make_parser()
         args = parse_cli_args(
             parser,
-            ["--run-its", "rhoai-e2e-konflux-rhoai1-ocp422"],
+            ["--run-its", "e2e-konflux-rhoai1-ocp422"],
         )
         runner = RhoaiE2ERunner(args)
         with patch.object(runner, "_stage_its_manifest_tmp"), patch.object(

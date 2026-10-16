@@ -7,6 +7,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from suite.constants import (
+    E2E_EPHC_OCP420_CORE,
+    E2E_EPHC_OCP420_MLOPS,
+    E2E_EPHC_OCP420_TAIL,
+    E2E_EPHC_OCP421,
+    E2E_KONFLUX_RHOAI1_OCP422,
+)
 from suite.errors import AppError
 
 _UPSTREAM_MAIN_ITS_GIT_REF = "upstream/main"
@@ -16,16 +23,16 @@ _K8S_NAME_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 
 # metadata.name -> config snapshot YAML for ``--run-its NAME`` offline FBC fallback
 _ITS_RUN_ITS_SNAPSHOT_BY_NAME: dict[str, str] = {
-    "rhoai-e2e-konflux-rhoai1-ocp422": "config/test-snapshot-rh-nightly.yaml",
+    E2E_KONFLUX_RHOAI1_OCP422: "config/test-snapshot-rh-nightly.yaml",
 }
 
 # metadata.name -> Konflux Application when ``--konflux-app`` differs from DEFAULT_APP
 _ITS_DEFAULT_KONFLUX_APP_BY_NAME: dict[str, str] = {
-    "rhoai-e2e-konflux-rhoai1-ocp422": "rhoai-fbc-fragment-ocp-422",
-    "rhoai-e2e-ephc-ocp420-core": "rhoai-fbc-fragment-ocp-420",
-    "rhoai-e2e-ephc-ocp420-mlops": "rhoai-fbc-fragment-ocp-420",
-    "rhoai-e2e-ephc-ocp420-tail": "rhoai-fbc-fragment-ocp-420",
-    "rhoai-e2e-ephc-ocp421": "rhoai-fbc-fragment-ocp-421",
+    E2E_KONFLUX_RHOAI1_OCP422: "rhoai-fbc-fragment-ocp-422",
+    E2E_EPHC_OCP420_CORE: "rhoai-fbc-fragment-ocp-420",
+    E2E_EPHC_OCP420_MLOPS: "rhoai-fbc-fragment-ocp-420",
+    E2E_EPHC_OCP420_TAIL: "rhoai-fbc-fragment-ocp-420",
+    E2E_EPHC_OCP421: "rhoai-fbc-fragment-ocp-421",
 }
 
 

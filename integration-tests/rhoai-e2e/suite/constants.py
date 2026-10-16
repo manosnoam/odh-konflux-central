@@ -6,16 +6,25 @@ DEFAULT_NAMESPACE = "rhoai-tenant"
 DEFAULT_APP = "testops-playpen"
 # provision-ephemeral-cluster creates TestPlatformCluster (konflux-integration-runner SA).
 KONFLUX_INTEGRATION_SERVICE_ACCOUNT = "konflux-integration-runner"
-# Canonical EPHC ITS (420 core leg; see RHOAI_E2E_EPHC_PLAYPEN_ITS_NAMES for full playpen batch).
-RHOAI_E2E_EPHC_ITS_NAME = "rhoai-e2e-ephc-ocp420-core"
-RHOAI_E2E_EPHC_PLAYPEN_ITS_NAMES: tuple[str, ...] = (
-    "rhoai-e2e-ephc-ocp420-core",
-    "rhoai-e2e-ephc-ocp420-mlops",
-    "rhoai-e2e-ephc-ocp420-tail",
-    "rhoai-e2e-ephc-ocp421",
+
+# In-tree IntegrationTestScenario metadata.name values (must match tekton/its/*.yaml).
+E2E_KONFLUX_RHOAI1_OCP422 = "e2e-konflux-rhoai1-ocp422"
+E2E_EPHC_OCP420_CORE = "e2e-ephc-ocp420-wb-mr-msrv-mrt-maas"
+E2E_EPHC_OCP420_MLOPS = "e2e-ephc-ocp420-aip-ray-mlf-ogx-ais-tr-sprk-cf"
+E2E_EPHC_OCP420_TAIL = "e2e-ephc-ocp420-llam-dsw-wbi"
+E2E_EPHC_OCP421 = "e2e-ephc-ocp421-dcy-plat"
+E2E_EPHC_PLAYPEN_ITS_NAMES: tuple[str, ...] = (
+    E2E_EPHC_OCP420_CORE,
+    E2E_EPHC_OCP420_MLOPS,
+    E2E_EPHC_OCP420_TAIL,
+    E2E_EPHC_OCP421,
 )
-# External FBC ocp-422 ITS (its-rhoai-e2e-konflux-rhoai1-ocp422.yaml; konflux-rhoai1 S3 install-data).
-RHOAI_E2E_KONFLUX_RHOAI1_ITS_NAME = "rhoai-e2e-konflux-rhoai1-ocp422"
+
+# Canonical EPHC ITS (420 core leg; see RHOAI_E2E_EPHC_PLAYPEN_ITS_NAMES for full playpen batch).
+RHOAI_E2E_EPHC_ITS_NAME = E2E_EPHC_OCP420_CORE
+RHOAI_E2E_EPHC_PLAYPEN_ITS_NAMES = E2E_EPHC_PLAYPEN_ITS_NAMES
+# External FBC ocp-422 ITS (its-e2e-konflux-rhoai1-ocp422.yaml; konflux-rhoai1 S3 install-data).
+RHOAI_E2E_KONFLUX_RHOAI1_ITS_NAME = E2E_KONFLUX_RHOAI1_OCP422
 # Obsolete IntegrationTestScenario names on testops-playpen; Konflux starts one PipelineRun per ITS
 # when a Snapshot is created for the same application. Used by ``runners/report/prune_stale_testops_its.py``
 # — not by default ``rhoai_e2e.py`` direct trigger.
@@ -96,7 +105,7 @@ def default_tests_config_path() -> Path:
     return Path(__file__).resolve().parent.parent / "config" / "rhoai-e2e-tests-config.yaml"
 
 
-# Value of ITS param TEST_GATES in committed its-rhoai-e2e-*.yaml (patch when CLI selection differs).
+# Value of ITS param TEST_GATES in committed its-e2e-*.yaml (patch when CLI selection differs).
 ITS_TEST_GATES_PARAM_DEFAULT = "bvt,smoke"
 # Empty ITS COMPONENTS = run all catalog ids (see rhoai-e2e-components-smoke.yaml).
 ITS_COMPONENTS_PARAM_DEFAULT = ""

@@ -50,7 +50,7 @@ class PipelineRunContextTest(unittest.TestCase):
             test_gates="bvt,smoke",
             trigger_command=(
                 "python3 integration-tests/rhoai-e2e/rhoai_e2e.py "
-                f"--enable-its rhoai-e2e-konflux-rhoai1-ocp422 --konflux-namespace {DEFAULT_NAMESPACE}"
+                f"--enable-its e2e-konflux-rhoai1-ocp422 --konflux-namespace {DEFAULT_NAMESPACE}"
             ),
         )
         text = "\n".join(lines)
@@ -68,7 +68,7 @@ class PipelineRunContextTest(unittest.TestCase):
             cluster_source="rhoai-e2e-s3-konflux-rhoai1",
             product="rhoai",
             test_gates="bvt,smoke",
-            trigger_command="python3 integration-tests/rhoai-e2e/rhoai_e2e.py --run-its rhoai-e2e-konflux-rhoai1-ocp422",
+            trigger_command="python3 integration-tests/rhoai-e2e/rhoai_e2e.py --run-its e2e-konflux-rhoai1-ocp422",
         )
         self.assertIn("CLI direct", msg)
         self.assertIn("Incoming", msg)
@@ -83,7 +83,7 @@ class PipelineRunContextTest(unittest.TestCase):
             cluster_source="rhoai-e2e-s3-konflux-rhoai1",
             product="rhoai",
             test_gates="bvt,smoke",
-            trigger_command="python3 integration-tests/rhoai-e2e/rhoai_e2e.py --run-its rhoai-e2e-konflux-rhoai1-ocp422",
+            trigger_command="python3 integration-tests/rhoai-e2e/rhoai_e2e.py --run-its e2e-konflux-rhoai1-ocp422",
         )
         self.assertEqual(tuple(results.keys()), TRIGGER_CONTEXT_RESULT_NAMES)
         self.assertIn("CLI direct", results["TRIGGER"])
@@ -111,7 +111,7 @@ class PipelineRunContextTest(unittest.TestCase):
                 "name": "e2e-its-konflux-rhoai1-smoke-2gh84",
                 "annotations": {
                     "rhoai-e2e.trigger-type": TRIGGER_TYPE_RH_NIGHTLY_AUTO,
-                    "rhoai-e2e.trigger-command": "python3 integration-tests/rhoai-e2e/rhoai_e2e.py --enable-its rhoai-e2e-konflux-rhoai1-ocp422",
+                    "rhoai-e2e.trigger-command": "python3 integration-tests/rhoai-e2e/rhoai_e2e.py --enable-its e2e-konflux-rhoai1-ocp422",
                     "rhoai-e2e.fbcf-image": _FBC,
                 },
                 "labels": {

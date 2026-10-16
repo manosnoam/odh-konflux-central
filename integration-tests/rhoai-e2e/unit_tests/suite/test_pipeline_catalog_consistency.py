@@ -101,7 +101,7 @@ _TRIGGER_CONTEXT_SAMPLE = {
     "FBC": "rhoai-fbc-fragment-ocp-422 @ sha256:d9f54f26",
     "CLUSTER": "konflux-rhoai1",
     "RUN": "product=rhoai, tests=bvt,smoke",
-    "TRIGGER_CMD": "python3 integration-tests/rhoai-e2e/rhoai_e2e.py --run-its rhoai-e2e-konflux-rhoai1-ocp422",
+    "TRIGGER_CMD": "python3 integration-tests/rhoai-e2e/rhoai_e2e.py --run-its e2e-konflux-rhoai1-ocp422",
 }
 
 

@@ -1,25 +1,23 @@
 ---
-# EPHC smoke slice B: auto on rhoai-fbc-fragment-ocp-421 (pairs with ocp420 = A).
-# Slice B COMPONENTS: dashboard_cypress + platform only.
-# Debug: --run-its rhoai-e2e-ephc-ocp421 --konflux-app testops-playpen
-# Enable on FBC only after upstream merge.
+# EPHC smoke slice 420-tail: slow / heavy tail only (llama_stack, distributed_workloads, workbench_images).
+# Debug: --run-its e2e-ephc-ocp420-llam-dsw-wbi --konflux-app testops-playpen
 apiVersion: appstudio.redhat.com/v1beta2
 kind: IntegrationTestScenario
 metadata:
   labels:
     test.appstudio.openshift.io/optional: "true"
-  name: rhoai-e2e-ephc-ocp421
+  name: e2e-ephc-ocp420-llam-dsw-wbi
   namespace: rhoai-tenant
 spec:
-  application: rhoai-fbc-fragment-ocp-421
+  application: rhoai-fbc-fragment-ocp-420
   contexts:
-    - description: RHOAI EPHC smoke slice B when rhoai-fbc-fragment-ocp-421 builds
-      name: component_rhoai-fbc-fragment-ocp-421
+    - description: EPHC 420 tail smoke when rhoai-fbc-fragment-ocp-420 builds
+      name: component_rhoai-fbc-fragment-ocp-420
   params:
     - name: CLUSTER_SOURCE
       value: "EPHC"
     - name: OCP_VERSION
-      value: "4.21"
+      value: "4.20"
     - name: PRODUCT
       value: "rhoai"
     - name: RHOAI_VERSION
@@ -29,7 +27,7 @@ spec:
     - name: OPERATOR_NAME
       value: "rhods-operator"
     - name: RHOAI_FBC_NAME
-      value: "rhoai-fbc-fragment-ocp-421"
+      value: "rhoai-fbc-fragment-ocp-420"
     - name: RHOAI_FBC_IMAGE
       value: "unspecified (default)"
     - name: MIN_RHOAI_VERSION
@@ -37,7 +35,7 @@ spec:
     - name: TEST_GATES
       value: "bvt,smoke"
     - name: COMPONENTS
-      value: "dashboard_cypress,platform"
+      value: "llama_stack,distributed_workloads,workbench_images"
     - name: QUAY_PULL_SECRET_NAME
       value: "rhoai-external-quay-secret"
     - name: SCRIPTS_REPO_URL

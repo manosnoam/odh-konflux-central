@@ -62,7 +62,7 @@ Every path ends in a Tekton [PipelineRun](#pipelinerun); only the **starter** di
 | Trigger | Who starts the run | Typical in this repo |
 | ------- | ------------------ | -------------------- |
 | **Manual** | You (`oc create` / `oc apply`, or [`rhoai_e2e.py`](../integration-tests/rhoai-e2e/rhoai_e2e.py)) | `test-pipelinerun.yaml`, dev iteration |
-| **[ITS](#its)** | [Integration Service](#integration-service) after a build [Snapshot](#snapshot) | `its-rhoai-e2e-*.yaml` |
+| **[ITS](#its)** | [Integration Service](#integration-service) after a build [Snapshot](#snapshot) | `its-e2e-*.yaml` |
 | **[PAC](#pac)** | Pipelines-as-Code on git push / PR / comment | [pipelineruns/](../pipelineruns/), [trainer PAC template](../integration-tests/trainer/pr-testing-pipeline.yaml) |
 
 [rhoai-e2e](../integration-tests/rhoai-e2e/README.md) uses **[ITS](#its) + [Snapshot](#snapshot)** today, not [PAC](#pac).

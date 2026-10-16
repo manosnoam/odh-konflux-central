@@ -322,14 +322,16 @@ def its_profile_segment_for_name(its_profile: str) -> str:
 
 
 _ITS_PIPELINERUN_TEMPLATE_STEM = f"{_RHOAI_E2E_RESOURCE_PREFIX}-pipelinerun"
+_INTEGRATION_TEST_SCENARIO_NAME_PREFIXES = ("rhoai-e2e-", "e2e-")
 
 
 def its_profile_from_scenario_name(scenario_name: str) -> str:
-    """Use ``IntegrationTestScenario.metadata.name`` (minus ``rhoai-e2e-``) as the ITS profile."""
+    """Use ``IntegrationTestScenario.metadata.name`` (minus ``e2e-`` / legacy ``rhoai-e2e-``) as the ITS profile."""
     name = (scenario_name or "").strip().lower()
-    scenario_prefix = f"{_RHOAI_E2E_RESOURCE_PREFIX}-"
-    if name.startswith(scenario_prefix):
-        name = name[len(scenario_prefix) :]
+    for prefix in _INTEGRATION_TEST_SCENARIO_NAME_PREFIXES:
+        if name.startswith(prefix):
+            name = name[len(prefix) :]
+            break
     return its_profile_segment_for_name(name)
 
 

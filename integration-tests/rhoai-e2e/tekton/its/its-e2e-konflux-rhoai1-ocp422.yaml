@@ -7,7 +7,7 @@ kind: IntegrationTestScenario
 metadata:
   labels:
     test.appstudio.openshift.io/optional: "true"
-  name: rhoai-e2e-konflux-rhoai1-ocp422
+  name: e2e-konflux-rhoai1-ocp422
   namespace: rhoai-tenant
 spec:
   application: rhoai-fbc-fragment-ocp-422

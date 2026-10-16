@@ -54,7 +54,7 @@ def test_enable_its_rejects_external_kubeconfig() -> None:
             parser,
             [
                 "--enable-its",
-                "rhoai-e2e-konflux-rhoai1-ocp422",
+                "e2e-konflux-rhoai1-ocp422",
                 "--external-kubeconfig",
                 "/etc/hosts",
             ],
