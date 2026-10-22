@@ -124,6 +124,7 @@ class MlflowEhcTrackingTest(unittest.TestCase):
             ):
                 cmd = "bash mlflow-tests/images/test-run.sh -m smoke"
                 out = prepend_mlflow_ephc_tracking(cmd)
+                self.assertIn("ARTIFACTS_SERVER_GATEWAY=false", out)
                 self.assertIn("FORCE_PORT_FORWARD=true", out)
                 env = mlflow_orchestrate_env_defaults(None)
                 self.assertEqual(env, {"ARTIFACTS_SERVER_GATEWAY": "false"})

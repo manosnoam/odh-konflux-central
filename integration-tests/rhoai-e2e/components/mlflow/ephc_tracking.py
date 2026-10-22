@@ -40,7 +40,7 @@ def mlflow_crd_supports_artifacts_server() -> bool:
     except json.JSONDecodeError:
         return False
     for ver in data.get("spec", {}).get("versions", []) or []:
-        if not isinstance(ver, dict):
+        if not isinstance(ver, dict) or not ver.get("storage"):
             continue
         schema = ver.get("schema", {}).get("openAPIV3Schema", {})
         if not isinstance(schema, dict):
@@ -87,20 +87,32 @@ def _use_force_port_forward() -> bool:
     return _mlflow_tracking_patch_enabled()
 
 
-def mlflow_ephc_incluster_tracking_shell() -> str:
-    """Tell test-run.sh to port-forward instead of using the MLflow CR route."""
+def _mlflow_run_shell_prefix() -> str:
+    """Runtime exports before test-run.sh (after vault shift-left may set gateway=true)."""
+    if mlflow_crd_supports_artifacts_server() and _artifacts_server_gateway_enabled():
+        return ""
+    if not mlflow_crd_supports_artifacts_server():
+        if _mlflow_tracking_patch_enabled():
+            return "export ARTIFACTS_SERVER_GATEWAY=false; export FORCE_PORT_FORWARD=true"
+        return "export ARTIFACTS_SERVER_GATEWAY=false"
     if not _use_force_port_forward():
         return ""
     return _SHELL_PREFIX
+
+
+def mlflow_ephc_incluster_tracking_shell() -> str:
+    """Tell test-run.sh to port-forward instead of using the MLflow CR route."""
+    return _mlflow_run_shell_prefix()
 
 
 def prepend_mlflow_ephc_tracking(run_command: str) -> str:
     cmd = (run_command or "").strip()
     if not cmd:
         return cmd
-    if not _use_force_port_forward():
+    prefix = _mlflow_run_shell_prefix()
+    if not prefix:
         return cmd
-    return f"{_SHELL_PREFIX} && {cmd}"
+    return f"{prefix} && {cmd}"
 
 
 def prepend_mlflow_run_wall_clock(run_command: str, timeout_sec: float) -> str:
