@@ -145,6 +145,16 @@ class TriggerParamRegistryTests(unittest.TestCase):
         )
         self.assertEqual(resolved["CLUSTER_SOURCE"], "custom-secret")
 
+    def test_cluster_source_external_secret_overrides_its_ephc(self) -> None:
+        secret = "rhoai-e2e-kubeconfig-nmanos-konflux1-nmanos"
+        ctx = _ctx(product="", external=True, external_secret=secret)
+        resolved = resolve_trigger_params(
+            ctx,
+            its_params={"CLUSTER_SOURCE": CLUSTER_SOURCE_EPHC},
+            explicit={},
+        )
+        self.assertEqual(resolved["CLUSTER_SOURCE"], secret)
+
     def test_cluster_source_s3_its_wins_over_ephc_infer(self) -> None:
         ctx = _ctx(product="rhoai")
         resolved = resolve_trigger_params(

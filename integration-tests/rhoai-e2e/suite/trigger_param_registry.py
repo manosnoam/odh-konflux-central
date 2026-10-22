@@ -22,6 +22,7 @@ from suite.constants import (
 )
 from suite.its_registry import its_manifest_param
 from suite.its_trigger_params import (
+    CLUSTER_SOURCE_EPHC,
     ocp_install_prefix,
     resolve_cluster_source_for_trigger,
     resolve_version_display_params,
@@ -201,11 +202,14 @@ def _usable_rhoai_version(raw: str) -> str:
     return text
 
 
-def _its_param_overrides_infer(name: str, value: str) -> bool:
+def _its_param_overrides_infer(name: str, value: str, ctx: TriggerContext | None = None) -> bool:
     """True when a committed ITS value should win over trigger-time inference."""
     text = (value or "").strip()
     if not text:
         return False
+    if name == "CLUSTER_SOURCE" and text == CLUSTER_SOURCE_EPHC:
+        if ctx and (ctx.external_secret or "").strip():
+            return False
     if name == "RHOAI_VERSION":
         return bool(_usable_rhoai_version(text))
     if name == "RHOAI_FBC_IMAGE":
@@ -653,7 +657,7 @@ def resolve_trigger_params(
                 result[spec.name] = inferred
                 continue
         its_val = (its_params.get(spec.name) or "").strip()
-        if its_val and _its_param_overrides_infer(spec.name, its_val):
+        if its_val and _its_param_overrides_infer(spec.name, its_val, ctx):
             result[spec.name] = its_val
             continue
         inferred = _infer(spec, ctx)
