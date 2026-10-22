@@ -8,7 +8,11 @@ import shlex
 from suite.its_trigger_params import CLUSTER_SOURCE_EPHC, is_external_cluster_source
 
 # test-run.sh honors FORCE_PORT_FORWARD=true on OpenShift (kubectl port-forward + PF_PID).
-_SHELL_PREFIX = "export FORCE_PORT_FORWARD=true"
+# Gateway mode sets ARTIFACTS_SERVER_GATEWAY during the run; decide at shell runtime, not only at orchestrate.
+_SHELL_PREFIX = (
+    'if [ "${ARTIFACTS_SERVER_GATEWAY:-}" != "true" ]'
+    ' && [ "${ARTIFACTS_SERVER_GATEWAY:-}" != "1" ]; then export FORCE_PORT_FORWARD=true; fi'
+)
 
 
 def _mlflow_tracking_patch_enabled() -> bool:

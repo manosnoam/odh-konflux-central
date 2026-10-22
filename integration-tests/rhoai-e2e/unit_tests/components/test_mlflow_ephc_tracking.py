@@ -21,7 +21,8 @@ class MlflowEhcTrackingTest(unittest.TestCase):
         os.environ["CLUSTER_SOURCE"] = CLUSTER_SOURCE_EPHC
         try:
             shell = mlflow_ephc_incluster_tracking_shell()
-            self.assertEqual(shell, "export FORCE_PORT_FORWARD=true")
+            self.assertIn("FORCE_PORT_FORWARD=true", shell)
+            self.assertIn("ARTIFACTS_SERVER_GATEWAY", shell)
             self.assertNotIn("CLUSTER_SOURCE", shell)
         finally:
             os.environ.pop("CLUSTER_SOURCE", None)
