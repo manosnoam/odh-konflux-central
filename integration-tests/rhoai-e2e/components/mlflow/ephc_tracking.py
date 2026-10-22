@@ -89,12 +89,12 @@ def _use_force_port_forward() -> bool:
 
 def _mlflow_run_shell_prefix() -> str:
     """Runtime exports before test-run.sh (after vault shift-left may set gateway=true)."""
-    if mlflow_crd_supports_artifacts_server() and _artifacts_server_gateway_enabled():
+    if not _mlflow_tracking_patch_enabled():
+        return ""
+    if _artifacts_server_gateway_enabled() and mlflow_crd_supports_artifacts_server():
         return ""
     if not mlflow_crd_supports_artifacts_server():
-        if _mlflow_tracking_patch_enabled():
-            return "export ARTIFACTS_SERVER_GATEWAY=false; export FORCE_PORT_FORWARD=true"
-        return "export ARTIFACTS_SERVER_GATEWAY=false"
+        return "export ARTIFACTS_SERVER_GATEWAY=false; export FORCE_PORT_FORWARD=true"
     if not _use_force_port_forward():
         return ""
     return _SHELL_PREFIX

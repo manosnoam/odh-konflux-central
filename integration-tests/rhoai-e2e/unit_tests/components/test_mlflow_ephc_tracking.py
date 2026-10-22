@@ -72,13 +72,18 @@ class MlflowEhcTrackingTest(unittest.TestCase):
 
     def test_skips_force_port_forward_when_artifacts_gateway(self) -> None:
         import os
+        from unittest import mock
 
         os.environ["CLUSTER_SOURCE"] = CLUSTER_SOURCE_EPHC
         os.environ["ARTIFACTS_SERVER_GATEWAY"] = "true"
         try:
-            cmd = "bash mlflow-tests/images/test-run.sh -m smoke"
-            self.assertEqual(prepend_mlflow_ephc_tracking(cmd), cmd)
-            self.assertEqual(mlflow_ephc_incluster_tracking_shell(), "")
+            with mock.patch(
+                "components.mlflow.ephc_tracking.mlflow_crd_supports_artifacts_server",
+                return_value=True,
+            ):
+                cmd = "bash mlflow-tests/images/test-run.sh -m smoke"
+                self.assertEqual(prepend_mlflow_ephc_tracking(cmd), cmd)
+                self.assertEqual(mlflow_ephc_incluster_tracking_shell(), "")
         finally:
             os.environ.pop("ARTIFACTS_SERVER_GATEWAY", None)
             os.environ.pop("CLUSTER_SOURCE", None)
