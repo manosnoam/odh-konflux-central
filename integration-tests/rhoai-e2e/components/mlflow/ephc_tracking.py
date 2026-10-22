@@ -78,6 +78,8 @@ def mlflow_orchestrate_env_defaults(
         return env_defaults
     out = dict(env_defaults or {})
     out["ARTIFACTS_SERVER_GATEWAY"] = "false"
+    # envFileMlflow often sets ARTIFACTS_SERVER=true; deploy.py adds spec.artifactsServer to the CR.
+    out["ARTIFACTS_SERVER"] = "false"
     return out
 
 
@@ -94,7 +96,10 @@ def _mlflow_run_shell_prefix() -> str:
     if _artifacts_server_gateway_enabled() and mlflow_crd_supports_artifacts_server():
         return ""
     if not mlflow_crd_supports_artifacts_server():
-        return "export ARTIFACTS_SERVER_GATEWAY=false; export FORCE_PORT_FORWARD=true"
+        return (
+            "export ARTIFACTS_SERVER=false; export ARTIFACTS_SERVER_GATEWAY=false; "
+            "export FORCE_PORT_FORWARD=true"
+        )
     if not _use_force_port_forward():
         return ""
     return _SHELL_PREFIX
